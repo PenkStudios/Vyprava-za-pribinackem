@@ -14,19 +14,36 @@
 #include "../scene.cpp"
 
 namespace Game {
+    class Door_Data {
+    public:
+        Vector3 position;
+        Vector3 scale;
+        float default_Rotation;
+        float opened_Rotation;
+
+        float rotation;
+        bool opening;
+        Door_Data(Vector3 door_Position, Vector3 door_Scale, float door_Default_Rotation, float door_Opened_Rotation) :
+            position(door_Position), scale(door_Scale), default_Rotation(door_Default_Rotation),
+            opened_Rotation(door_Opened_Rotation), rotation(door_Default_Rotation), opening(false) {}
+    };
+
     Shader lighting;
     Model house;
     Model father;
     Camera3D camera;
     Light flashlight;
+    Model door;
     ModelAnimation *animations;
     float fall_Acceleration = 0.f;
 
     bool debug = false;
     float fog_Density = 0.15f;
     bool crouching = false;
-    int frameCounter = 0;
+    int frame_Counter = 0;
     int animation_Frame_Count = 0;
+
+    std::vector<Door_Data> doors = {};
 
     std::vector<Vector3> father_Points = {};
     float keyframe_Tick = 0.f;
@@ -74,9 +91,28 @@ namespace Game {
             father_Points.push_back(Vector3 {x, y, z});
         }
         ai_File.close();
+
+        std::ifstream doors_File("doors.txt", std::ios::in);
+        float position_X, position_Y, position_Z,
+              scale_X, scale_Y, scale_Z,
+              rotation_Start, rotation_End;
+
+        while(doors_File >> position_X >> position_Y >> position_Z >>
+                            scale_X >> scale_Y >> scale_Z >>
+                            rotation_Start >> rotation_End) {
+            doors.push_back(Door_Data(Vector3 {position_X, position_Y, position_Z},
+                                      Vector3 {scale_X, scale_Y, scale_Z},
+                                              rotation_Start, rotation_End));
+        }
+        doors_File.close();
+
+        door = LoadModel("models/door.glb");
+        for(int material = 0; material < door.materialCount; material++)
+            door.materials[material].shader = lighting;
     }
 
-    RayCollision GetCollisionRay(Ray ray) {
+    // Get map collision with ray (map + doors)
+    RayCollision Get_Collision_Ray(Ray ray) {
         RayCollision collision = { 0 };
         collision.distance = 1000000.f;
         for (int m = 0; m < house.meshCount; m++)
@@ -93,11 +129,32 @@ namespace Game {
             }
         }
 
+        for(Door_Data &door_Data : doors) {
+            // Fun fact: Matrix multiplication order matters
+            // bruh it literaly says that in the MatrixMultiply documentation ._.
+            Matrix matrix = MatrixIdentity();
+            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
+            
+            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
+            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
+            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+
+            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+
+            RayCollision doorCollision = GetRayCollisionMesh(ray, door.meshes[0], matrix);
+            if (doorCollision.hit)
+            {
+                if(doorCollision.distance < collision.distance) {
+                    collision = doorCollision;
+                }
+            }
+        }
+
         return collision;
     }
 
-    bool RaySideCollision(Ray ray, Vector3 old_Position) {
-        RayCollision collision = GetCollisionRay(ray);
+    bool Ray_Side_Collision(Ray ray, Vector3 old_Position) {
+        RayCollision collision = Get_Collision_Ray(ray);
         if(collision.hit && collision.distance < 1.f) {
             return true;
         }
@@ -111,11 +168,11 @@ namespace Game {
         return false;
     }
 
-    bool RaySidesCollision(Vector3 camera_Position, Vector3 old_Position) {
-        bool collision_1 = RaySideCollision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.f, 0.f, 0.1f}}, old_Position);
-        bool collision_2 = RaySideCollision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.f, 0.f, -0.1f}}, old_Position);
-        bool collision_3 = RaySideCollision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.1f, 0.f, 0.f}}, old_Position);
-        bool collision_4 = RaySideCollision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {-0.1f, 0.f, 0.f}}, old_Position);
+    bool Ray_Sides_Collision(Vector3 camera_Position, Vector3 old_Position) {
+        bool collision_1 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.f, 0.f, 0.1f}}, old_Position);
+        bool collision_2 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.f, 0.f, -0.1f}}, old_Position);
+        bool collision_3 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.1f, 0.f, 0.f}}, old_Position);
+        bool collision_4 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {-0.1f, 0.f, 0.f}}, old_Position);
     
         return collision_1 || collision_2 || collision_3 || collision_4;
     }
@@ -132,26 +189,59 @@ namespace Game {
         SetShaderValue(lighting, fogDensityLoc, &fog_Density, SHADER_UNIFORM_FLOAT);
 
         BeginMode3D(camera); {
-            frameCounter++;
-            if(frameCounter > 100) frameCounter = 0;
+            frame_Counter++;
+            if(frame_Counter > 100) frame_Counter = 0;
 
             UpdateModelAnimation(father, animations[0], animation_Frame_Count);
             animation_Frame_Count++;
             if(animation_Frame_Count >= animations[0].frameCount)
                 animation_Frame_Count = 0;
 
+            for(Door_Data &door_Data : doors) {
+                // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
+                DrawLine3D(camera.position, door_Data.position, RED);
+
+                Matrix matrix = MatrixIdentity();
+                matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
+
+                matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
+                matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
+                matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+
+                matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+
+                DrawMesh(door.meshes[0], house.materials[16], matrix);
+
+                Ray ray = {camera.position, camera.target};
+                RayCollision collision = GetRayCollisionMesh(ray, door.meshes[0], matrix);
+
+                if(collision.hit && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                    door_Data.opening = !door_Data.opening;
+                }
+                
+                if(door_Data.opening) {
+                    if(door_Data.rotation < door_Data.opened_Rotation) {
+                        door_Data.rotation += 1.f;
+                    }
+                } else {
+                    if(door_Data.rotation > door_Data.default_Rotation) {
+                        door_Data.rotation -= 1.f;
+                    }
+                }
+            }
+
             // Basically, a very complex and buggy way to slow down the player if he is crouching
-            if((crouching && frameCounter % 2 == 0) || !crouching) {
+            if((crouching && frame_Counter % 2 == 0) || !crouching) {
                 UpdateCamera(&camera, CAMERA_FIRST_PERSON);
             } else {
                 UpdateCamera(&camera, CAMERA_FREE);
                 camera.position = old_Position;
             }
 
-            if(RaySidesCollision({old_Position.x, camera.position.y, camera.position.z}, old_Position))
+            if(Ray_Sides_Collision({old_Position.x, camera.position.y, camera.position.z}, old_Position))
                 camera.position.z = old_Position.z;
 
-            if(RaySidesCollision({camera.position.x, camera.position.y, old_Position.z}, old_Position))
+            if(Ray_Sides_Collision({camera.position.x, camera.position.y, old_Position.z}, old_Position))
                 camera.position.x = old_Position.x;
 
             DrawModel(house, {0.f, 0.f, 0.f}, 1.f, WHITE);
@@ -169,7 +259,7 @@ namespace Game {
                         Remap(keyframe_Tick, 0.f, max, source.y, target.y),
                         Remap(keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
 
-            float y = GetCollisionRay(ray).point.y;
+            float y = Get_Collision_Ray(ray).point.y;
 
             Vector3 current = {Remap(keyframe_Tick, 0.f, max, source.x, target.x),
                                y,
@@ -203,7 +293,7 @@ namespace Game {
         } EndMode3D();
         
         Ray bottom = {Vector3Add(camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
-        RayCollision collision_Legs = GetCollisionRay(bottom);
+        RayCollision collision_Legs = Get_Collision_Ray(bottom);
         if(collision_Legs.hit) {
             Vector3 target = Vector3Add(collision_Legs.point, {0.f, crouching ? 5.0f : 6.5f, 0.f});
             if(camera.position.y < target.y) {
