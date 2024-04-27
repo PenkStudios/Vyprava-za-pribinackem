@@ -28,6 +28,21 @@ namespace Game {
             opened_Rotation(door_Opened_Rotation), rotation(door_Default_Rotation), opening(false) {}
     };
 
+    std::vector<Door_Data> doors = {};
+
+    class Father_Point {
+    public:
+        Vector3 position;
+        std::vector<bool> door_States;
+
+        Father_Point(Vector3 position) : position(position) {
+            for(int index = 0; index < doors.size(); index++)
+                door_States.emplace_back();
+        }
+
+        Father_Point(Vector3 position, std::vector<bool> door_States) : position(position), door_States(door_States) {}
+    };
+
     Shader lighting;
     Model house;
     Model father;
@@ -35,6 +50,7 @@ namespace Game {
     Light flashlight;
     Model door;
     ModelAnimation *animations;
+    Mesh doorHandle;
     float fall_Acceleration = 0.f;
 
     bool debug = false;
@@ -43,9 +59,7 @@ namespace Game {
     int frame_Counter = 0;
     int animation_Frame_Count = 0;
 
-    std::vector<Door_Data> doors = {};
-
-    std::vector<Vector3> father_Points = {};
+    std::vector<Father_Point> father_Points = {};
     float keyframe_Tick = 0.f;
     int keyframe = 0;
 
@@ -82,6 +96,8 @@ namespace Game {
 
         for(int material = 0; material < house.materialCount; material++)
             house.materials[material].shader = lighting;
+
+        doorHandle = GenMeshSphere(0.5f, 15, 15);
 
         flashlight = CreateLight(LIGHT_POINT, camera.position, {0.f, 0.f, 0.f}, WHITE, lighting);
     
@@ -197,6 +213,7 @@ namespace Game {
             if(animation_Frame_Count >= animations[0].frameCount)
                 animation_Frame_Count = 0;
 
+            bool door_Opened = false;
             for(Door_Data &door_Data : doors) {
                 // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
                 DrawLine3D(camera.position, door_Data.position, RED);
@@ -211,21 +228,44 @@ namespace Game {
                 matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
 
                 DrawMesh(door.meshes[0], house.materials[16], matrix);
+                
+                Matrix matrixDoorHandle = MatrixIdentity();
+                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
 
-                Ray ray = {camera.position, camera.target};
+                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
+                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(door_Data.rotation * DEG2RAD));
+                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+
+                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+                DrawMesh(doorHandle, house.materials[16], matrixDoorHandle);
+
+                Ray ray = GetMouseRay({(float)GetScreenWidth() / 2.f, (float)GetScreenHeight() / 2.f}, camera);
                 RayCollision collision = GetRayCollisionMesh(ray, door.meshes[0], matrix);
 
-                if(collision.hit && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                if(collision.hit && collision.distance < 10.f && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !door_Opened) {
                     door_Data.opening = !door_Data.opening;
+                    door_Opened = true;
                 }
                 
-                if(door_Data.opening) {
-                    if(door_Data.rotation < door_Data.opened_Rotation) {
-                        door_Data.rotation += 1.f;
+                if(door_Data.default_Rotation < door_Data.opened_Rotation) {
+                    if(door_Data.opening) {
+                        if(door_Data.rotation < door_Data.opened_Rotation) {
+                            door_Data.rotation += 1.f;
+                        }
+                    } else {
+                        if(door_Data.rotation > door_Data.default_Rotation) {
+                            door_Data.rotation -= 1.f;
+                        }
                     }
                 } else {
-                    if(door_Data.rotation > door_Data.default_Rotation) {
-                        door_Data.rotation -= 1.f;
+                    if(door_Data.opening) {
+                        if(door_Data.rotation > door_Data.opened_Rotation) {
+                            door_Data.rotation -= 1.f;
+                        }
+                    } else {
+                        if(door_Data.rotation < door_Data.default_Rotation) {
+                            door_Data.rotation += 1.f;
+                        }
                     }
                 }
             }
@@ -249,8 +289,8 @@ namespace Game {
             if(debug) fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_SHIFT)) crouching = !crouching;
 
-            Vector3 source = father_Points[keyframe];
-            Vector3 target = father_Points[(keyframe + 1) % father_Points.size()];
+            Vector3 source = father_Points[keyframe].position;
+            Vector3 target = father_Points[(keyframe + 1) % father_Points.size()].position;
 
             float max = Vector3Distance(source, target) / 4.f;
             keyframe_Tick += 0.01f;
@@ -271,7 +311,7 @@ namespace Game {
 
             float angle_Source = angle;
             if(keyframe > 0) {
-                Vector3 difference_Source = Vector3Subtract(source, father_Points[keyframe - 1]);
+                Vector3 difference_Source = Vector3Subtract(source, father_Points[keyframe - 1].position);
                 angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
 
                 float lerp = Clamp(keyframe_Tick * 2.f, 0.f, 1.f);
