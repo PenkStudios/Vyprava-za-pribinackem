@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 
 #define RLIGHTS_IMPLEMENTATION
 #include "../rlights.h"
@@ -21,11 +22,16 @@ namespace Game {
         float default_Rotation;
         float opened_Rotation;
 
-        float rotation;
+        float rotation; // Rotation caused by player
+        float rotation_Father; // Rotation caused by daddy
+
+        // -||-
         bool opening;
+        bool opening_Father;
         Door_Data(Vector3 door_Position, Vector3 door_Scale, float door_Default_Rotation, float door_Opened_Rotation) :
             position(door_Position), scale(door_Scale), default_Rotation(door_Default_Rotation),
-            opened_Rotation(door_Opened_Rotation), rotation(door_Default_Rotation), opening(false) {}
+            opened_Rotation(door_Opened_Rotation), rotation(door_Default_Rotation),
+            rotation_Father(door_Default_Rotation), opening(false) {}
     };
 
     std::vector<Door_Data> doors = {};
@@ -102,10 +108,28 @@ namespace Game {
         flashlight = CreateLight(LIGHT_POINT, camera.position, {0.f, 0.f, 0.f}, WHITE, lighting);
     
         std::ifstream ai_File("ai.txt", std::ios::in);
-        float x, y, z;
-        while(ai_File >> x >> y >> z) {
-            father_Points.push_back(Vector3 {x, y, z});
+
+        std::string line;
+        while (std::getline(ai_File, line)) {
+            father_Points.push_back(Father_Point({0.f, 0.f, 0.f}, {}));
+            std::stringstream string_Stream(line);
+
+            float value;
+            int index = 0;
+            while (string_Stream >> value) {
+                if(index == 0) {
+                    father_Points.back().position.x = value;
+                } else if(index == 1) {
+                    father_Points.back().position.y = value;
+                } else if(index == 2) {
+                    father_Points.back().position.z = value;
+                } else {
+                    father_Points.back().door_States.push_back(value);
+                }
+                index++;
+            }
         }
+
         ai_File.close();
 
         std::ifstream doors_File("doors.txt", std::ios::in);
@@ -193,6 +217,15 @@ namespace Game {
         return collision_1 || collision_2 || collision_3 || collision_4;
     }
 
+    std::vector<bool> Get_Door_States() {
+        std::vector<bool> states = {};
+        for(Door_Data door_Data : doors) {
+            states.push_back(door_Data.opening);
+        }
+
+        return states;
+    }
+
     void Update() {
         ClearBackground(BLACK);
         SetShaderValue(lighting, lighting.locs[SHADER_LOC_VECTOR_VIEW], &camera.position.x, SHADER_UNIFORM_VEC3);
@@ -218,11 +251,21 @@ namespace Game {
                 // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
                 DrawLine3D(camera.position, door_Data.position, RED);
 
+                float rotation_Player = door_Data.rotation;
+                float rotation_Father = door_Data.rotation_Father;
+
+                float rotation = 0.f;
+                if(door_Data.default_Rotation < door_Data.opened_Rotation) {
+                    rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
+                } else {
+                    rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
+                }
+
                 Matrix matrix = MatrixIdentity();
                 matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
 
                 matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-                matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
+                matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
                 matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
                 matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
@@ -233,7 +276,7 @@ namespace Game {
                 matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
 
                 matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
-                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(door_Data.rotation * DEG2RAD));
+                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(rotation * DEG2RAD));
                 matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
                 matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
@@ -257,6 +300,16 @@ namespace Game {
                             door_Data.rotation -= 1.f;
                         }
                     }
+
+                    if(door_Data.opening_Father) {
+                        if(door_Data.rotation_Father < door_Data.opened_Rotation) {
+                            door_Data.rotation_Father += 1.f;
+                        }
+                    } else {
+                        if(door_Data.rotation_Father > door_Data.default_Rotation) {
+                            door_Data.rotation_Father -= 1.f;
+                        }
+                    }
                 } else {
                     if(door_Data.opening) {
                         if(door_Data.rotation > door_Data.opened_Rotation) {
@@ -265,6 +318,16 @@ namespace Game {
                     } else {
                         if(door_Data.rotation < door_Data.default_Rotation) {
                             door_Data.rotation += 1.f;
+                        }
+                    }
+
+                    if(door_Data.opening_Father) {
+                        if(door_Data.rotation_Father > door_Data.opened_Rotation) {
+                            door_Data.rotation_Father -= 1.f;
+                        }
+                    } else {
+                        if(door_Data.rotation_Father < door_Data.default_Rotation) {
+                            door_Data.rotation_Father += 1.f;
                         }
                     }
                 }
@@ -289,46 +352,82 @@ namespace Game {
             if(debug) fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_SHIFT)) crouching = !crouching;
 
+            /* {
+                if(IsKeyPressed(KEY_SPACE)) {
+                    father_Points.push_back(Father_Point(camera.position, Get_Door_States()));
+                } else if(IsKeyPressed(KEY_BACKSPACE)) {
+                    father_Points.back() = Father_Point(camera.position, Get_Door_States());
+                } else if(IsKeyPressed(KEY_ENTER)) {
+                    for(Father_Point point : father_Points) {
+                        std::string doors = "";
+                        for(bool state : point.door_States) {
+                            doors += " " + std::to_string(state);
+                        }
+               
+                        std::cout << point.position.x << " " << point.position.y << " " << point.position.z << doors << std::endl;
+                    }
+                }
+
+                Vector3 previous_Point = {0.f, 0.f, 0.f};
+                int index = 0;
+                for(Father_Point point : father_Points) {
+                    if(index > 0) {
+                        DrawLine3D(previous_Point, point.position, RED);
+                    }
+                    DrawSphere(point.position, .5f, BLUE);
+                    previous_Point = point.position;
+                    index++;
+                }
+            } */
+
             Vector3 source = father_Points[keyframe].position;
             Vector3 target = father_Points[(keyframe + 1) % father_Points.size()].position;
 
-            float max = Vector3Distance(source, target) / 4.f;
-            keyframe_Tick += 0.01f;
-
-            Ray ray = {{Remap(keyframe_Tick, 0.f, max, source.x, target.x),
-                        Remap(keyframe_Tick, 0.f, max, source.y, target.y),
-                        Remap(keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
-
-            float y = Get_Collision_Ray(ray).point.y;
-
-            Vector3 current = {Remap(keyframe_Tick, 0.f, max, source.x, target.x),
-                               y,
-                               Remap(keyframe_Tick, 0.f, max, source.z, target.z)};
-
-            Vector3 difference = Vector3Subtract(target, source);
-            float angle = -atan2(difference.z, difference.x) * RAD2DEG;
-            float angle_Result = angle;
-
-            float angle_Source = angle;
-            if(keyframe > 0) {
-                Vector3 difference_Source = Vector3Subtract(source, father_Points[keyframe - 1].position);
-                angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
-
-                float lerp = Clamp(keyframe_Tick * 2.f, 0.f, 1.f);
-                float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
-
-                angle_Result = angle_Source + addition * lerp;
-            }
-            
-            DrawModelEx(father, current, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {10.f, 10.f, 10.f}, WHITE);
-
-            if(keyframe_Tick > max) {
-                keyframe_Tick = 0.f;
-                keyframe++;
+            int index = 0;
+            for(bool state : father_Points[(keyframe + 1) % father_Points.size()].door_States) {
+                doors[index].opening_Father = state;
+                index++;
             }
 
-            if(keyframe > father_Points.size() - 1) {
-                keyframe = 0;
+            if((int)doors[index].rotation_Father == (int)doors[index].opened_Rotation) {
+                float max = Vector3Distance(source, target) / 4.f;
+                keyframe_Tick += 0.01f;
+
+                Ray ray = {{Remap(keyframe_Tick, 0.f, max, source.x, target.x),
+                            Remap(keyframe_Tick, 0.f, max, source.y, target.y),
+                            Remap(keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
+
+                float y = Get_Collision_Ray(ray).point.y;
+
+                Vector3 current = {Remap(keyframe_Tick, 0.f, max, source.x, target.x),
+                                y,
+                                Remap(keyframe_Tick, 0.f, max, source.z, target.z)};
+
+                Vector3 difference = Vector3Subtract(target, source);
+                float angle = -atan2(difference.z, difference.x) * RAD2DEG;
+                float angle_Result = angle;
+
+                float angle_Source = angle;
+                if(keyframe > 0) {
+                    Vector3 difference_Source = Vector3Subtract(source, father_Points[keyframe - 1].position);
+                    angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
+
+                    float lerp = Clamp(keyframe_Tick * 2.f, 0.f, 1.f);
+                    float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
+
+                    angle_Result = angle_Source + addition * lerp;
+                }
+                
+                DrawModelEx(father, current, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {10.f, 10.f, 10.f}, WHITE);
+
+                if(keyframe_Tick > max) {
+                    keyframe_Tick = 0.f;
+                    keyframe++;
+                }
+
+                if(keyframe > father_Points.size() - 1) {
+                    keyframe = 0;
+                }
             }
         } EndMode3D();
         
