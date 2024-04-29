@@ -200,9 +200,8 @@ namespace Game {
         }
 
         if(debug) {
-            DrawLine3D(Vector3Add(camera.position, {0.f, -1.75f, 0.f}), collision.point, RED);
-            DrawSphere(Vector3Add(camera.position, {0.f, -1.75f, 0.f}), 0.5f, RED);
-            DrawSphere(collision.point, 0.5f, BLUE);
+            DrawLine3D(Vector3Add(camera.position, {0.f, -0.75f, 0.f}), collision.point, Color {255, 0, 0, 32});
+            DrawSphere(collision.point, 0.5f, Color {0, 0, 255, 32});
         }
 
         return false;
@@ -213,7 +212,7 @@ namespace Game {
         bool collision_2 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.f, 0.f, -0.1f}}, old_Position);
         bool collision_3 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.1f, 0.f, 0.f}}, old_Position);
         bool collision_4 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {-0.1f, 0.f, 0.f}}, old_Position);
-    
+
         return collision_1 || collision_2 || collision_3 || collision_4;
     }
 
@@ -344,8 +343,12 @@ namespace Game {
             if(Ray_Sides_Collision({old_Position.x, camera.position.y, camera.position.z}, old_Position))
                 camera.position.z = old_Position.z;
 
+            // (if debug) we dont want the spheres to be rendered twice
+            bool is_Debug = debug;
+            debug = false;
             if(Ray_Sides_Collision({camera.position.x, camera.position.y, old_Position.z}, old_Position))
                 camera.position.x = old_Position.x;
+            debug = is_Debug;
 
             DrawModel(house, {0.f, 0.f, 0.f}, 1.f, WHITE);
 
@@ -389,46 +392,46 @@ namespace Game {
                 index++;
             }
 
-            if((int)doors[index].rotation_Father == (int)doors[index].opened_Rotation) {
-                float max = Vector3Distance(source, target) / 4.f;
-                keyframe_Tick += 0.01f;
+            float max = Vector3Distance(source, target) / 4.f;
+            keyframe_Tick += 0.01f;
 
-                Ray ray = {{Remap(keyframe_Tick, 0.f, max, source.x, target.x),
-                            Remap(keyframe_Tick, 0.f, max, source.y, target.y),
-                            Remap(keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
+            Ray ray = {{Remap(keyframe_Tick, 0.f, max, source.x, target.x),
+                        Remap(keyframe_Tick, 0.f, max, source.y, target.y),
+                        Remap(keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
 
-                float y = Get_Collision_Ray(ray).point.y;
+            float y = Get_Collision_Ray(ray).point.y;
 
-                Vector3 current = {Remap(keyframe_Tick, 0.f, max, source.x, target.x),
-                                y,
-                                Remap(keyframe_Tick, 0.f, max, source.z, target.z)};
+            Vector3 current = {Remap(keyframe_Tick, 0.f, max, source.x, target.x),
+                            y,
+                            Remap(keyframe_Tick, 0.f, max, source.z, target.z)};
 
-                Vector3 difference = Vector3Subtract(target, source);
-                float angle = -atan2(difference.z, difference.x) * RAD2DEG;
-                float angle_Result = angle;
+            Vector3 difference = Vector3Subtract(target, source);
+            float angle = -atan2(difference.z, difference.x) * RAD2DEG;
+            float angle_Result = angle;
 
-                float angle_Source = angle;
-                if(keyframe > 0) {
-                    Vector3 difference_Source = Vector3Subtract(source, father_Points[keyframe - 1].position);
-                    angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
+            float angle_Source = angle;
+            if(keyframe > 0) {
+                Vector3 difference_Source = Vector3Subtract(source, father_Points[keyframe - 1].position);
+                angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
 
-                    float lerp = Clamp(keyframe_Tick * 2.f, 0.f, 1.f);
-                    float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
+                float lerp = Clamp(keyframe_Tick * 2.f, 0.f, 1.f);
+                float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
 
-                    angle_Result = angle_Source + addition * lerp;
-                }
-                
-                DrawModelEx(father, current, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {10.f, 10.f, 10.f}, WHITE);
-
-                if(keyframe_Tick > max) {
-                    keyframe_Tick = 0.f;
-                    keyframe++;
-                }
-
-                if(keyframe > father_Points.size() - 1) {
-                    keyframe = 0;
-                }
+                angle_Result = angle_Source + addition * lerp;
             }
+            
+            DrawModelEx(father, current, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {10.f, 10.f, 10.f}, WHITE);
+
+            if(keyframe_Tick > max) {
+                keyframe_Tick = 0.f;
+                keyframe++;
+            }
+
+            if(keyframe > father_Points.size() - 1) {
+                keyframe = 0;
+            }
+
+            
         } EndMode3D();
         
         Ray bottom = {Vector3Add(camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
@@ -448,9 +451,16 @@ namespace Game {
         } else
             camera.position = old_Position;
 
-        if(debug)
+        if(debug) {
             DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
-                                                                                             collision_Legs.normal.y < 0.99f || collision_Legs.normal.y > 1.01, fog_Density), 5, 5, 15, WHITE);
+                                                                                                collision_Legs.normal.y < 0.99f || collision_Legs.normal.y > 1.01), 5, 5, 15, WHITE);
+            
+            Vector3 source = father_Points[keyframe].position;
+            Vector3 target = father_Points[(keyframe + 1) % father_Points.size()].position;
+            float max_Tick = Vector3Distance(source, target) / 4.f;
+
+            DrawText(TextFormat("AI data: keyframe tick %f/%f, keyframe %d/%d", keyframe_Tick, max_Tick, keyframe, father_Points.size()), 5, 5 + 15, 15, WHITE);
+        }
     }
 };
 
