@@ -387,7 +387,10 @@ namespace Game {
             Vector3 target = father_Points[(keyframe + 1) % father_Points.size()].position;
 
             int index = 0;
+            bool changing_Door_State = false;
             for(bool state : father_Points[(keyframe + 1) % father_Points.size()].door_States) {
+                if(doors[index].opening_Father != state)
+                    changing_Door_State = true;
                 doors[index].opening_Father = state;
                 index++;
             }

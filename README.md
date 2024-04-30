@@ -1,8 +1,8 @@
-# Výprava za pribiňáčkem verze 0.2.2
+# Výprava za pribiňáčkem verze 0.2.3
 Velice vtipná hra o cestě pro pribiňáčka
 
 ## Přídáno
-- Opraven bug s noclipnutím do stěny nepřítele (na začátku `ai.txt` byly duplikátní keyframy)
+- Začátek čekání před otevření dveří
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
