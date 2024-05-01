@@ -1,5 +1,6 @@
 #include <raylib.h>
 #include "scene.cpp"
+#include "mod_loader.cpp"
 
 #include "scenes/intro.cpp"
 #include "scenes/menu.cpp"
@@ -22,11 +23,14 @@ int main() {
     Switch_To_Scene(GAME);
     Init_Scenes();
 
+    Mod_Load_Directory("mods/");
+
     SetTargetFPS(60);
 
     while(!WindowShouldClose()) {
         BeginDrawing(); {
             Update_Scene();
+            Mod_Callback("Update_2D");
         } EndDrawing();
     }
 

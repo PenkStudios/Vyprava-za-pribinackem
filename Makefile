@@ -1,15 +1,15 @@
 CXX=/bin/g++
 WINDOWS-CXX=/bin/x86_64-w64-mingw32-g++
 
-LINK=-lraylib -std=c++17 -g
+LINK=-std=c++17
 
 all: linux windows finish
 
 linux: source/main.cpp
-	$(CXX) source/main.cpp $(LINK) -o build/pribiňáček
+	$(CXX) source/main.cpp $(LINK) -L. -l:build/libraylib.so.500 -o build/pribiňáček
 
 windows: source/main.cpp
-	$(WINDOWS-CXX) source/main.cpp $(LINK) -static -mwindows -lwinmm -o build/pribiňáček.exe
+	$(WINDOWS-CXX) source/main.cpp $(LINK) -L. -l:build/raylib.dll -static -mwindows -lwinmm -o build/pribiňáček.exe
 
 finish:
 	@echo "\033[96m"

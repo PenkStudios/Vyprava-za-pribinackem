@@ -13,6 +13,7 @@
 #include "../rlights.h"
 
 #include "../scene.cpp"
+#include "../mod_loader.cpp"
 
 namespace Game {
     class Door_Data {
@@ -64,6 +65,7 @@ namespace Game {
     bool crouching = false;
     int frame_Counter = 0;
     int animation_Frame_Count = 0;
+    int cutscene_Frame = 0; // Frame of the starting cutscene
 
     std::vector<Father_Point> father_Points = {};
     float keyframe_Tick = 0.f;
@@ -82,7 +84,6 @@ namespace Game {
         father = LoadModel("models/human.m3d");
 
         Texture human = LoadTexture("textures/human.png");
-        std::cout << father.materialCount << std::endl;
         SetMaterialTexture(&father.materials[1], MATERIAL_MAP_DIFFUSE, human);
 
         int animation_Count = 0; // (1)
@@ -237,6 +238,8 @@ namespace Game {
         SetShaderValue(lighting, fogDensityLoc, &fog_Density, SHADER_UNIFORM_FLOAT);
 
         BeginMode3D(camera); {
+            Mod_Callback("Update_3D");
+
             frame_Counter++;
             if(frame_Counter > 100) frame_Counter = 0;
 
@@ -432,9 +435,7 @@ namespace Game {
 
             if(keyframe > father_Points.size() - 1) {
                 keyframe = 0;
-            }
-
-            
+            }            
         } EndMode3D();
         
         Ray bottom = {Vector3Add(camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};

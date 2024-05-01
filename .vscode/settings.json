@@ -4,6 +4,16 @@
             "cwd": "/home/zahon/projects/Výprava za pribiňáčkem/build",
             "binaryPath": "/home/zahon/projects/Výprava za pribiňáčkem/build/pribiňáček",
             "binaryArgs": []
+        },
+        {
+            "cwd": "/home/zahon/projects/Vyprava za pribinackem/build",
+            "binaryPath": "/home/zahon/projects/Vyprava za pribinackem/build/pribiňáček.exe",
+            "binaryArgs": []
+        },
+        {
+            "cwd": "/home/zahon/projects/Vyprava za pribinackem/build",
+            "binaryPath": "/home/zahon/projects/Vyprava za pribinackem/build/pribiňáček",
+            "binaryArgs": []
         }
     ],
     "files.associations": {
@@ -56,6 +66,12 @@
         "streambuf": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "cstring": "cpp"
+        "cstring": "cpp",
+        "sstream": "cpp",
+        "chrono": "cpp",
+        "codecvt": "cpp",
+        "ctime": "cpp",
+        "ratio": "cpp",
+        "iomanip": "cpp"
     }
 }
