@@ -20,17 +20,17 @@ int main() {
         {GAME,  {Game::Init,    Game::Update}}
     });
 
-    Switch_To_Scene(GAME);
+    Switch_To_Scene(INTRO);
     Init_Scenes();
 
     Mod_Load_Directory("mods/");
+    Mod_Callback("Init", nullptr);
 
     SetTargetFPS(60);
 
     while(!WindowShouldClose()) {
         BeginDrawing(); {
             Update_Scene();
-            Mod_Callback("Update_2D");
         } EndDrawing();
     }
 

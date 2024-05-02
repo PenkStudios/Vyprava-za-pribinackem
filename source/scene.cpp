@@ -39,4 +39,6 @@ Scene &Get_Scene() {
     return scene;
 }
 
+class Base_Data {};
+
 #endif // SCENE_CXX

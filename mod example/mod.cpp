@@ -1,4 +1,9 @@
 #include <raylib.h>
+#include <iostream>
+
+#include "../source/scenes/intro.cpp"
+#include "../source/scenes/menu.cpp"
+#include "../source/scenes/game.cpp"
 
 #ifdef __WIN32__
 #define MOD_API __declspec(dllexport)
@@ -8,12 +13,13 @@
 
 extern "C" {
 
-MOD_API void Init() {}
-MOD_API void Update_2D() {
-    DrawText("Hello from the Update_2D function", 5, 5, 35, RED);
-}
-MOD_API void Update_3D() {
-    DrawCube({0.f, 7.5f, 0.f}, 2.f, 2.f, 2.f, RED);
-}
+MOD_API void Init(void*) {}
+
+MOD_API void Update_Intro(Intro::Intro_Data* context) {}
+
+MOD_API void Update_Menu(Menu::Menu_Data* context) {}
+
+MOD_API void Update_Game(Game::Game_Data* context) { }
+MOD_API void Update_Game_UI(Game::Game_Data* context) {}
 
 }

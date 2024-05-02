@@ -1,7 +1,7 @@
 #ifndef MOD_LOADER_CXX
 #define MOD_LOADER_CXX
 
-#define FUNCTION_LIST {{"Init", nullptr}, {"Update_2D", nullptr}, {"Update_3D", nullptr}}
+#define FUNCTION_LIST {{"Init", nullptr}, {"Update_Intro", nullptr}, {"Update_Menu", nullptr}, {"Update_Game", nullptr}, {"Update_Game_UI", nullptr}}
 
 #if defined(__WIN32__) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__) // WINDOWS
 
@@ -13,7 +13,7 @@
 #include <errhandlingapi.h>
 #include <filesystem>
 
-typedef void (*callback_Function)();
+typedef void (*callback_Function)(void*);
 
 struct pmMod {
 	HMODULE handle;
@@ -54,21 +54,22 @@ void Mod_Load_Directory(std::string directory) {
     }
 }
 
-void Mod_Callback(std::string function) {
+void Mod_Callback(std::string function, void* context) {
 	for(pmMod &mod : mods) {
-		mod.functions[function]();
+		mod.functions[function](context);
 	}
 }
 
 #else // LINUX || MACOS
 
+#include <map>
 #include <vector>
 #include <iostream>
 #include <dlfcn.h>
 #include <cstring>
 #include <filesystem>
 
-typedef void (*callback_Function)();
+typedef void (*callback_Function)(void*);
 
 struct pmMod {
 	void *handle;
@@ -109,9 +110,9 @@ void Mod_Load_Directory(std::string directory) {
     }
 }
 
-void Mod_Callback(std::string function) {
+void Mod_Callback(std::string function, void* context) {
 	for(pmMod &mod : mods) {
-		mod.functions[function]();
+		mod.functions[function](context);
 	}
 }
 
