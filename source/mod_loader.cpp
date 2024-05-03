@@ -1,7 +1,9 @@
 #ifndef MOD_LOADER_CXX
 #define MOD_LOADER_CXX
 
-#define FUNCTION_LIST {{"Init", nullptr}, {"Update_Intro", nullptr}, {"Update_Menu", nullptr}, {"Update_Game", nullptr}, {"Update_Game_UI", nullptr}}
+// Ordered - for 2d function where the order of drawing matters (extra bool argument "in_Front")
+#define FUNCTION_LIST_ORDERED {{"Update_Intro", nullptr}, {"Update_Menu", nullptr}, {"Update_Game", nullptr}, {"Update_Game_UI", nullptr}}
+#define FUNCTION_LIST {{"Update_Game", nullptr}, {"Init", nullptr}, {"Init_Intro", nullptr}, {"Init_Menu", nullptr}, {"Init_Game", nullptr}}
 
 #if defined(__WIN32__) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__) // WINDOWS
 
@@ -14,10 +16,12 @@
 #include <filesystem>
 
 typedef void (*callback_Function)(void*);
+typedef void (*callback_Ordered_Function)(void*, bool);
 
 struct pmMod {
 	HMODULE handle;
 
+	std::map<std::string, callback_Ordered_Function> functions_Ordered = FUNCTION_LIST_ORDERED;
 	std::map<std::string, callback_Function> functions = FUNCTION_LIST;
 };
 
@@ -34,12 +38,10 @@ bool Mod_Load_Path(std::string path) {
 
     for(auto &iterator : mods.back().functions) {
         iterator.second = reinterpret_cast<callback_Function>(GetProcAddress(mods.back().handle, iterator.first.c_str()));
-        if(iterator.second == NULL) {
-            mods.pop_back();
-            std::cerr << "GetProcAdress: " << GetLastError() << std::endl;
-            std::cerr << "[ Mod loader ] GetProcAdress failed" << std::endl;
-            return false;
-        }
+    }
+
+	for(auto &iterator : mods.back().functions_Ordered) {
+        iterator.second = reinterpret_cast<callback_Ordered_Function>(GetProcAddress(mods.back().handle, iterator.first.c_str()));
     }
 
 	return true;
@@ -54,9 +56,13 @@ void Mod_Load_Directory(std::string directory) {
     }
 }
 
-void Mod_Callback(std::string function, void* context) {
+void Mod_Callback(std::string function, void* context, bool in_Front = true) {
 	for(pmMod &mod : mods) {
-		mod.functions[function](context);
+		if(mod.functions.count(function) && mod.functions[function] != nullptr)
+			mod.functions[function](context);
+
+		if(mod.functions_Ordered.count(function) && mod.functions_Ordered[function] != nullptr)
+			mod.functions_Ordered[function](context, in_Front);
 	}
 }
 
@@ -70,10 +76,12 @@ void Mod_Callback(std::string function, void* context) {
 #include <filesystem>
 
 typedef void (*callback_Function)(void*);
+typedef void (*callback_Ordered_Function)(void*, bool);
 
 struct pmMod {
 	void *handle;
 
+	std::map<std::string, callback_Ordered_Function> functions_Ordered = FUNCTION_LIST_ORDERED;
 	std::map<std::string, callback_Function> functions = FUNCTION_LIST;
 };
 
@@ -90,12 +98,10 @@ bool Mod_Load_Path(std::string path) {
 
     for(auto &iterator : mods.back().functions) {
         iterator.second = reinterpret_cast<callback_Function>(dlsym(mods.back().handle, iterator.first.c_str()));
-        if(iterator.second == NULL) {
-            mods.pop_back();
-            std::cerr << "dlsym: " << dlerror() << std::endl;
-            std::cerr << "[ Mod loader ] dlsym failed" << std::endl;
-            return false;
-        }
+    }
+
+	for(auto &iterator : mods.back().functions_Ordered) {
+        iterator.second = reinterpret_cast<callback_Ordered_Function>(dlsym(mods.back().handle, iterator.first.c_str()));
     }
 
 	return true;
@@ -110,9 +116,13 @@ void Mod_Load_Directory(std::string directory) {
     }
 }
 
-void Mod_Callback(std::string function, void* context) {
+void Mod_Callback(std::string function, void* context, bool in_Front = true) {
 	for(pmMod &mod : mods) {
-		mod.functions[function](context);
+		if(mod.functions.count(function) && mod.functions[function] != nullptr)
+			mod.functions[function](context);
+
+		if(mod.functions_Ordered.count(function) && mod.functions_Ordered[function] != nullptr)
+			mod.functions_Ordered[function](context, in_Front);
 	}
 }
 

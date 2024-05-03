@@ -13,12 +13,12 @@ namespace Menu {
     } data;
 
     void Init() {
-        
+        Mod_Callback("Init_Menu", (void*)&data);
     }
 
     void Update() {
         ClearBackground(BLACK);
-        Mod_Callback("Update_Menu", (void*)&data);
+        Mod_Callback("Update_Menu", (void*)&data, 0);
     }
 };
 

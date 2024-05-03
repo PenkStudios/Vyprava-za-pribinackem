@@ -24,10 +24,13 @@ namespace Intro {
 
         data.tick = 0.f;
         data.blink_Countdown = 0;
+        Mod_Callback("Init_Intro", (void*)&data);
     }
 
     void Update() {
         ClearBackground(BLACK);
+
+        Mod_Callback("Update_Intro", (void*)&data, 0);
 
         // Dammit, the first day of coding and the code is already garbage
         // Dont fucking know what this code does
@@ -74,13 +77,15 @@ namespace Intro {
                      {GetScreenWidth() / 2.f, GetScreenHeight() / 1.3f},
                      {GetScreenWidth() / 2.f + 200.f, GetScreenHeight() / 1.5f}, Color {255, 255, 255, (unsigned char)(opacity_Light / 4.f)});
     
+        Mod_Callback("Update_Intro", (void*)&data, 1);
+
         if(data.tick < GetFPS() * 1) {
             DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color {0, 0, 0, (unsigned char)Remap(data.tick, 0.f, GetFPS() * 1.f, 255.f, 0.f)});
         } else if(data.tick > GetFPS() * 3) {
             DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color {0, 0, 0, (unsigned char)Remap(Clamp(data.tick, GetFPS() * 3.f, GetFPS() * 5.f), GetFPS() * 3.f, GetFPS() * 5.f, 0.f, 255.f)});
         }
 
-        Mod_Callback("Update_Intro", (void*)&data);
+        Mod_Callback("Update_Intro", (void*)&data, 2);
     }
 };
 

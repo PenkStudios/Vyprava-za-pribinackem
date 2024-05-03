@@ -72,6 +72,16 @@ namespace Game {
         std::vector<Father_Point> father_Points = {};
         float keyframe_Tick = 0.f;
         int keyframe = 0;
+
+        class Camera_Keyframe {
+        public:
+            Vector3 position;
+            Vector3 target;
+
+            Camera_Keyframe(Vector3 position, Vector3 target) : position(position), target(target) {}
+        };
+        std::vector<Camera_Keyframe> camera_Animation = {};
+        float camera_Animation_Tick = 0.f;
     } data;
 
     void Init() {
@@ -150,9 +160,22 @@ namespace Game {
         }
         doors_File.close();
 
+        std::ifstream animation_File("spawn_animation.txt", std::ios::in);
+        float keyframe_X, keyframe_Y, keyframe_Z,
+              target_X, target_Y, target_Z;
+
+        while(animation_File >> keyframe_X >> keyframe_Y >> keyframe_Z >>
+                                target_X >> target_Y >> target_Z) {
+            data.camera_Animation.push_back(Game_Data::Camera_Keyframe(Vector3 {keyframe_X, keyframe_Y, keyframe_Z},
+                                                                       Vector3 {keyframe_X + target_X, keyframe_Y + target_Y, keyframe_Z + target_Z}));
+        }
+        animation_File.close();
+
         data.door = LoadModel("models/door.glb");
         for(int material = 0; material < data.door.materialCount; material++)
             data.door.materials[material].shader = data.lighting;
+
+        Mod_Callback("Init_Game", (void*)&data);
     }
 
     // Get map collision with ray (map + doors)
@@ -250,6 +273,11 @@ namespace Game {
             data.animation_Frame_Count++;
             if(data.animation_Frame_Count >= data.animations[0].frameCount)
                 data.animation_Frame_Count = 0;
+
+            for(int index = 0; index < data.camera_Animation.size(); index++) {
+                DrawCube(data.camera_Animation[index].position, 1.f, 1.f, 1.f, RED);
+                DrawLine3D(data.camera_Animation[index].position, data.camera_Animation[index].target, WHITE);
+            }
 
             bool door_Opened = false;
             for(Game_Data::Door_Data &door_Data : data.doors) {
@@ -441,7 +469,7 @@ namespace Game {
             }            
         } EndMode3D();
 
-        Mod_Callback("Update_Game_UI", (void*)&data);
+        Mod_Callback("Update_Game_UI", (void*)&data, false);
         
         Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
         RayCollision collision_Legs = Get_Collision_Ray(bottom);
@@ -470,6 +498,8 @@ namespace Game {
 
             DrawText(TextFormat("AI data: keyframe tick %f/%f, keyframe %d/%d", data.keyframe_Tick, max_Tick, data.keyframe, data.father_Points.size()), 5, 5 + 15, 15, WHITE);
         }
+
+        Mod_Callback("Update_Game_UI", (void*)&data, true);
     }
 };
 
