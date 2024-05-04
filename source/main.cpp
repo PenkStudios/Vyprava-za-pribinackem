@@ -15,18 +15,19 @@ int main() {
     ChangeDirectory("assets");
 
     Set_Scene_Data({
-        {INTRO, {Intro::Init,   Intro::Update}},
-        {MENU,  {Menu::Init,    Menu::Update}},
-        {GAME,  {Game::Init,    Game::Update}}
+        {INTRO, {Intro::Init,   Intro::On_Switch,   Intro::Update}},
+        {MENU,  {Menu::Init,    Menu::On_Switch,    Menu::Update}},
+        {GAME,  {Game::Init,    Game::On_Switch,    Game::Update}}
     });
 
-    Switch_To_Scene(INTRO);
+    Switch_To_Scene(MENU);
     Init_Scenes();
 
     Mod_Load_Directory("mods/");
     Mod_Callback("Init", nullptr);
 
     SetTargetFPS(60);
+    EnableCursor();
 
     while(!WindowShouldClose()) {
         BeginDrawing(); {

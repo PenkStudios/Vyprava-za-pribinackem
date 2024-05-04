@@ -10,6 +10,7 @@ Scene scene;
 class SceneInfo {
 public:
     std::function<void(void)> init;
+    std::function<void(void)> on_Switch;
     std::function<void(void)> update;
 };
 
@@ -33,6 +34,7 @@ void Update_Scene() {
 
 void Switch_To_Scene(Scene next_Scene) {
     scene = next_Scene;
+    scenes[scene].on_Switch();
 }
 
 Scene &Get_Scene() {

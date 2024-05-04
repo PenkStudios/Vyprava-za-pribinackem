@@ -3,7 +3,12 @@ WINDOWS-CXX=/bin/x86_64-w64-mingw32-g++
 
 LINK=-std=c++17
 
-all: linux windows finish
+all: linux finish
+
+release:
+	make linux
+	make windows
+	make finish
 
 linux: source/main.cpp
 	$(CXX) source/main.cpp $(LINK) -L. -l:build/libraylib.so.500 -o build/pribiňáček

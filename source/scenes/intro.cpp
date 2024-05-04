@@ -27,10 +27,14 @@ namespace Intro {
         Mod_Callback("Init_Intro", (void*)&data);
     }
 
+    void On_Switch() {
+        Mod_Callback("Switch_Intro", (void*)&data);
+    }
+
     void Update() {
         ClearBackground(BLACK);
 
-        Mod_Callback("Update_Intro", (void*)&data, 0);
+        Mod_Callback("Update_Intro_2D", (void*)&data, false);
 
         // Dammit, the first day of coding and the code is already garbage
         // Dont fucking know what this code does
@@ -59,7 +63,7 @@ namespace Intro {
         // God damn, why would you even set the FPS to 0?!
         if(GetFPS() != 0) {
             if(data.tick > GetFPS() * 6) {
-                Switch_To_Scene(GAME);
+                Switch_To_Scene(MENU);
             }
         }
 
@@ -76,8 +80,6 @@ namespace Intro {
         DrawTriangle({GetScreenWidth() / 2.f - 200.f, GetScreenHeight() / 1.5f},
                      {GetScreenWidth() / 2.f, GetScreenHeight() / 1.3f},
                      {GetScreenWidth() / 2.f + 200.f, GetScreenHeight() / 1.5f}, Color {255, 255, 255, (unsigned char)(opacity_Light / 4.f)});
-    
-        Mod_Callback("Update_Intro", (void*)&data, 1);
 
         if(data.tick < GetFPS() * 1) {
             DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color {0, 0, 0, (unsigned char)Remap(data.tick, 0.f, GetFPS() * 1.f, 255.f, 0.f)});
@@ -85,7 +87,7 @@ namespace Intro {
             DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color {0, 0, 0, (unsigned char)Remap(Clamp(data.tick, GetFPS() * 3.f, GetFPS() * 5.f), GetFPS() * 3.f, GetFPS() * 5.f, 0.f, 255.f)});
         }
 
-        Mod_Callback("Update_Intro", (void*)&data, 2);
+        Mod_Callback("Update_Intro", (void*)&data, true);
     }
 };
 

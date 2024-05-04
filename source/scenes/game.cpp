@@ -11,6 +11,7 @@
 
 #define RLIGHTS_IMPLEMENTATION
 #include "../rlights.h"
+#include "../reasings.c"
 
 #include "../scene.cpp"
 #include "../mod_loader.cpp"
@@ -73,21 +74,22 @@ namespace Game {
         float keyframe_Tick = 0.f;
         int keyframe = 0;
 
-        class Camera_Keyframe {
+        class Wake_Keyframe {
         public:
             Vector3 position;
             Vector3 target;
 
-            Camera_Keyframe(Vector3 position, Vector3 target) : position(position), target(target) {}
+            Wake_Keyframe(Vector3 position, Vector3 target) : position(position), target(target) {}
         };
-        std::vector<Camera_Keyframe> camera_Animation = {};
-        float camera_Animation_Tick = 0.f;
+        std::vector<Wake_Keyframe> wake_Animation = {};
+        float wake_Animation_Tick = 0.f;
+        bool wake_Animation_Finished = false;
     } data;
 
     void Init() {
-        data.camera.position = {0.f, 7.5f, 0.f};
+        data.camera.position = {-10.f, 20.f, 23.5f}; // {0.f, 7.5f, 0.f};
         data.camera.up = {0.f, 1.f, 0.f};
-        data.camera.target = {0.f, 0.f, 10.f};
+        data.camera.target = {0.f, 20.f, 23.5f};
         data.camera.fovy = 90.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
@@ -166,8 +168,8 @@ namespace Game {
 
         while(animation_File >> keyframe_X >> keyframe_Y >> keyframe_Z >>
                                 target_X >> target_Y >> target_Z) {
-            data.camera_Animation.push_back(Game_Data::Camera_Keyframe(Vector3 {keyframe_X, keyframe_Y, keyframe_Z},
-                                                                       Vector3 {keyframe_X + target_X, keyframe_Y + target_Y, keyframe_Z + target_Z}));
+            data.wake_Animation.push_back(Game_Data::Wake_Keyframe(Vector3 {keyframe_X, keyframe_Y, keyframe_Z},
+                                                                   Vector3 {keyframe_X + target_X, keyframe_Y + target_Y, keyframe_Z + target_Z}));
         }
         animation_File.close();
 
@@ -252,6 +254,11 @@ namespace Game {
         return states;
     }
 
+    void On_Switch() {
+        DisableCursor();
+        Mod_Callback("Switch_Game", (void*)&data);
+    }
+
     void Update() {
         ClearBackground(BLACK);
         SetShaderValue(data.lighting, data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
@@ -264,7 +271,7 @@ namespace Game {
         SetShaderValue(data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         BeginMode3D(data.camera); {
-            Mod_Callback("Update_Game", (void*)&data);
+            Mod_Callback("Update_Game_3D", (void*)&data);
 
             data.frame_Counter++;
             if(data.frame_Counter > 100) data.frame_Counter = 0;
@@ -274,15 +281,58 @@ namespace Game {
             if(data.animation_Frame_Count >= data.animations[0].frameCount)
                 data.animation_Frame_Count = 0;
 
-            for(int index = 0; index < data.camera_Animation.size(); index++) {
-                DrawCube(data.camera_Animation[index].position, 1.f, 1.f, 1.f, RED);
-                DrawLine3D(data.camera_Animation[index].position, data.camera_Animation[index].target, WHITE);
+            if(data.debug) {
+                for(int index = 0; index < data.wake_Animation.size(); index++) {
+                    DrawCube(data.wake_Animation[index].position, 1.f, 1.f, 1.f, RED);
+                    DrawLine3D(data.wake_Animation[index].position, data.wake_Animation[index].target, WHITE);
+                }
+            }
+
+            if(data.wake_Animation_Tick < data.wake_Animation.size() - 1) {
+                Vector3 source_Position = data.wake_Animation[(int)data.wake_Animation_Tick].position;
+                Vector3 target_Position = data.wake_Animation[(int)data.wake_Animation_Tick + 1].position;
+
+                #define WAKE_EASING EaseSineInOut
+                #define WAKE_EASING_2 EaseLinearNone
+
+                Vector3 current_Position = {
+                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.x, target_Position.x - source_Position.x, 1.f) +
+                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.x, target_Position.x - source_Position.x, 1.f)) / 2.f,
+                    
+                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.y, target_Position.y - source_Position.y, 1.f) +
+                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.y, target_Position.y - source_Position.y, 1.f)) / 2.f,
+                    
+                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.z, target_Position.z - source_Position.z, 1.f) +
+                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.z, target_Position.z - source_Position.z, 1.f)) / 2.f
+                };
+
+                Vector3 source_Target = data.wake_Animation[(int)data.wake_Animation_Tick].target;
+                Vector3 target_Target = data.wake_Animation[(int)data.wake_Animation_Tick + 1].target;
+
+                Vector3 current_Target = {
+                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.x, target_Target.x - source_Target.x, 1.f) + 
+                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.x, target_Target.x - source_Target.x, 1.f)) / 2.f,
+                    
+                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.y, target_Target.y - source_Target.y, 1.f) + 
+                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.y, target_Target.y - source_Target.y, 1.f)) / 2.f,
+                    
+                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.z, target_Target.z - source_Target.z, 1.f) + 
+                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.z, target_Target.z - source_Target.z, 1.f)) / 2.f
+                };
+
+                data.wake_Animation_Tick += 1.f * GetFrameTime();
+                if(data.wake_Animation_Tick >= data.wake_Animation.size() - 1) {
+                    data.wake_Animation_Finished = true;
+                }
+                
+                data.camera.position = current_Position;
+                data.camera.target = current_Target;
             }
 
             bool door_Opened = false;
             for(Game_Data::Door_Data &door_Data : data.doors) {
                 // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
-                DrawLine3D(data.camera.position, door_Data.position, RED);
+                // DrawLine3D(data.camera.position, door_Data.position, RED);
 
                 float rotation_Player = door_Data.rotation;
                 float rotation_Father = door_Data.rotation_Father;
@@ -469,24 +519,27 @@ namespace Game {
             }            
         } EndMode3D();
 
-        Mod_Callback("Update_Game_UI", (void*)&data, false);
+        Mod_Callback("Update_Game_2D", (void*)&data, false);
         
-        Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
-        RayCollision collision_Legs = Get_Collision_Ray(bottom);
-        if(collision_Legs.hit) {
-            Vector3 target = Vector3Add(collision_Legs.point, {0.f, data.crouching ? 5.0f : 6.5f, 0.f});
-            if(data.camera.position.y < target.y) {
-                data.camera.position = target;
-                data.fall_Acceleration = 0.1f;
-            } else if(data.camera.position.y < target.y + 0.1f && data.camera.position.y > target.y - 0.1f) {
-                // Do nothing there
-                data.fall_Acceleration = 0.1f;
-            } else {
-                data.camera.position.y -= data.fall_Acceleration;
-                data.fall_Acceleration += 0.01f;
-            }
-        } else
-            data.camera.position = old_Position;
+        RayCollision collision_Legs = {0};
+        if(data.wake_Animation_Finished) {
+            Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
+            collision_Legs = Get_Collision_Ray(bottom);
+            if(collision_Legs.hit) {
+                Vector3 target = Vector3Add(collision_Legs.point, {0.f, data.crouching ? 5.0f : 6.5f, 0.f});
+                if(data.camera.position.y < target.y) {
+                    data.camera.position = target;
+                    data.fall_Acceleration = 0.1f;
+                } else if(data.camera.position.y < target.y + 0.1f && data.camera.position.y > target.y - 0.1f) {
+                    // Do nothing there
+                    data.fall_Acceleration = 0.1f;
+                } else {
+                    data.camera.position.y -= data.fall_Acceleration;
+                    data.fall_Acceleration += 0.01f;
+                }
+            } else
+                data.camera.position = old_Position;
+        }
 
         if(data.debug) {
             DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
@@ -499,7 +552,7 @@ namespace Game {
             DrawText(TextFormat("AI data: keyframe tick %f/%f, keyframe %d/%d", data.keyframe_Tick, max_Tick, data.keyframe, data.father_Points.size()), 5, 5 + 15, 15, WHITE);
         }
 
-        Mod_Callback("Update_Game_UI", (void*)&data, true);
+        Mod_Callback("Update_Game_2D", (void*)&data, true);
     }
 };
 
