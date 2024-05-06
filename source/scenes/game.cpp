@@ -8,6 +8,14 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <vector>
+
+#ifdef PLATFORM_ANDROID
+#include <android/log.h>
+#define LOG_VERBOSE(message, ...) ((void)__android_log_print(ANDROID_LOG_VERBOSE, "PRIBINACEK", "[%s %s] " message, __FILE_NAME__, __func__, ##__VA_ARGS__))
+#else
+#define LOG_VERBOSE(message, ...) ((void)printf("PRIBINACEK: " message "\n", ##__VA_ARGS__))
+#endif
 
 #define RLIGHTS_IMPLEMENTATION
 #include "../rlights.h"
@@ -47,7 +55,7 @@ namespace Game {
 
             Father_Point(Vector3 position, int doors_Size) : position(position) {
                 for(int index = 0; index < doors_Size; index++)
-                    door_States.emplace_back();
+                    door_States.push_back(false);
             }
 
             Father_Point(Vector3 position, std::vector<bool> door_States) : position(position), door_States(door_States) {}
@@ -104,7 +112,11 @@ namespace Game {
         int animation_Count = 0; // (1)
         data.animations = LoadModelAnimations("models/human.m3d", &animation_Count);
 
-        data.lighting = LoadShader("shaders/vertex.glsl", "shaders/fragment.glsl");
+#ifdef PLATFORM_ANDROID
+        data.lighting = LoadShader("shaders/vertex100.glsl", "shaders/fragment100.glsl");
+#else
+        data.lighting = LoadShader("shaders/vertex330.glsl", "shaders/fragment330.glsl");
+#endif
 
         data.lighting.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(data.lighting, "matModel");
         data.lighting.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(data.lighting, "viewPos");
@@ -122,8 +134,8 @@ namespace Game {
         data.doorHandle = GenMeshSphere(0.5f, 15, 15);
 
         data.flashlight = CreateLight(LIGHT_POINT, data.camera.position, {0.f, 0.f, 0.f}, WHITE, data.lighting);
-    
-        std::ifstream ai_File("ai.txt", std::ios::in);
+
+        std::istringstream ai_File(LoadFileText("ai.txt"));
 
         std::string line;
         while (std::getline(ai_File, line)) {
@@ -146,9 +158,7 @@ namespace Game {
             }
         }
 
-        ai_File.close();
-
-        std::ifstream doors_File("doors.txt", std::ios::in);
+        std::istringstream doors_File(LoadFileText("doors.txt"));
         float position_X, position_Y, position_Z,
               scale_X, scale_Y, scale_Z,
               rotation_Start, rotation_End;
@@ -160,18 +170,17 @@ namespace Game {
                                       Vector3 {scale_X, scale_Y, scale_Z},
                                               rotation_Start, rotation_End));
         }
-        doors_File.close();
 
-        std::ifstream animation_File("spawn_animation.txt", std::ios::in);
+        std::istringstream animation_File(LoadFileText("spawn_animation.txt"));
         float keyframe_X, keyframe_Y, keyframe_Z,
               target_X, target_Y, target_Z;
+
 
         while(animation_File >> keyframe_X >> keyframe_Y >> keyframe_Z >>
                                 target_X >> target_Y >> target_Z) {
             data.wake_Animation.push_back(Game_Data::Wake_Keyframe(Vector3 {keyframe_X, keyframe_Y, keyframe_Z},
                                                                    Vector3 {keyframe_X + target_X, keyframe_Y + target_Y, keyframe_Z + target_Z}));
         }
-        animation_File.close();
 
         data.door = LoadModel("models/door.glb");
         for(int material = 0; material < data.door.materialCount; material++)
@@ -263,6 +272,9 @@ namespace Game {
         ClearBackground(BLACK);
         SetShaderValue(data.lighting, data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
 
+        float start, end;
+        start = GetTime();
+
         data.flashlight.position = data.camera.position;
         UpdateLightValues(data.lighting, data.flashlight);
 
@@ -270,16 +282,26 @@ namespace Game {
         int fogDensityLoc = GetShaderLocation(data.lighting, "fogDensity");
         SetShaderValue(data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
+        end = GetTime();
+        LOG_VERBOSE("Time update lights: %f", end - start);
+
         BeginMode3D(data.camera); {
+            start = GetTime();
             Mod_Callback("Update_Game_3D", (void*)&data);
 
             data.frame_Counter++;
             if(data.frame_Counter > 100) data.frame_Counter = 0;
 
-            UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
+	    UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
+
+            end = GetTime();
+            LOG_VERBOSE("ONLY UPDATE MODEL: %f", end - start);
+            start = GetTime();
+
             data.animation_Frame_Count++;
-            if(data.animation_Frame_Count >= data.animations[0].frameCount)
-                data.animation_Frame_Count = 0;
+            //if(data.animation_Frame_Count >= data.animations[0].frameCount)
+            //    data.animation_Frame_Count = 0;
+
 
             if(data.debug) {
                 for(int index = 0; index < data.wake_Animation.size(); index++) {
@@ -329,6 +351,10 @@ namespace Game {
                 data.camera.target = current_Target;
             }
 
+            end = GetTime();
+            LOG_VERBOSE("Model updation + wake animation: %f", end - start);
+            start = GetTime();
+
             bool door_Opened = false;
             for(Game_Data::Door_Data &door_Data : data.doors) {
                 // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
@@ -367,6 +393,7 @@ namespace Game {
 
                 Ray ray = GetMouseRay({(float)GetScreenWidth() / 2.f, (float)GetScreenHeight() / 2.f}, data.camera);
                 RayCollision collision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
+
 
                 if(collision.hit && collision.distance < 10.f && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !door_Opened) {
                     door_Data.opening = !door_Data.opening;
@@ -416,6 +443,10 @@ namespace Game {
                 }
             }
 
+            end = GetTime();
+            LOG_VERBOSE("Door opening: %f", end - start);
+            start = GetTime();
+
             // Basically, a very complex and buggy way to slow down the player if he is crouching
             if((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
                 UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
@@ -434,7 +465,15 @@ namespace Game {
                 data.camera.position.x = old_Position.x;
             data.debug = is_Debug;
 
+            end = GetTime();
+            LOG_VERBOSE("Ray collisions: %f", end - start);
+            start = GetTime();
+
             DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
+
+            end = GetTime();
+            LOG_VERBOSE("House drawing: %f", end - start);
+            start = GetTime();
 
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_SHIFT)) data.crouching = !data.crouching;
@@ -516,7 +555,11 @@ namespace Game {
 
             if(data.keyframe > data.father_Points.size() - 1) {
                 data.keyframe = 0;
-            }            
+            }
+
+            end = GetTime();
+            LOG_VERBOSE("Enemy walk: %f", end - start);
+            start = GetTime();
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
@@ -541,6 +584,10 @@ namespace Game {
                 data.camera.position = old_Position;
         }
 
+        end = GetTime();
+        LOG_VERBOSE("Physics: %f", end - start);
+        start = GetTime();
+
         if(data.debug) {
             DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
                                                                                                 collision_Legs.normal.y < 0.99f || collision_Legs.normal.y > 1.01), 5, 5, 15, WHITE);
@@ -552,7 +599,10 @@ namespace Game {
             DrawText(TextFormat("AI data: keyframe tick %f/%f, keyframe %d/%d", data.keyframe_Tick, max_Tick, data.keyframe, data.father_Points.size()), 5, 5 + 15, 15, WHITE);
         }
 
+        DrawFPS(5, 5);
+
         Mod_Callback("Update_Game_2D", (void*)&data, true);
+        LOG_VERBOSE("");
     }
 };
 

@@ -26,7 +26,7 @@ int main() {
     Mod_Load_Directory("mods/");
     Mod_Callback("Init", nullptr);
 
-    SetTargetFPS(60);
+    // SetTargetFPS(60);
     EnableCursor();
 
     while(!WindowShouldClose()) {

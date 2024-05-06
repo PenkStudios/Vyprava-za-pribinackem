@@ -1,10 +1,8 @@
-# Výprava za pribiňáčkem verze 0.3.5
+# Výprava za pribiňáčkem verze 0.3.6
 Velice vtipná hra o cestě pro pribiňáčka
 
 ## Přídáno
-- Dokončena animace po vzbuzení
-- Základní menu
-- "nepřítel" má nyní vystouplé rysy na obličeji
+- Základní podpora androidu
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

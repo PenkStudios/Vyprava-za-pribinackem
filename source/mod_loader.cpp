@@ -66,6 +66,13 @@ void Mod_Callback(std::string function, void* context, bool in_Front = true) {
 	}
 }
 
+#elif defined(PLATFORM_ANDROID)
+#include <string>
+// No modding support for android :/
+
+bool Mod_Load_Path(std::string path) { return false; }
+void Mod_Load_Directory(std::string directory) {}
+void Mod_Callback(std::string function, void* context, bool in_Front = true) {}
 #else // LINUX || MACOS
 
 #include <map>
@@ -73,7 +80,9 @@ void Mod_Callback(std::string function, void* context, bool in_Front = true) {
 #include <iostream>
 #include <dlfcn.h>
 #include <cstring>
+
 #include <filesystem>
+namespace fs = std::filesystem;
 
 typedef void (*callback_Function)(void*);
 typedef void (*callback_Ordered_Function)(void*, bool);
@@ -88,7 +97,9 @@ struct pmMod {
 std::vector<pmMod> mods;
 
 bool Mod_Load_Path(std::string path) {
-	mods.push_back(pmMod {dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL)});
+    pmMod mod{};
+    mod.handle = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
+	mods.push_back(mod);
 	if(mods.back().handle == NULL) {
 		mods.pop_back();
         std::cerr << "dlopen: " << dlerror() << std::endl;
@@ -108,7 +119,7 @@ bool Mod_Load_Path(std::string path) {
 }
 
 void Mod_Load_Directory(std::string directory) {
-	for(auto path : std::filesystem::directory_iterator(directory)) {
+	for(auto path : fs::directory_iterator(directory)) {
         if(path.path().extension().string() == ".so") {
 			std::cout << "[ Mod loader ] Loading " << path.path().string() << std::endl;
 			Mod_Load_Path(path.path().string());

@@ -1,9 +1,9 @@
 CXX=/bin/g++
 WINDOWS-CXX=/bin/x86_64-w64-mingw32-g++
 
-LINK=-std=c++17
+LINK=-std=c++17 -g
 
-all: linux finish
+all: linux windows finish
 
 release:
 	make linux
