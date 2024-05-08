@@ -1,8 +1,8 @@
-# Výprava za pribiňáčkem verze 0.3.6
+# Výprava za pribiňáčkem verze 0.3.9
 Velice vtipná hra o cestě pro pribiňáčka
 
 ## Přídáno
-- Základní podpora androidu
+- Lépe optimalizovaný model "nepřítele" (.m3d -> .iqm)
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

@@ -104,13 +104,13 @@ namespace Game {
         data.house = LoadModel("models/house.glb");
         DisableCursor();
 
-        data.father = LoadModel("models/human.m3d");
+        data.father = LoadModel("models/human.iqm");
 
         Texture human = LoadTexture("textures/human.png");
-        SetMaterialTexture(&data.father.materials[1], MATERIAL_MAP_DIFFUSE, human);
+        SetMaterialTexture(&data.father.materials[0], MATERIAL_MAP_DIFFUSE, human);
 
         int animation_Count = 0; // (1)
-        data.animations = LoadModelAnimations("models/human.m3d", &animation_Count);
+        data.animations = LoadModelAnimations("models/human.iqm", &animation_Count);
 
 #ifdef PLATFORM_ANDROID
         data.lighting = LoadShader("shaders/vertex100.glsl", "shaders/fragment100.glsl");
@@ -292,15 +292,15 @@ namespace Game {
             data.frame_Counter++;
             if(data.frame_Counter > 100) data.frame_Counter = 0;
 
-	    UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
+	        UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
 
             end = GetTime();
             LOG_VERBOSE("ONLY UPDATE MODEL: %f", end - start);
             start = GetTime();
 
             data.animation_Frame_Count++;
-            //if(data.animation_Frame_Count >= data.animations[0].frameCount)
-            //    data.animation_Frame_Count = 0;
+            if(data.animation_Frame_Count >= data.animations[0].frameCount)
+                data.animation_Frame_Count = 0;
 
 
             if(data.debug) {
@@ -546,7 +546,7 @@ namespace Game {
                 angle_Result = angle_Source + addition * lerp;
             }
             
-            DrawModelEx(data.father, current, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {10.f, 10.f, 10.f}, WHITE);
+            DrawModelEx(data.father, current, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
 
             if(data.keyframe_Tick > max) {
                 data.keyframe_Tick = 0.f;
