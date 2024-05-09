@@ -92,6 +92,46 @@ namespace Game {
         std::vector<Wake_Keyframe> wake_Animation = {};
         float wake_Animation_Tick = 0.f;
         bool wake_Animation_Finished = false;
+
+        class Joystick {
+        public:
+            Vector2 center;
+            float size;
+            bool dragging = false;
+
+            Joystick(Vector2 center, float size) : center(center), size(size) {}
+            Joystick() {}
+
+            bool Can_Update() {
+                return !(CheckCollisionPointCircle(GetMousePosition(), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) && !dragging;
+            }
+
+            float Update() {
+                DrawCircleLinesV(center, size, BLACK);
+
+                Vector2 mouse_Point = GetMousePosition();
+
+                Vector2 diff = Vector2Subtract(mouse_Point, center);
+                float angle = atan2(diff.y, diff.x);
+
+                if(!CheckCollisionPointCircle(GetMousePosition(), center, size)) {
+                    mouse_Point = Vector2Add({cos(angle) * size, sin(angle) * size}, center);
+                }
+
+                if((CheckCollisionPointCircle(GetMousePosition(), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || dragging) {
+                    DrawCircleV(mouse_Point, size / 2.f, BLACK);
+                    dragging = true;
+                }
+
+                if(IsMouseButtonUp(MOUSE_BUTTON_LEFT) && dragging) {
+                    dragging = false;
+                }
+
+                return angle * RAD2DEG;
+            }
+        };
+
+        Joystick movement;
     } data;
 
     void Init() {
@@ -101,8 +141,9 @@ namespace Game {
         data.camera.fovy = 90.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
+        data.movement = Game_Data::Joystick({GetScreenHeight() / 3.5f, GetScreenHeight() - GetScreenHeight() / 3.5f}, GetScreenHeight() / 4.f);
+
         data.house = LoadModel("models/house.glb");
-        DisableCursor();
 
         data.father = LoadModel("models/human.iqm");
 
@@ -264,7 +305,8 @@ namespace Game {
     }
 
     void On_Switch() {
-        DisableCursor();
+        //DisableCursor();
+        EnableCursor();
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
@@ -447,24 +489,6 @@ namespace Game {
             LOG_VERBOSE("Door opening: %f", end - start);
             start = GetTime();
 
-            // Basically, a very complex and buggy way to slow down the player if he is crouching
-            if((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
-                UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
-            } else {
-                UpdateCamera(&data.camera, CAMERA_FREE);
-                data.camera.position = old_Position;
-            }
-
-            if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
-                data.camera.position.z = old_Position.z;
-
-            // (if debug) we dont want the spheres to be rendered twice
-            bool is_Debug = data.debug;
-            data.debug = false;
-            if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
-                data.camera.position.x = old_Position.x;
-            data.debug = is_Debug;
-
             end = GetTime();
             LOG_VERBOSE("Ray collisions: %f", end - start);
             start = GetTime();
@@ -563,7 +587,40 @@ namespace Game {
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
-        
+
+        bool can_Update = data.movement.Can_Update();
+
+        if(can_Update) {
+            // Basically, a very complex and buggy way to slow down the player if he is crouching
+            if((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
+                UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
+            } else {
+                UpdateCamera(&data.camera, CAMERA_FREE);
+                data.camera.position = old_Position;
+            }
+        }
+
+        float joystick = data.movement.Update();
+
+        Vector3 diff = Vector3Subtract(data.camera.target, data.camera.position);
+        float camera_Angle = atan2(diff.z, diff.x) + 90.f * DEG2RAD;
+
+        if(!can_Update) {
+            Vector3 offset = {cos(joystick * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f, 0.f, sin(joystick * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f};
+            data.camera.position = Vector3Add(data.camera.position, offset);
+            data.camera.target = Vector3Add(data.camera.target, offset);
+        }
+
+        if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
+            data.camera.position.z = old_Position.z;
+
+        // (if debug) we dont want the spheres to be rendered twice
+        bool is_Debug = data.debug;
+        data.debug = false;
+        if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
+            data.camera.position.x = old_Position.x;
+        data.debug = is_Debug;
+
         RayCollision collision_Legs = {0};
         if(data.wake_Animation_Finished) {
             Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};

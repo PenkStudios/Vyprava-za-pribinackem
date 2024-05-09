@@ -2,7 +2,7 @@
 Velice vtipná hra o cestě pro pribiňáčka
 
 ## Přídáno
-- Lépe optimalizovaný model "nepřítele" (.m3d -> .iqm)
+- Základní joystick
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
