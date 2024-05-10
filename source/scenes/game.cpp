@@ -93,6 +93,12 @@ namespace Game {
         float wake_Animation_Tick = 0.f;
         bool wake_Animation_Finished = false;
 
+        Texture joystick_Base;
+        Texture joystick_Pointer;
+
+        Vector3 camera_Rotation = {0.f, 0.f, 0.f};
+        Vector2 old_Mouse_Position = {0.f, 0.f};
+
         class Joystick {
         public:
             Vector2 center;
@@ -106,33 +112,35 @@ namespace Game {
                 return !(CheckCollisionPointCircle(GetMousePosition(), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) && !dragging;
             }
 
-            float Update() {
-                DrawCircleLinesV(center, size, BLACK);
-
-                Vector2 mouse_Point = GetMousePosition();
-
-                Vector2 diff = Vector2Subtract(mouse_Point, center);
-                float angle = atan2(diff.y, diff.x);
-
-                if(!CheckCollisionPointCircle(GetMousePosition(), center, size)) {
-                    mouse_Point = Vector2Add({cos(angle) * size, sin(angle) * size}, center);
-                }
-
-                if((CheckCollisionPointCircle(GetMousePosition(), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || dragging) {
-                    DrawCircleV(mouse_Point, size / 2.f, BLACK);
-                    dragging = true;
-                }
-
-                if(IsMouseButtonUp(MOUSE_BUTTON_LEFT) && dragging) {
-                    dragging = false;
-                }
-
-                return angle * RAD2DEG;
-            }
+            float Update();
         };
 
         Joystick movement;
     } data;
+
+    float Game_Data::Joystick::Update() {
+        DrawTextureEx(data.joystick_Base, {center.x - size, center.y - size}, 0.f, size * 2.f / data.joystick_Base.width, WHITE);
+
+        Vector2 mouse_Point = GetMousePosition();
+
+        Vector2 diff = Vector2Subtract(mouse_Point, center);
+        float angle = atan2(diff.y, diff.x);
+
+        if(!CheckCollisionPointCircle(GetMousePosition(), center, size)) {
+            mouse_Point = Vector2Add({cos(angle) * size, sin(angle) * size}, center);
+        }
+
+        if((CheckCollisionPointCircle(GetMousePosition(), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || dragging) {
+            DrawTextureEx(data.joystick_Pointer, {mouse_Point.x - size / 2.f, mouse_Point.y - size / 2.f}, 0.f, size / data.joystick_Pointer.width, WHITE);
+            dragging = true;
+        }
+
+        if(IsMouseButtonUp(MOUSE_BUTTON_LEFT) && dragging) {
+            dragging = false;
+        }
+
+        return angle * RAD2DEG;
+    }
 
     void Init() {
         data.camera.position = {-10.f, 20.f, 23.5f}; // {0.f, 7.5f, 0.f};
@@ -141,7 +149,13 @@ namespace Game {
         data.camera.fovy = 90.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
-        data.movement = Game_Data::Joystick({GetScreenHeight() / 3.5f, GetScreenHeight() - GetScreenHeight() / 3.5f}, GetScreenHeight() / 4.f);
+        data.joystick_Base = LoadTexture("textures/joystick_base.png");
+        SetTextureFilter(data.joystick_Base, TEXTURE_FILTER_BILINEAR);
+
+        data.joystick_Pointer = LoadTexture("textures/joystick.png");
+        SetTextureFilter(data.joystick_Pointer, TEXTURE_FILTER_BILINEAR);
+
+        data.movement = Game_Data::Joystick({GetScreenHeight() / 3.5f, GetScreenHeight() - GetScreenHeight() / 3.5f}, GetScreenHeight() / 6.f);
 
         data.house = LoadModel("models/house.glb");
 
@@ -308,6 +322,13 @@ namespace Game {
         //DisableCursor();
         EnableCursor();
         Mod_Callback("Switch_Game", (void*)&data);
+    }
+
+    void Update_Camera_Android() {
+        UpdateCameraPro(&data.camera, {0.f, 0.f, 0.f}, data.camera_Rotation, 1.f);
+        Vector2 delta = Vector2Subtract(data.old_Mouse_Position, GetMousePosition());
+        data.old_Mouse_Position = GetMousePosition();
+        data.camera_Rotation = Vector3Add(data.camera_Rotation, {delta.x, delta.y, 0.f});
     }
 
     void Update() {
@@ -594,8 +615,10 @@ namespace Game {
             // Basically, a very complex and buggy way to slow down the player if he is crouching
             if((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
                 UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
+                // Update_Camera_Android();
             } else {
                 UpdateCamera(&data.camera, CAMERA_FREE);
+                // Update_Camera_Android();
                 data.camera.position = old_Position;
             }
         }
