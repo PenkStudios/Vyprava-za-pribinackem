@@ -98,39 +98,49 @@ namespace Game {
 
         Vector3 camera_Rotation = {0.f, 0.f, 0.f};
         Vector2 old_Mouse_Position = {0.f, 0.f};
+        bool previous_Rotated = false; // If there was a rotate "event" previous frame
+
+        class Joystick_Data {
+        public:
+            float rotation;
+            bool moving;
+
+            Joystick_Data(float rotation, bool moving) : rotation(rotation), moving(moving) {}
+        };
 
         class Joystick {
         public:
             Vector2 center;
             float size;
+
             bool dragging = false;
 
             Joystick(Vector2 center, float size) : center(center), size(size) {}
             Joystick() {}
 
-            bool Can_Update() {
-                return !(CheckCollisionPointCircle(GetMousePosition(), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) && !dragging;
+            bool Can_Update(int touch_Id) {
+                return !(CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) && !dragging;
             }
 
-            float Update();
+            void Render();
+
+            Joystick_Data Update(int touch_Id);
         };
 
         Joystick movement;
     } data;
 
-    float Game_Data::Joystick::Update() {
-        DrawTextureEx(data.joystick_Base, {center.x - size, center.y - size}, 0.f, size * 2.f / data.joystick_Base.width, WHITE);
-
-        Vector2 mouse_Point = GetMousePosition();
+    Game_Data::Joystick_Data Game_Data::Joystick::Update(int touch_Id) {
+        Vector2 mouse_Point = GetTouchPosition(touch_Id);
 
         Vector2 diff = Vector2Subtract(mouse_Point, center);
         float angle = atan2(diff.y, diff.x);
 
-        if(!CheckCollisionPointCircle(GetMousePosition(), center, size)) {
+        if(!CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size)) {
             mouse_Point = Vector2Add({cos(angle) * size, sin(angle) * size}, center);
         }
 
-        if((CheckCollisionPointCircle(GetMousePosition(), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || dragging) {
+        if((CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || dragging) {
             DrawTextureEx(data.joystick_Pointer, {mouse_Point.x - size / 2.f, mouse_Point.y - size / 2.f}, 0.f, size / data.joystick_Pointer.width, WHITE);
             dragging = true;
         }
@@ -139,7 +149,13 @@ namespace Game {
             dragging = false;
         }
 
-        return angle * RAD2DEG;
+        // LOG_VERBOSE("Joystick: dragging %d, id %d\n", dragging, dragging_Id);
+
+        return Game_Data::Joystick_Data(angle * RAD2DEG, (CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || dragging);
+    }
+
+    void Game_Data::Joystick::Render() {
+        DrawTextureEx(data.joystick_Base, {center.x - size, center.y - size}, 0.f, size * 2.f / data.joystick_Base.width, WHITE);
     }
 
     void Init() {
@@ -319,24 +335,29 @@ namespace Game {
     }
 
     void On_Switch() {
-        //DisableCursor();
+        // DisableCursor();
         EnableCursor();
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
-    void Update_Camera_Android() {
-        UpdateCameraPro(&data.camera, {0.f, 0.f, 0.f}, data.camera_Rotation, 1.f);
-        Vector2 delta = Vector2Subtract(data.old_Mouse_Position, GetMousePosition());
-        data.old_Mouse_Position = GetMousePosition();
-        data.camera_Rotation = Vector3Add(data.camera_Rotation, {delta.x, delta.y, 0.f});
+    void Update_Camera_Android(int touch_Id, bool update_Camera) {
+        Vector3 target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
+        data.camera.target = Vector3Add(data.camera.position, target);
+
+        Vector2 delta = Vector2Subtract(data.old_Mouse_Position, GetTouchPosition(touch_Id));
+
+        data.old_Mouse_Position = GetTouchPosition(touch_Id);
+
+        if(!update_Camera)
+            return;
+
+        data.camera_Rotation = Vector3Add(data.camera_Rotation, {-delta.y * GetFrameTime() * 10.f, delta.x * GetFrameTime() * 10.f, 0.f});
+        data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -75.f, 75.f);
     }
 
     void Update() {
         ClearBackground(BLACK);
         SetShaderValue(data.lighting, data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
-
-        float start, end;
-        start = GetTime();
 
         data.flashlight.position = data.camera.position;
         UpdateLightValues(data.lighting, data.flashlight);
@@ -345,11 +366,7 @@ namespace Game {
         int fogDensityLoc = GetShaderLocation(data.lighting, "fogDensity");
         SetShaderValue(data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
-        end = GetTime();
-        LOG_VERBOSE("Time update lights: %f", end - start);
-
         BeginMode3D(data.camera); {
-            start = GetTime();
             Mod_Callback("Update_Game_3D", (void*)&data);
 
             data.frame_Counter++;
@@ -357,9 +374,6 @@ namespace Game {
 
 	        UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
 
-            end = GetTime();
-            LOG_VERBOSE("ONLY UPDATE MODEL: %f", end - start);
-            start = GetTime();
 
             data.animation_Frame_Count++;
             if(data.animation_Frame_Count >= data.animations[0].frameCount)
@@ -414,9 +428,6 @@ namespace Game {
                 data.camera.target = current_Target;
             }
 
-            end = GetTime();
-            LOG_VERBOSE("Model updation + wake animation: %f", end - start);
-            start = GetTime();
 
             bool door_Opened = false;
             for(Game_Data::Door_Data &door_Data : data.doors) {
@@ -506,19 +517,9 @@ namespace Game {
                 }
             }
 
-            end = GetTime();
-            LOG_VERBOSE("Door opening: %f", end - start);
-            start = GetTime();
-
-            end = GetTime();
-            LOG_VERBOSE("Ray collisions: %f", end - start);
-            start = GetTime();
 
             DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
 
-            end = GetTime();
-            LOG_VERBOSE("House drawing: %f", end - start);
-            start = GetTime();
 
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_SHIFT)) data.crouching = !data.crouching;
@@ -602,37 +603,43 @@ namespace Game {
                 data.keyframe = 0;
             }
 
-            end = GetTime();
-            LOG_VERBOSE("Enemy walk: %f", end - start);
-            start = GetTime();
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
 
-        bool can_Update = data.movement.Can_Update();
+        data.movement.Render();
+        bool rotation_Updated = false;
 
-        if(can_Update) {
-            // Basically, a very complex and buggy way to slow down the player if he is crouching
-            if((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
-                UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
-                // Update_Camera_Android();
+        for(int id = 0; id < GetTouchPointCount(); id++) {
+            bool can_Update = data.movement.Can_Update(id);
+            Game_Data::Joystick_Data joystick = data.movement.Update(id);
+
+            if (can_Update) {
+                // Basically, a very complex and buggy way to slow down the player if he is crouching
+                if ((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
+                    // UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
+                    Update_Camera_Android(id, data.previous_Rotated);
+                } else {
+                    // UpdateCamera(&data.camera, CAMERA_FREE);
+                    // data.camera.position = old_Position;
+                    Update_Camera_Android(id, data.previous_Rotated);
+                }
+                rotation_Updated = true;
             } else {
-                UpdateCamera(&data.camera, CAMERA_FREE);
-                // Update_Camera_Android();
-                data.camera.position = old_Position;
+                if(joystick.moving) {
+                    Vector3 diff = Vector3Subtract(data.camera.target, data.camera.position);
+                    float camera_Angle = atan2(diff.z, diff.x) + 90.f * DEG2RAD;
+
+                    Vector3 offset = {
+                            cos(joystick.rotation * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f, 0.f,
+                            sin(joystick.rotation * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f};
+                    data.camera.position = Vector3Add(data.camera.position, offset);
+                    data.camera.target = Vector3Add(data.camera.target, offset);
+                }
             }
         }
 
-        float joystick = data.movement.Update();
-
-        Vector3 diff = Vector3Subtract(data.camera.target, data.camera.position);
-        float camera_Angle = atan2(diff.z, diff.x) + 90.f * DEG2RAD;
-
-        if(!can_Update) {
-            Vector3 offset = {cos(joystick * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f, 0.f, sin(joystick * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f};
-            data.camera.position = Vector3Add(data.camera.position, offset);
-            data.camera.target = Vector3Add(data.camera.target, offset);
-        }
+        data.previous_Rotated = rotation_Updated;
 
         if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
             data.camera.position.z = old_Position.z;
@@ -664,9 +671,6 @@ namespace Game {
                 data.camera.position = old_Position;
         }
 
-        end = GetTime();
-        LOG_VERBOSE("Physics: %f", end - start);
-        start = GetTime();
 
         if(data.debug) {
             DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
@@ -682,7 +686,6 @@ namespace Game {
         DrawFPS(5, 5);
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
-        LOG_VERBOSE("");
     }
 };
 
