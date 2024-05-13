@@ -14,7 +14,7 @@ linux: source/main.cpp
 	$(CXX) source/main.cpp $(LINK) -L. -l:build/libraylib.so.500 -o build/pribiňáček
 
 windows: source/main.cpp
-	$(WINDOWS-CXX) source/main.cpp $(LINK) -L. -l:build/raylib.dll -static -mwindows -lwinmm -o build/pribiňáček.exe
+	# $(WINDOWS-CXX) source/main.cpp $(LINK) -L. -l:build/raylib.dll -static -mwindows -lwinmm -o build/pribiňáček.exe
 
 finish:
 	@echo "\033[96m"

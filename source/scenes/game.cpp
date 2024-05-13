@@ -12,9 +12,9 @@
 
 #ifdef PLATFORM_ANDROID
 #include <android/log.h>
-#define LOG_VERBOSE(message, ...) ((void)__android_log_print(ANDROID_LOG_VERBOSE, "PRIBINACEK", "[%s %s] " message, __FILE_NAME__, __func__, ##__VA_ARGS__))
+#define LOG(message, ...) ((void)__android_log_print(ANDROID_LOG_VERBOSE, "PRIBINACEK", "[%s %s] " message, __FILE_NAME__, __func__, ##__VA_ARGS__))
 #else
-#define LOG_VERBOSE(message, ...) ((void)printf("PRIBINACEK: " message "\n", ##__VA_ARGS__))
+#define LOG(message, ...) ((void)printf("PRIBINACEK: " message "\n", ##__VA_ARGS__))
 #endif
 
 #define RLIGHTS_IMPLEMENTATION
@@ -23,6 +23,12 @@
 
 #include "../scene.cpp"
 #include "../mod_loader.cpp"
+
+#define MINIAUDIO_IMPLEMENTATION
+#include "../miniaudio.h"
+
+// Odkomentujte pro android UI
+// #define ANDROID_UI
 
 namespace Game {
     class Game_Data {
@@ -76,7 +82,6 @@ namespace Game {
         bool crouching = false;
         int frame_Counter = 0;
         int animation_Frame_Count = 0;
-        int cutscene_Frame = 0; // Frame of the starting cutscene
 
         std::vector<Father_Point> father_Points = {};
         float keyframe_Tick = 0.f;
@@ -96,6 +101,9 @@ namespace Game {
         Texture joystick_Base;
         Texture joystick_Pointer;
 
+        Texture crouch;
+        Texture un_Crouch;
+
         Vector3 camera_Rotation = {0.f, 0.f, 0.f};
         Vector2 old_Mouse_Position = {0.f, 0.f};
         bool previous_Rotated = false; // If there was a rotate "event" previous frame
@@ -114,12 +122,13 @@ namespace Game {
             float size;
 
             bool dragging = false;
+            int draggin_Id = -1;
 
             Joystick(Vector2 center, float size) : center(center), size(size) {}
             Joystick() {}
 
             bool Can_Update(int touch_Id) {
-                return !(CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) && !dragging;
+                return !(CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) && !(dragging && draggin_Id == touch_Id);
             }
 
             void Render();
@@ -128,6 +137,20 @@ namespace Game {
         };
 
         Joystick movement;
+
+        ma_device_config deviceConfig;
+        ma_device device;
+
+        ma_context context;
+
+        ma_device_info *pCaptureInfos;
+        ma_uint32 captureCount;
+
+        int microphone_Id = 0;
+        int microphone_Change_Cooldown;
+
+        float max_Audio = 0.f;
+        bool searching_Microphone = true;
     } data;
 
     Game_Data::Joystick_Data Game_Data::Joystick::Update(int touch_Id) {
@@ -140,14 +163,19 @@ namespace Game {
             mouse_Point = Vector2Add({cos(angle) * size, sin(angle) * size}, center);
         }
 
-        if((CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || dragging) {
+        if((!dragging && CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || (dragging && draggin_Id == touch_Id)) {
             DrawTextureEx(data.joystick_Pointer, {mouse_Point.x - size / 2.f, mouse_Point.y - size / 2.f}, 0.f, size / data.joystick_Pointer.width, WHITE);
-            dragging = true;
+            if(!dragging) {
+                dragging = true;
+                draggin_Id = touch_Id;
+            }
         }
 
+        /*
         if(IsMouseButtonUp(MOUSE_BUTTON_LEFT) && dragging) {
             dragging = false;
         }
+         */
 
         // LOG_VERBOSE("Joystick: dragging %d, id %d\n", dragging, dragging_Id);
 
@@ -158,6 +186,26 @@ namespace Game {
         DrawTextureEx(data.joystick_Base, {center.x - size, center.y - size}, 0.f, size * 2.f / data.joystick_Base.width, WHITE);
     }
 
+    void See_Player() {
+
+    }
+
+    void Audio_Data_Callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
+        for(int frame = 0; frame < frameCount; frame++) {
+            float audio = ((float*)pInput)[frame];
+
+            if(audio > data.max_Audio) {
+                data.max_Audio = audio;
+            }
+            
+            if(audio > 0.999f) {
+                See_Player();
+            }
+        }
+
+        (void)pOutput;
+    }
+
     void Init() {
         data.camera.position = {-10.f, 20.f, 23.5f}; // {0.f, 7.5f, 0.f};
         data.camera.up = {0.f, 1.f, 0.f};
@@ -165,13 +213,60 @@ namespace Game {
         data.camera.fovy = 90.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
+        if (ma_context_init(NULL, 0, NULL, &data.context) != MA_SUCCESS) {
+            LOG("Failed to initialize context");
+        }
+
+        ma_device_info *pPlaybackInfos;
+        ma_uint32 playbackCount;
+        ma_device_uninit(&data.device);
+        if (ma_context_get_devices(&data.context, &pPlaybackInfos, &playbackCount, &data.pCaptureInfos, &data.captureCount) != MA_SUCCESS)
+        {
+            LOG("Cannot list devices\n");
+        }
+
+        for(int index = 0; index < data.captureCount; index++)
+            std::cout << data.pCaptureInfos[index].name << std::endl;
+
+        ma_result result;
+
+        data.deviceConfig = ma_device_config_init(ma_device_type_capture);
+        data.deviceConfig.capture.pDeviceID = &data.pCaptureInfos[0].id;
+        data.deviceConfig.capture.format    = ma_format_f32;
+        data.deviceConfig.capture.channels  = 2;
+        data.deviceConfig.sampleRate        = 0;
+        data.deviceConfig.dataCallback      = Audio_Data_Callback;
+        data.deviceConfig.pUserData         = nullptr;
+
+        result = ma_device_init(NULL, &data.deviceConfig, &data.device);
+        if (result != MA_SUCCESS) {
+            LOG("Failed to initialize capture device.\n");
+        }
+
+        result = ma_device_start(&data.device);
+        if (result != MA_SUCCESS) {
+            ma_device_uninit(&data.device);
+            LOG("Failed to start device.\n");
+        }
+
+        // ma_device_uninit(&data.device);
+
+#ifdef ANDROID_UI
         data.joystick_Base = LoadTexture("textures/joystick_base.png");
         SetTextureFilter(data.joystick_Base, TEXTURE_FILTER_BILINEAR);
 
         data.joystick_Pointer = LoadTexture("textures/joystick.png");
         SetTextureFilter(data.joystick_Pointer, TEXTURE_FILTER_BILINEAR);
 
-        data.movement = Game_Data::Joystick({GetScreenHeight() / 3.5f, GetScreenHeight() - GetScreenHeight() / 3.5f}, GetScreenHeight() / 6.f);
+        float margin = GetScreenHeight() / 30.f;
+        data.movement = Game_Data::Joystick({GetScreenHeight() / 5.f + margin, GetScreenHeight() - GetScreenHeight() / 5.f - margin}, GetScreenHeight() / 5.f);
+
+        data.crouch = LoadTexture("textures/crouch.png");
+        SetTextureFilter(data.crouch, TEXTURE_FILTER_BILINEAR);
+
+        data.un_Crouch = LoadTexture("textures/uncrouch.png");
+        SetTextureFilter(data.un_Crouch, TEXTURE_FILTER_BILINEAR);
+#endif
 
         data.house = LoadModel("models/house.glb");
 
@@ -335,8 +430,7 @@ namespace Game {
     }
 
     void On_Switch() {
-        // DisableCursor();
-        EnableCursor();
+        DisableCursor();
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
@@ -365,6 +459,8 @@ namespace Game {
         Vector3 old_Position = data.camera.position;
         int fogDensityLoc = GetShaderLocation(data.lighting, "fogDensity");
         SetShaderValue(data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+
+        Vector3 enemy_Position;
 
         BeginMode3D(data.camera); {
             Mod_Callback("Update_Game_3D", (void*)&data);
@@ -565,7 +661,7 @@ namespace Game {
             }
 
             float max = Vector3Distance(source, target) / 4.f;
-            data.keyframe_Tick += 0.01f;
+            data.keyframe_Tick += 1.f * GetFrameTime();
 
             Ray ray = {{Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
                         Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
@@ -573,9 +669,9 @@ namespace Game {
 
             float y = Get_Collision_Ray(ray).point.y;
 
-            Vector3 current = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
-                            y,
-                            Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
+            enemy_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
+                              y,
+                              Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
 
             Vector3 difference = Vector3Subtract(target, source);
             float angle = -atan2(difference.z, difference.x) * RAD2DEG;
@@ -592,7 +688,7 @@ namespace Game {
                 angle_Result = angle_Source + addition * lerp;
             }
             
-            DrawModelEx(data.father, current, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
+            DrawModelEx(data.father, enemy_Position, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
 
             if(data.keyframe_Tick > max) {
                 data.keyframe_Tick = 0.f;
@@ -602,26 +698,41 @@ namespace Game {
             if(data.keyframe > data.father_Points.size() - 1) {
                 data.keyframe = 0;
             }
-
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
 
+#ifdef ANDROID_UI
         data.movement.Render();
         bool rotation_Updated = false;
 
+        if(data.movement.draggin_Id >= GetTouchPointCount())
+            data.movement.dragging = false;
+
+        float size = GetScreenHeight() / 1300.f;
+        float margin = GetScreenHeight() / 30.f;
+
+        Texture texture = data.crouching ? data.un_Crouch : data.crouch;
+        DrawTextureEx(texture, {(float)GetScreenWidth() - texture.width * size - margin, margin}, 0.f, size, WHITE);
+        Rectangle crouch_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin, texture.width * size, texture.height * size};
+
+        crouch_Rectangle.x -= crouch_Rectangle.width / 2.f;
+        crouch_Rectangle.y -= crouch_Rectangle.height / 2.f;
+        crouch_Rectangle.width *= 2.f;
+        crouch_Rectangle.height *= 2.f;
+
+        // TODO: Předělat celej systém dotyků pomocí gestures
         for(int id = 0; id < GetTouchPointCount(); id++) {
             bool can_Update = data.movement.Can_Update(id);
             Game_Data::Joystick_Data joystick = data.movement.Update(id);
 
-            if (can_Update) {
+            if(CheckCollisionPointRec(GetTouchPosition(id), crouch_Rectangle)) {
+                data.crouching = !data.crouching;
+            } else if (can_Update) {
                 // Basically, a very complex and buggy way to slow down the player if he is crouching
                 if ((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
-                    // UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
                     Update_Camera_Android(id, data.previous_Rotated);
                 } else {
-                    // UpdateCamera(&data.camera, CAMERA_FREE);
-                    // data.camera.position = old_Position;
                     Update_Camera_Android(id, data.previous_Rotated);
                 }
                 rotation_Updated = true;
@@ -640,6 +751,14 @@ namespace Game {
         }
 
         data.previous_Rotated = rotation_Updated;
+#else
+        // Basically, a very complex and buggy way to slow down the player if he is crouching
+        if ((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
+            UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
+        } else {
+            UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
+        }
+#endif
 
         if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
             data.camera.position.z = old_Position.z;
@@ -671,7 +790,6 @@ namespace Game {
                 data.camera.position = old_Position;
         }
 
-
         if(data.debug) {
             DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
                                                                                                 collision_Legs.normal.y < 0.99f || collision_Legs.normal.y > 1.01), 5, 5, 15, WHITE);
@@ -684,6 +802,18 @@ namespace Game {
         }
 
         DrawFPS(5, 5);
+
+        Ray enemy_Ray = {enemy_Position, Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, enemy_Position)), {10.f, 10.f, 10.f})};
+        float player_Distance = Vector3DistanceSqr(enemy_Position, data.camera.position);
+        RayCollision scene_Collision = Get_Collision_Ray(enemy_Ray);
+
+        bool player_Visible = player_Distance < scene_Collision.distance;
+
+        if(player_Visible) {
+            See_Player();
+        }
+
+        bool trigger_Chase = player_Visible;
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
     }

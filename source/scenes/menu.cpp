@@ -7,6 +7,8 @@
 #include "../mod_loader.cpp"
 #include "../scene.cpp"
 
+#include "game.cpp"
+
 namespace Menu {
     Color Alpha_Modify(Color color, unsigned char alpha) { return ColorTint(color, {255, 255, 255, alpha}); }
 
@@ -51,10 +53,13 @@ namespace Menu {
             }
 
             bool Update(unsigned char alpha = 255) {
+                float spacing = GetScreenHeight() / 240.f;
+                float border_Width = GetScreenHeight() / 120.f;
+
                 DrawRectangleRounded(rectangle, 0.3f, 10, Alpha_Modify(WHITE, alpha));
-                DrawRectangleRoundedLinesEx({rectangle.x + 2.5f, rectangle.y + 2.5f, rectangle.width - 7.5f, rectangle.height - 7.5f}, 0.3f, 10, 5.f, Alpha_Modify(GRAY, alpha));
-                DrawRectangleRoundedLinesEx({rectangle.x + 2.5f, rectangle.y + 2.5f, rectangle.width - 5.f, rectangle.height - 5.f}, 0.3f, 10, 5.f, Alpha_Modify(BLACK, alpha));
-                DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, 3.f, Alpha_Modify(WHITE, alpha));
+                DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, 0.3f, 10, border_Width, Alpha_Modify(GRAY, alpha));
+                DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, 0.3f, 10, border_Width, Alpha_Modify(BLACK, alpha));
+                DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Alpha_Modify(WHITE, alpha));
             
                 DrawTextEx(font, text, Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), font_Size, 0.f, BLACK);
 
@@ -77,10 +82,13 @@ namespace Menu {
         data.bold_Font = LoadFontEx("fonts/bold.ttf", 96, nullptr, 0x5ff);
         SetTextureFilter(data.bold_Font.texture, TEXTURE_FILTER_BILINEAR);
 
-        data.settings_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + 75.f * 0.f}, "Nastavení", 40.f, data.medium_Font);
-        data.play_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + 75.f * 1.f}, "Hrát", 40.f, data.medium_Font);
+        float font_Size = GetScreenHeight() / 15.f;
+        float button_Height = GetScreenHeight() / 8.f;
+
+        data.settings_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 0.f}, "Nastavení", font_Size, data.medium_Font);
+        data.play_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Hrát", font_Size, data.medium_Font);
         
-        data.back_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.2f}, "Zpět", 40.f, data.medium_Font);
+        data.back_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.2f}, "Zpět", font_Size, data.medium_Font);
 
         Mod_Callback("Init_Menu", (void*)&data);
         
@@ -114,6 +122,30 @@ namespace Menu {
     }
 
     void Update() {
+        if(Game::data.searching_Microphone) { 
+            Game::data.microphone_Change_Cooldown--;
+            if(Game::data.microphone_Change_Cooldown < 0) {
+                if(Game::data.max_Audio > 0.01f) {
+                    LOG("Found working audio device ID: %d (%s) with time of %f", Game::data.microphone_Id, &Game::data.pCaptureInfos[Game::data.microphone_Id].name, GetTime());
+                    Game::data.searching_Microphone = false;
+                }
+
+                Game::data.max_Audio = 0.f;
+                Game::data.microphone_Id++;
+                if(Game::data.microphone_Id >= Game::data.captureCount)
+                    Game::data.microphone_Id = 0;
+
+                ma_device_uninit(&Game::data.device);
+
+                Game::data.deviceConfig.capture.pDeviceID = &Game::data.pCaptureInfos[Game::data.microphone_Id].id;
+                if (ma_device_init(NULL, &Game::data.deviceConfig, &Game::data.device) != MA_SUCCESS)
+                {
+                    LOG("Failed to initialize device (the 2nd+ time)\n");
+                }
+                ma_device_start(&Game::data.device);
+            }
+        }
+
         if(data.changing_Scene) {
             data.scene_Change_Tick += 1.f * GetFrameTime();
             data.camera.position = Vector3Lerp(data.scene_Perspectives[data.old_Scene],
@@ -136,20 +168,21 @@ namespace Menu {
 
         Mod_Callback("Update_Menu_2D", (void*)&data, false);
 
-        DrawCircleGradient(GetScreenWidth() / 2, GetScreenHeight() / 2, 300.f, BLANK, BLACK);
-        DrawRing({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, 299.f, 10000, 0.f, 360.f, 32, BLACK);
+        DrawCircleGradient(GetScreenWidth() / 2, GetScreenHeight() / 2, GetScreenHeight() / 2.f, BLANK, BLACK);
+        DrawRing({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, GetScreenHeight() / 2.f - GetScreenHeight() / 500.f, 10000, 0.f, 360.f, 32, BLACK);
 
         bool fading_In = data.old_Scene == data.scene;
         unsigned char alpha = fading_In ? Clamp(Remap(data.scene_Change_Tick, 0.f, 0.5f, 255.f, 0.f), 0.f, 255.f) : Clamp(Remap(data.scene_Change_Tick, 0.5f, 1.f, 0.f, 255.f), 0.f, 255.f);
 
         switch(data.scene) {
             case Menu::Menu_Data::Menu_Scene::MAIN: {
+                float font_Size = GetScreenHeight() / 15.f;
                 for(int angle = 0; angle < 360; angle += 20) {
                     Vector2 offset = {cos(angle * DEG2RAD) * 3.f, sin(angle * DEG2RAD) * 3.f};
 
-                    DrawTextExC(data.bold_Font, "Výprava za pribiňáčkem", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, offset), 40.f, 1.f, Alpha_Modify(BLACK, alpha));
+                    DrawTextExC(data.bold_Font, "Výprava za pribiňáčkem", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, offset), font_Size, 1.f, Alpha_Modify(BLACK, alpha));
                 }
-                DrawTextExC(data.bold_Font, "Výprava za pribiňáčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, 40.f, 1.f, Alpha_Modify(WHITE, alpha));
+                DrawTextExC(data.bold_Font, "Výprava za pribiňáčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, Alpha_Modify(WHITE, alpha));
 
                 if(data.settings_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS);
                 if(data.play_Button.Update(alpha)) Switch_To_Scene(GAME);
