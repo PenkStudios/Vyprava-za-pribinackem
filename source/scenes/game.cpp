@@ -24,11 +24,13 @@
 #include "../scene.cpp"
 #include "../mod_loader.cpp"
 
-#define MINIAUDIO_IMPLEMENTATION
-#include "../miniaudio.h"
-
 // Odkomentujte pro android UI
-// #define ANDROID_UI
+#define ANDROID_UI
+
+#ifndef ANDROID_UI
+#define MINIAUDIO_IMPLEMENTATION
+#endif
+#include "../miniaudio.h"
 
 namespace Game {
     class Game_Data {
@@ -86,6 +88,7 @@ namespace Game {
         std::vector<Father_Point> father_Points = {};
         float keyframe_Tick = 0.f;
         int keyframe = 0;
+        float enemy_Direction = 0.f;
 
         class Wake_Keyframe {
         public:
@@ -187,7 +190,23 @@ namespace Game {
     }
 
     void See_Player() {
+        int target_Breakpoint = -1;
+        float target_Breakpoint_Distance = 10000.f;
 
+        int index = 0;
+        for(Game_Data::Father_Point point : data.father_Points) {
+            float distance = Vector3DistanceSqr(point.position, data.camera.position);
+            if(distance < target_Breakpoint_Distance) {
+                target_Breakpoint = index;
+                target_Breakpoint_Distance = distance;
+            }
+            index++;
+        }
+
+        data.enemy_Direction = 1.f * GetFrameTime();
+        if(target_Breakpoint < data.keyframe) {
+            data.enemy_Direction *= -1.f;
+        }
     }
 
     void Audio_Data_Callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
@@ -213,6 +232,7 @@ namespace Game {
         data.camera.fovy = 90.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
+#ifndef ANDROID_UI
         if (ma_context_init(NULL, 0, NULL, &data.context) != MA_SUCCESS) {
             LOG("Failed to initialize context");
         }
@@ -250,7 +270,7 @@ namespace Game {
         }
 
         // ma_device_uninit(&data.device);
-
+#endif
 #ifdef ANDROID_UI
         data.joystick_Base = LoadTexture("textures/joystick_base.png");
         SetTextureFilter(data.joystick_Base, TEXTURE_FILTER_BILINEAR);
@@ -431,6 +451,7 @@ namespace Game {
 
     void On_Switch() {
         DisableCursor();
+        data.enemy_Direction = 1.f * GetFrameTime();
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
