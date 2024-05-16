@@ -1,8 +1,10 @@
-# Výprava za pribiňáčkem verze 0.4.45
+# Výprava za pribiňáčkem verze 0.4.5
 Velice vtipná hra o cestě pro pribiňáčka
 
 ## Přídáno
-- Trochu opraveno snímání zvuků
+- Rychlost při updatování kamery
+- Přidán atribut materiálu v `doors.txt`
+- Lednice & skříně májí nyní dveře
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

@@ -122,33 +122,6 @@ namespace Menu {
     }
 
     void Update() {
-#ifndef ANDROID_UI
-        if(Game::data.searching_Microphone) { 
-            Game::data.microphone_Change_Cooldown--;
-            if(Game::data.microphone_Change_Cooldown < 0) {
-                if(Game::data.max_Audio > 0.01f) {
-                    LOG("Found working audio device ID: %d (%s) with time of %f", Game::data.microphone_Id, &Game::data.pCaptureInfos[Game::data.microphone_Id].name, GetTime());
-                    Game::data.searching_Microphone = false;
-                } else {
-                    Game::data.max_Audio = 0.f;
-                    Game::data.microphone_Id++;
-                    if(Game::data.microphone_Id >= Game::data.captureCount)
-                        Game::data.microphone_Id = 0;
-
-                    Game::data.microphone_Change_Cooldown = 25;
-
-                    ma_device_uninit(&Game::data.device);
-
-                    Game::data.deviceConfig.capture.pDeviceID = &Game::data.pCaptureInfos[Game::data.microphone_Id].id;
-                    if (ma_device_init(NULL, &Game::data.deviceConfig, &Game::data.device) != MA_SUCCESS)
-                    {
-                        LOG("Failed to initialize device (the 2nd+ time)\n");
-                    }
-                    ma_device_start(&Game::data.device);
-                }
-            }
-        }
-#endif
         if(data.changing_Scene) {
             data.scene_Change_Tick += 1.f * GetFrameTime();
             data.camera.position = Vector3Lerp(data.scene_Perspectives[data.old_Scene],

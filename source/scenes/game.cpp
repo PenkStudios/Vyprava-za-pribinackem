@@ -25,12 +25,7 @@
 #include "../mod_loader.cpp"
 
 // Odkomentujte pro android UI
-#define ANDROID_UI
-
-#ifndef ANDROID_UI
-#define MINIAUDIO_IMPLEMENTATION
-#endif
-#include "../miniaudio.h"
+// #define ANDROID_UI
 
 namespace Game {
     class Game_Data {
@@ -42,16 +37,18 @@ namespace Game {
             float default_Rotation;
             float opened_Rotation;
 
+            Material* material;
+
             float rotation; // Rotation caused by player
             float rotation_Father; // Rotation caused by daddy
 
             // -||-
             bool opening;
             bool opening_Father;
-            Door_Data(Vector3 door_Position, Vector3 door_Scale, float door_Default_Rotation, float door_Opened_Rotation) :
+            Door_Data(Vector3 door_Position, Vector3 door_Scale, float door_Default_Rotation, float door_Opened_Rotation, Material* material) :
                 position(door_Position), scale(door_Scale), default_Rotation(door_Default_Rotation),
                 opened_Rotation(door_Opened_Rotation), rotation(door_Default_Rotation),
-                rotation_Father(door_Default_Rotation), opening(false) {}
+                rotation_Father(door_Default_Rotation), material(material), opening(false) {}
         };
 
         std::vector<Door_Data> doors = {};
@@ -141,14 +138,6 @@ namespace Game {
 
         Joystick movement;
 
-        ma_device_config deviceConfig;
-        ma_device device;
-
-        ma_context context;
-
-        ma_device_info *pCaptureInfos;
-        ma_uint32 captureCount;
-
         int microphone_Id = 0;
         int microphone_Change_Cooldown;
 
@@ -209,22 +198,6 @@ namespace Game {
         }
     }
 
-    void Audio_Data_Callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
-        for(int frame = 0; frame < frameCount; frame++) {
-            float audio = ((float*)pInput)[frame];
-
-            if(audio > data.max_Audio) {
-                data.max_Audio = audio;
-            }
-            
-            if(audio > 0.999f) {
-                See_Player();
-            }
-        }
-
-        (void)pOutput;
-    }
-
     void Init() {
         data.camera.position = {-10.f, 20.f, 23.5f}; // {0.f, 7.5f, 0.f};
         data.camera.up = {0.f, 1.f, 0.f};
@@ -232,45 +205,6 @@ namespace Game {
         data.camera.fovy = 90.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
-#ifndef ANDROID_UI
-        if (ma_context_init(NULL, 0, NULL, &data.context) != MA_SUCCESS) {
-            LOG("Failed to initialize context");
-        }
-
-        ma_device_info *pPlaybackInfos;
-        ma_uint32 playbackCount;
-        ma_device_uninit(&data.device);
-        if (ma_context_get_devices(&data.context, &pPlaybackInfos, &playbackCount, &data.pCaptureInfos, &data.captureCount) != MA_SUCCESS)
-        {
-            LOG("Cannot list devices\n");
-        }
-
-        for(int index = 0; index < data.captureCount; index++)
-            std::cout << data.pCaptureInfos[index].name << std::endl;
-
-        ma_result result;
-
-        data.deviceConfig = ma_device_config_init(ma_device_type_capture);
-        data.deviceConfig.capture.pDeviceID = &data.pCaptureInfos[0].id;
-        data.deviceConfig.capture.format    = ma_format_f32;
-        data.deviceConfig.capture.channels  = 2;
-        data.deviceConfig.sampleRate        = 0;
-        data.deviceConfig.dataCallback      = Audio_Data_Callback;
-        data.deviceConfig.pUserData         = nullptr;
-
-        result = ma_device_init(NULL, &data.deviceConfig, &data.device);
-        if (result != MA_SUCCESS) {
-            LOG("Failed to initialize capture device.\n");
-        }
-
-        result = ma_device_start(&data.device);
-        if (result != MA_SUCCESS) {
-            ma_device_uninit(&data.device);
-            LOG("Failed to start device.\n");
-        }
-
-        // ma_device_uninit(&data.device);
-#endif
 #ifdef ANDROID_UI
         data.joystick_Base = LoadTexture("textures/joystick_base.png");
         SetTextureFilter(data.joystick_Base, TEXTURE_FILTER_BILINEAR);
@@ -349,12 +283,25 @@ namespace Game {
               scale_X, scale_Y, scale_Z,
               rotation_Start, rotation_End;
 
+        int material_Id;
+        Material *material;
+
         while(doors_File >> position_X >> position_Y >> position_Z >>
                             scale_X >> scale_Y >> scale_Z >>
-                            rotation_Start >> rotation_End) {
+                            rotation_Start >> rotation_End >> material_Id) {
+            switch(material_Id) {
+                case 0: {
+                    material = &data.house.materials[16];
+                    break;
+                }
+                case 1: {
+                    material = &data.house.materials[0];
+                    break;
+                }
+            }
             data.doors.push_back(Game_Data::Door_Data(Vector3 {position_X, position_Y, position_Z},
-                                      Vector3 {scale_X, scale_Y, scale_Z},
-                                              rotation_Start, rotation_End));
+                                                      Vector3 {scale_X, scale_Y, scale_Z},
+                                                      rotation_Start, rotation_End, material));
         }
 
         std::istringstream animation_File(LoadFileText("spawn_animation.txt"));
@@ -470,6 +417,23 @@ namespace Game {
         data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -75.f, 75.f);
     }
 
+    void Update_Camera_Desktop(float speed) {
+        UpdateCameraPro(&data.camera,
+            (Vector3){
+                (IsKeyDown(KEY_W) || IsKeyDown(KEY_UP))*speed*GetFrameTime()*7.f -       // Move forward-backward
+                (IsKeyDown(KEY_S) || IsKeyDown(KEY_DOWN))*speed*GetFrameTime()*7.f,    
+                (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT))*speed*GetFrameTime()*7.f -    // Move right-left
+                (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))*speed*GetFrameTime()*7.f,
+                0.0f                                                                     // Move up-down
+            },
+            (Vector3){
+                GetMouseDelta().x*0.05f,                                                 // Rotation: yaw
+                GetMouseDelta().y*0.05f,                                                 // Rotation: pitch
+                0.0f                                                                     // Rotation: roll
+            },
+            GetMouseWheelMove()*2.0f);
+    }
+
     void Update() {
         ClearBackground(BLACK);
         SetShaderValue(data.lighting, data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
@@ -570,7 +534,7 @@ namespace Game {
 
                 matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
 
-                DrawMesh(data.door.meshes[0], data.house.materials[16], matrix);
+                DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
                 
                 Matrix matrixDoorHandle = MatrixIdentity();
                 matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
@@ -580,7 +544,7 @@ namespace Game {
                 matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
                 matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
-                DrawMesh(data.doorHandle, data.house.materials[16], matrixDoorHandle);
+                DrawMesh(data.doorHandle, *door_Data.material, matrixDoorHandle);
 
                 Ray ray = GetMouseRay({(float)GetScreenWidth() / 2.f, (float)GetScreenHeight() / 2.f}, data.camera);
                 RayCollision collision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
@@ -639,7 +603,7 @@ namespace Game {
 
 
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
-            if(IsKeyPressed(KEY_LEFT_SHIFT)) data.crouching = !data.crouching;
+            if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
 
             /* {
                 if(IsKeyPressed(KEY_SPACE)) {
@@ -753,8 +717,6 @@ namespace Game {
                 // Basically, a very complex and buggy way to slow down the player if he is crouching
                 if ((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
                     Update_Camera_Android(id, data.previous_Rotated);
-                } else {
-                    Update_Camera_Android(id, data.previous_Rotated);
                 }
                 rotation_Updated = true;
             } else {
@@ -773,12 +735,11 @@ namespace Game {
 
         data.previous_Rotated = rotation_Updated;
 #else
-        // Basically, a very complex and buggy way to slow down the player if he is crouching
-        if ((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
-            UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
-        } else {
-            UpdateCamera(&data.camera, CAMERA_FIRST_PERSON);
-        }
+        float speed = 1.f;
+        if(data.crouching) speed /= 1.5f;
+        if(!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
+
+        Update_Camera_Desktop(speed);
 #endif
 
         if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
