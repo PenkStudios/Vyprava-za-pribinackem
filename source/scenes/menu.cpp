@@ -7,8 +7,6 @@
 #include "../mod_loader.cpp"
 #include "../scene.cpp"
 
-#include "game.cpp"
-
 namespace Menu {
     Color Alpha_Modify(Color color, unsigned char alpha) { return ColorTint(color, {255, 255, 255, alpha}); }
 
@@ -101,6 +99,10 @@ namespace Menu {
 
     void On_Switch() {
         EnableCursor();
+
+        for(int material = 0; material < data.pribinacek.materialCount; material++) {
+            data.pribinacek.materials[material].shader = LoadMaterialDefault().shader;
+        }
 
         Mod_Callback("Switch_Menu", (void*)&data);
     }

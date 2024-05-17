@@ -24,6 +24,8 @@
 #include "../scene.cpp"
 #include "../mod_loader.cpp"
 
+#include "menu.cpp"
+
 // Odkomentujte pro android UI
 // #define ANDROID_UI
 
@@ -68,6 +70,8 @@ namespace Game {
 
         Shader lighting;
         Model house;
+        std::vector<BoundingBox> house_BBoxes;
+        
         Model father;
         Camera3D camera;
         Light flashlight;
@@ -143,6 +147,8 @@ namespace Game {
 
         float max_Audio = 0.f;
         bool searching_Microphone = true;
+
+        bool holding_Pribinacek = false;
     } data;
 
     Game_Data::Joystick_Data Game_Data::Joystick::Update(int touch_Id) {
@@ -224,6 +230,10 @@ namespace Game {
 
         data.house = LoadModel("models/house.glb");
 
+        for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
+            data.house_BBoxes.push_back(GetMeshBoundingBox(data.house.meshes[mesh]));
+        }
+
         data.father = LoadModel("models/human.iqm");
 
         Texture human = LoadTexture("textures/human.png");
@@ -291,7 +301,7 @@ namespace Game {
                             rotation_Start >> rotation_End >> material_Id) {
             switch(material_Id) {
                 case 0: {
-                    material = &data.house.materials[16];
+                    material = &data.house.materials[14];
                     break;
                 }
                 case 1: {
@@ -323,7 +333,7 @@ namespace Game {
     }
 
     // Get map collision with ray (map + doors)
-    RayCollision Get_Collision_Ray(Ray ray) {
+    RayCollision Get_Collision_Ray(Ray ray, bool high_Quality = true) {
         RayCollision collision = { 0 };
         collision.distance = 1000000.f;
         for (int m = 0; m < data.house.meshCount; m++)
@@ -331,7 +341,14 @@ namespace Game {
             // NOTE: We consider the model.transform for the collision check but 
             // it can be checked against any transform Matrix, used when checking against same
             // model drawn multiple times with multiple transforms
-            RayCollision houseCollision = GetRayCollisionMesh(ray, data.house.meshes[m], data.house.transform);
+            RayCollision houseCollision;
+            if(high_Quality) {
+                houseCollision = GetRayCollisionMesh(ray, data.house.meshes[m], data.house.transform);
+            } else {
+                houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
+                // DrawBoundingBox(data.house_BBoxes[m], RED);
+            }
+
             if (houseCollision.hit)
             {
                 if(houseCollision.distance < collision.distance) {
@@ -399,6 +416,10 @@ namespace Game {
     void On_Switch() {
         DisableCursor();
         data.enemy_Direction = 1.f * GetFrameTime();
+
+        for(int material = 0; material < Menu::data.pribinacek.materialCount; material++)
+            Menu::data.pribinacek.materials[material].shader = data.lighting;
+
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
@@ -600,7 +621,7 @@ namespace Game {
 
 
             DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
-
+            DrawModel(Menu::data.pribinacek, {2.129f, 6.114f, 25.6f}, 1.f, WHITE);
 
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;

@@ -1,10 +1,9 @@
-# Výprava za pribiňáčkem verze 0.4.5
+# Výprava za pribiňáčkem verze 0.4.6
 Velice vtipná hra o cestě pro pribiňáčka
 
 ## Přídáno
-- Rychlost při updatování kamery
-- Přidán atribut materiálu v `doors.txt`
-- Lednice & skříně májí nyní dveře
+- Vylepšeny dveře u skříně
+- Začátek práce na boundingbox kolize místo mesh kolizí
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
