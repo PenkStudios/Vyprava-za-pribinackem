@@ -84,7 +84,7 @@ namespace Game {
         float fog_Density = 0.15f;
         bool crouching = false;
         int frame_Counter = 0;
-        int animation_Frame_Count = 0;
+        float animation_Frame_Count = 0;
 
         std::vector<Father_Point> father_Points = {};
         float keyframe_Tick = 0.f;
@@ -149,6 +149,7 @@ namespace Game {
         bool searching_Microphone = true;
 
         bool holding_Pribinacek = false;
+        Vector3 pribinacek_Position;
     } data;
 
     Game_Data::Joystick_Data Game_Data::Joystick::Update(int touch_Id) {
@@ -229,6 +230,9 @@ namespace Game {
 #endif
 
         data.house = LoadModel("models/house.glb");
+        for(int material = 0; material < data.house.materialCount; material++) {
+            SetTextureFilter(data.house.materials[material].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
+        }
 
         for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
             data.house_BBoxes.push_back(GetMeshBoundingBox(data.house.meshes[mesh]));
@@ -333,7 +337,7 @@ namespace Game {
     }
 
     // Get map collision with ray (map + doors)
-    RayCollision Get_Collision_Ray(Ray ray, bool high_Quality = true) {
+    RayCollision Get_Collision_Ray(Ray ray) {
         RayCollision collision = { 0 };
         collision.distance = 1000000.f;
         for (int m = 0; m < data.house.meshCount; m++)
@@ -341,13 +345,7 @@ namespace Game {
             // NOTE: We consider the model.transform for the collision check but 
             // it can be checked against any transform Matrix, used when checking against same
             // model drawn multiple times with multiple transforms
-            RayCollision houseCollision;
-            if(high_Quality) {
-                houseCollision = GetRayCollisionMesh(ray, data.house.meshes[m], data.house.transform);
-            } else {
-                houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
-                // DrawBoundingBox(data.house_BBoxes[m], RED);
-            }
+            RayCollision houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
 
             if (houseCollision.hit)
             {
@@ -420,6 +418,8 @@ namespace Game {
         for(int material = 0; material < Menu::data.pribinacek.materialCount; material++)
             Menu::data.pribinacek.materials[material].shader = data.lighting;
 
+        data.pribinacek_Position = {2.129f, 6.114f, 25.6f};
+
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
@@ -477,7 +477,7 @@ namespace Game {
 	        UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
 
 
-            data.animation_Frame_Count++;
+            data.animation_Frame_Count += 50.f * GetFrameTime();
             if(data.animation_Frame_Count >= data.animations[0].frameCount)
                 data.animation_Frame_Count = 0;
 
@@ -579,41 +579,41 @@ namespace Game {
                 if(door_Data.default_Rotation < door_Data.opened_Rotation) {
                     if(door_Data.opening) {
                         if(door_Data.rotation < door_Data.opened_Rotation) {
-                            door_Data.rotation += 1.f;
+                            door_Data.rotation += 100.f * GetFrameTime();
                         }
                     } else {
                         if(door_Data.rotation > door_Data.default_Rotation) {
-                            door_Data.rotation -= 1.f;
+                            door_Data.rotation -= 100.f * GetFrameTime();
                         }
                     }
 
                     if(door_Data.opening_Father) {
                         if(door_Data.rotation_Father < door_Data.opened_Rotation) {
-                            door_Data.rotation_Father += 1.f;
+                            door_Data.rotation_Father += 100.f * GetFrameTime();
                         }
                     } else {
                         if(door_Data.rotation_Father > door_Data.default_Rotation) {
-                            door_Data.rotation_Father -= 1.f;
+                            door_Data.rotation_Father -= 100.f * GetFrameTime();
                         }
                     }
                 } else {
                     if(door_Data.opening) {
                         if(door_Data.rotation > door_Data.opened_Rotation) {
-                            door_Data.rotation -= 1.f;
+                            door_Data.rotation -= 100.f * GetFrameTime();
                         }
                     } else {
                         if(door_Data.rotation < door_Data.default_Rotation) {
-                            door_Data.rotation += 1.f;
+                            door_Data.rotation += 100.f * GetFrameTime();
                         }
                     }
 
                     if(door_Data.opening_Father) {
                         if(door_Data.rotation_Father > door_Data.opened_Rotation) {
-                            door_Data.rotation_Father -= 1.f;
+                            door_Data.rotation_Father -= 100.f * GetFrameTime();
                         }
                     } else {
                         if(door_Data.rotation_Father < door_Data.default_Rotation) {
-                            door_Data.rotation_Father += 1.f;
+                            door_Data.rotation_Father += 100.f * GetFrameTime();
                         }
                     }
                 }
@@ -621,7 +621,11 @@ namespace Game {
 
 
             DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
-            DrawModel(Menu::data.pribinacek, {2.129f, 6.114f, 25.6f}, 1.f, WHITE);
+
+            if(data.holding_Pribinacek) {
+                data.pribinacek_Position = Vector3Add(data.camera.position, Vector3Normalize(Vector3Subtract(data.camera.target, data.camera.position)));
+            }
+            DrawModel(Menu::data.pribinacek, data.pribinacek_Position, 1.f, WHITE);
 
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
@@ -703,6 +707,19 @@ namespace Game {
 
             if(data.keyframe > data.father_Points.size() - 1) {
                 data.keyframe = 0;
+            }
+
+            Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
+            RayCollision player_Scene_Collision = Get_Collision_Ray(player_Ray);
+            float player_Distance_Pribinacek = Vector3DistanceSqr(data.pribinacek_Position, data.camera.position) / 10.f;
+            bool pribinacek_Visible = player_Distance_Pribinacek < player_Scene_Collision.distance;
+
+            if(!data.holding_Pribinacek && pribinacek_Visible && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                data.holding_Pribinacek = true;
+            }
+
+            if(data.holding_Pribinacek && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                data.holding_Pribinacek = false;
             }
         } EndMode3D();
 
@@ -786,8 +803,8 @@ namespace Game {
                     // Do nothing there
                     data.fall_Acceleration = 0.1f;
                 } else {
-                    data.camera.position.y -= data.fall_Acceleration;
-                    data.fall_Acceleration += 0.01f;
+                    data.camera.position.y -= data.fall_Acceleration * 50.f * GetFrameTime();
+                    data.fall_Acceleration += 1.f * GetFrameTime();
                 }
             } else
                 data.camera.position = old_Position;
@@ -804,7 +821,7 @@ namespace Game {
             DrawText(TextFormat("AI data: keyframe tick %f/%f, keyframe %d/%d", data.keyframe_Tick, max_Tick, data.keyframe, data.father_Points.size()), 5, 5 + 15, 15, WHITE);
         }
 
-        DrawFPS(5, 5);
+        DrawFPS(GetScreenWidth() / 500.f, GetScreenWidth() / 500.f);
 
         Ray enemy_Ray = {enemy_Position, Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, enemy_Position)), {10.f, 10.f, 10.f})};
         float player_Distance = Vector3DistanceSqr(enemy_Position, data.camera.position);
