@@ -1,9 +1,9 @@
-# Výprava za pribiňáčkem verze 0.4.7
+# Výprava za pribiňáčkem verze 0.4.8
 Velice vtipná hra o cestě pro pribiňáčka
 
 ## Přídáno
-- Dokončna opimizace domu
-- Začátek práce na sbírání pribiňáčka
+- Sbírání předmětu
+- Začátek práce na vylepšení mapy
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

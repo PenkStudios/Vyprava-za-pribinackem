@@ -148,8 +148,21 @@ namespace Game {
         float max_Audio = 0.f;
         bool searching_Microphone = true;
 
-        bool holding_Pribinacek = false;
-        Vector3 pribinacek_Position;
+        enum Item {NONE, PRIBINACEK, SPOON, _LAST};
+        class Item_Data {
+        public:
+            Vector3 position;
+            float y_Rotation;
+
+            float fall_Acceleration;
+
+            Item_Data(Vector3 position) : position(position), y_Rotation(0), fall_Acceleration(0) {}
+        };
+
+        std::vector<Item_Data> item_Data;
+        Item holding_Item = Item::NONE;
+
+        Model spoon;
     } data;
 
     Game_Data::Joystick_Data Game_Data::Joystick::Update(int touch_Id) {
@@ -333,6 +346,10 @@ namespace Game {
         for(int material = 0; material < data.door.materialCount; material++)
             data.door.materials[material].shader = data.lighting;
 
+        data.spoon = LoadModel("models/spoon.glb");
+        for(int material = 0; material < data.spoon.materialCount; material++)
+            data.spoon.materials[material].shader = data.lighting;
+
         Mod_Callback("Init_Game", (void*)&data);
     }
 
@@ -381,7 +398,7 @@ namespace Game {
 
     bool Ray_Side_Collision(Ray ray, Vector3 old_Position) {
         RayCollision collision = Get_Collision_Ray(ray);
-        if(collision.hit && collision.distance < 1.f) {
+        if(collision.hit && collision.distance < 2.f) {
             return true;
         }
 
@@ -418,7 +435,11 @@ namespace Game {
         for(int material = 0; material < Menu::data.pribinacek.materialCount; material++)
             Menu::data.pribinacek.materials[material].shader = data.lighting;
 
-        data.pribinacek_Position = {2.129f, 6.114f, 25.6f};
+        data.item_Data = {
+            Game_Data::Item_Data({0.f, 0.f, 0.f}),          // NONE
+            Game_Data::Item_Data({2.129f, 6.114f, 25.6f}),  // PRIBINACEK
+            Game_Data::Item_Data({2.129f, 6.114f, 25.6f})   // SPOON
+        };
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -570,7 +591,6 @@ namespace Game {
                 Ray ray = GetMouseRay({(float)GetScreenWidth() / 2.f, (float)GetScreenHeight() / 2.f}, data.camera);
                 RayCollision collision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
 
-
                 if(collision.hit && collision.distance < 10.f && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !door_Opened) {
                     door_Data.opening = !door_Data.opening;
                     door_Opened = true;
@@ -621,11 +641,67 @@ namespace Game {
 
 
             DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
+            
+            Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
+            Mesh *bbox_Mesh = nullptr;
+            
+            for(int index = 0; index < data.item_Data.size(); index++) {
+                switch(index) {
+                    case Game_Data::PRIBINACEK: {
+                        DrawModelEx(Menu::data.pribinacek, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
+                        bbox_Mesh = &Menu::data.pribinacek.meshes[1];
+                        break;
+                    }
 
-            if(data.holding_Pribinacek) {
-                data.pribinacek_Position = Vector3Add(data.camera.position, Vector3Normalize(Vector3Subtract(data.camera.target, data.camera.position)));
+                    case Game_Data::SPOON: {
+                        DrawModelEx(data.spoon, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
+                        bbox_Mesh = &data.spoon.meshes[0];
+                        break;
+                    }
+
+                    default: break;
+                }
+
+                if((Game_Data::Item)index != Game_Data::NONE && (Game_Data::Item)index != Game_Data::_LAST) {
+                    if(data.holding_Item == (Game_Data::Item)index) {
+                        data.item_Data[index].position = Vector3Add(data.camera.position, Vector3Multiply(Vector3Normalize(Vector3Subtract(data.camera.target, data.camera.position)), {3.f, 3.f, 3.f}));
+                        
+                        Vector3 diff = Vector3Subtract(data.camera.target, data.camera.position);
+                        data.item_Data[index].y_Rotation = -atan2(diff.z, diff.x) * RAD2DEG;
+                    } else {
+                        Ray down = {data.item_Data[index].position, {0.f, -0.1f, 0.f}};
+                        RayCollision collision = Get_Collision_Ray(down);
+                        if(data.debug) DrawRay(down, RED);
+                        if(collision.distance > 1.f) {
+                            data.item_Data[index].position.y -= data.item_Data[index].fall_Acceleration;
+                            data.item_Data[index].fall_Acceleration += 0.01f * GetFrameTime();
+                        }
+                    }
+
+                    if(bbox_Mesh != nullptr) {
+                        BoundingBox bbox = {{-1.f, -1.f, -1.f}, {1.f, 1.f, 1.f}};
+                        bbox.min = Vector3Add(bbox.min, data.item_Data[index].position);
+                        bbox.max = Vector3Add(bbox.max, data.item_Data[index].position);
+                        
+                        if(data.debug) DrawBoundingBox(bbox, RED);
+
+                        RayCollision player_Item_Collision = GetRayCollisionBox(player_Ray, bbox);
+
+                        bool item_Visible = player_Item_Collision.hit && player_Item_Collision.distance < 5.f;
+
+                        if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                            if(data.holding_Item == (Game_Data::Item)index) {
+                                data.item_Data[index].fall_Acceleration = 0.f;
+                                data.holding_Item = Game_Data::NONE;
+                            } else {
+                                if(item_Visible) {
+                                    data.holding_Item = (Game_Data::Item)index;
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            DrawModel(Menu::data.pribinacek, data.pribinacek_Position, 1.f, WHITE);
 
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
@@ -708,22 +784,13 @@ namespace Game {
             if(data.keyframe > data.father_Points.size() - 1) {
                 data.keyframe = 0;
             }
-
-            Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
-            RayCollision player_Scene_Collision = Get_Collision_Ray(player_Ray);
-            float player_Distance_Pribinacek = Vector3DistanceSqr(data.pribinacek_Position, data.camera.position) / 10.f;
-            bool pribinacek_Visible = player_Distance_Pribinacek < player_Scene_Collision.distance;
-
-            if(!data.holding_Pribinacek && pribinacek_Visible && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                data.holding_Pribinacek = true;
-            }
-
-            if(data.holding_Pribinacek && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                data.holding_Pribinacek = false;
-            }
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
+
+        const float size = 10.f;
+        DrawLineEx({GetScreenWidth() / 2.f - size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + size, GetScreenHeight() / 2.f}, 2.f, Fade(WHITE, 0.2f));
+        DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + size}, 2.f, Fade(WHITE, 0.2f));
 
 #ifdef ANDROID_UI
         data.movement.Render();
