@@ -1,4 +1,5 @@
 #include <raylib.h>
+#include <time.h>
 #include "scene.cpp"
 #include "mod_loader.cpp"
 
@@ -7,6 +8,7 @@
 #include "scenes/game.cpp"
 
 int main() {
+    srand(time(NULL));
     SetConfigFlags(FLAG_MSAA_4X_HINT);
 
 #ifdef PLATFORM_ANDROID

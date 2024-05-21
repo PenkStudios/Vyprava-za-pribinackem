@@ -1,0 +1,43 @@
+/*
+Konfigurační soubor hry
+-----------------------
+ai.txt
+------
+Zachovává AI "nepřítele".
+Každá řádka = breakpoint
+
+(X) = počet dveří = počet řádků v doors.txt
+Formát řádkou: `pozice_x pozice_y pozice_z dveře_1 dveře_2 ... dveře_(X)`
+
+NOTE: Rotace se v runtime vypočítá automaticky
+
+doors.txt
+---------
+Zachovává všechny informace o dveřích
+Každá žádka = jedny dveře
+
+Formát řádkou: `pozice_x pozice_y pozice_z velikost_x velikost_y velikost_z začáteční_rotace konečná_rotace materiál`
+
+`materiál` - ID z předvybraných materiálů (id=0 dřevo, id=1 bílý materiál, dveře od lednice)
+
+spawn_animation.txt
+-------------------
+Zachovává value informace o "wake" animation_Count
+Každá řádka = breakpoint
+
+Formát řádkou: `pozice_x pozice_y pozice_z směr_x směr_y směr_z`
+NOTE: směr je od pozice 0, 0, 0 (0, 0, 1 je dopředu)
+
+       +Y |   / +Z
+          |  /
+          | /
+ -X       |/       +X
+ ---------|---------
+         /|
+        / |
+       /  |
+  -Z  /   | -Y
+*/
+
+// Značí, kde se spawnuje lžíce (pozice_x1 pozice_y1 pozice_z1 rotace_y1 pozice_x2 pozice_y2 pozice_z2 rotace_y2 ...)
+SPOON_SPAWNS = -26 5 4 0 12 16 25 0 -7.51 11 29.12 90

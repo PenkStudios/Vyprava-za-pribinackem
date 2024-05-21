@@ -26,6 +26,9 @@
 
 #include "menu.cpp"
 
+// Convert blender coords to raylib coords
+#define B2RL(x, y, z) {x, z, -y}
+
 // Odkomentujte pro android UI
 // #define ANDROID_UI
 
@@ -91,14 +94,14 @@ namespace Game {
         int keyframe = 0;
         float enemy_Direction = 0.f;
 
-        class Wake_Keyframe {
+        class Directional_Position {
         public:
             Vector3 position;
             Vector3 target;
 
-            Wake_Keyframe(Vector3 position, Vector3 target) : position(position), target(target) {}
+            Directional_Position(Vector3 position, Vector3 target) : position(position), target(target) {}
         };
-        std::vector<Wake_Keyframe> wake_Animation = {};
+        std::vector<Directional_Position> wake_Animation = {};
         float wake_Animation_Tick = 0.f;
         bool wake_Animation_Finished = false;
 
@@ -108,7 +111,7 @@ namespace Game {
         Texture crouch;
         Texture un_Crouch;
 
-        Vector3 camera_Rotation = {0.f, 0.f, 0.f};
+        Vector3 camera_Rotation = {0.f, 180.f, 0.f};
         Vector2 old_Mouse_Position = {0.f, 0.f};
         bool previous_Rotated = false; // If there was a rotate "event" previous frame
 
@@ -155,15 +158,146 @@ namespace Game {
             float y_Rotation;
 
             float fall_Acceleration;
+            RayCollision collision;
+            bool falling;
 
-            Item_Data(Vector3 position) : position(position), y_Rotation(0), fall_Acceleration(0) {}
+            void Calculate_Collision();
+
+            void Init() {
+                fall_Acceleration = 0.1f;
+                Calculate_Collision();
+                falling = true;
+            }
+
+            Item_Data(Vector3 position, float y_Rotation) : position(position), y_Rotation(y_Rotation), fall_Acceleration(0), falling(true) { Init(); }
+            Item_Data(Vector3 position) : position(position), y_Rotation(0), fall_Acceleration(0), falling(true) { Init(); }
         };
 
         std::vector<Item_Data> item_Data;
         Item holding_Item = Item::NONE;
 
         Model spoon;
+
+        Vector3 camera_Target = {0.f, 0.f, 1.f}; // Camera rotation from the point {0, 0, 0}
+
+        class Guide_Caption {
+        public:
+            std::string target_Text;
+            bool can_Skip; // tap to skip (for story)
+
+            std::string text; // slowly written
+            float frame = 1;
+
+            std::string _Utf8_Substr(const std::string& str, unsigned int start, unsigned int leng) {
+                if (leng==0) { return ""; }
+                unsigned int c, i, ix, q, min=4294967295, max=4294967295;
+                for (q=0, i=0, ix=str.length(); i < ix; i++, q++)
+                {
+                    if (q==start){ min=i; }
+                    if (q<=start+leng || leng==std::string::npos){ max=i; }
+
+                    c = (unsigned char) str[i];
+                    if      (
+                            //c>=0   &&
+                            c<=127) i+=0;
+                    else if ((c & 0xE0) == 0xC0) i+=1;
+                    else if ((c & 0xF0) == 0xE0) i+=2;
+                    else if ((c & 0xF8) == 0xF0) i+=3;
+                    //else if (($c & 0xFC) == 0xF8) i+=4; // 111110bb //byte 5, unnecessary in 4 byte UTF-8
+                    //else if (($c & 0xFE) == 0xFC) i+=5; // 1111110b //byte 6, unnecessary in 4 byte UTF-8
+                    else return "";//invalid utf8
+                }
+                if (q<=start+leng || leng==std::string::npos){ max=i; }
+                if (min==std::string::npos || max==std::string::npos) { return ""; }
+                return str.substr(min,max);
+            }
+
+            // Returns true if skipping this frame
+            bool Update() {
+                frame += 20.f * GetFrameTime();
+                if(frame > target_Text.size()) {
+                    frame = target_Text.size();
+                }
+
+                text = _Utf8_Substr(target_Text, 0, (int)frame);
+
+                float margin = GetScreenWidth() / 50.f;
+                float height = GetScreenHeight() / 6.f;
+                Rectangle rectangle = {margin, margin, GetScreenWidth() - margin * 2.f, height};
+
+                DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
+                DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, 5.f, Color {0, 0, 0, 255});
+
+                Vector2 text_Size = MeasureTextEx(Menu::data.medium_Font, text.c_str(), 30.f, 0.f);
+                DrawTextEx(Menu::data.medium_Font, text.c_str(), {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, 30.f, 0.f, WHITE);
+
+                if(can_Skip && IsKeyPressed(KEY_SPACE)) {
+                    return true;
+                }
+                return false;
+            }
+
+            Guide_Caption(std::string text) : target_Text(text), can_Skip(true), text("") {}
+            Guide_Caption(std::string text, bool can_Skip) : target_Text(text), can_Skip(can_Skip), text("") {}
+        };
+
+        int guide_Index = 0;
+        std::vector<Guide_Caption> guide_Texts = {};
+
+        bool guide_Finished = false;
+        std::vector<Item_Data> spoon_Spawns;
+
+        const BoundingBox players_Room = {{-15.208473, 12.999510, 2.288752}, {-0.008472, 26.592718, 29.488750}};
     } data;
+
+    // Get map collision with ray (map + doors)
+    RayCollision Get_Collision_Ray(Ray ray) {
+        RayCollision collision = { 0 };
+        collision.distance = 1000000.f;
+        for (int m = 0; m < data.house.meshCount; m++)
+        {
+            // NOTE: We consider the model.transform for the collision check but 
+            // it can be checked against any transform Matrix, used when checking against same
+            // model drawn multiple times with multiple transforms
+            RayCollision houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
+            if(data.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
+
+            if (houseCollision.hit)
+            {
+                if(houseCollision.distance < collision.distance) {
+                    collision = houseCollision;
+                }
+            }
+        }
+
+        for(Game_Data::Door_Data &door_Data : data.doors) {
+            // Fun fact: Matrix multiplication order matters
+            // bruh it literaly says that in the MatrixMultiply documentation ._.
+            Matrix matrix = MatrixIdentity();
+            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
+            
+            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
+            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
+            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+
+            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+
+            RayCollision doorCollision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
+            if (doorCollision.hit)
+            {
+                if(doorCollision.distance < collision.distance) {
+                    collision = doorCollision;
+                }
+            }
+        }
+
+        return collision;
+    }
+    
+    void Game_Data::Item_Data::Calculate_Collision() {
+        Ray down = {position, {0.f, -0.1f, 0.f}};
+        collision = Get_Collision_Ray(down);
+    }
 
     Game_Data::Joystick_Data Game_Data::Joystick::Update(int touch_Id) {
         Vector2 mouse_Point = GetTouchPosition(touch_Id);
@@ -338,8 +472,8 @@ namespace Game {
 
         while(animation_File >> keyframe_X >> keyframe_Y >> keyframe_Z >>
                                 target_X >> target_Y >> target_Z) {
-            data.wake_Animation.push_back(Game_Data::Wake_Keyframe(Vector3 {keyframe_X, keyframe_Y, keyframe_Z},
-                                                                   Vector3 {keyframe_X + target_X, keyframe_Y + target_Y, keyframe_Z + target_Z}));
+            data.wake_Animation.push_back(Game_Data::Directional_Position(Vector3 {keyframe_X, keyframe_Y, keyframe_Z},
+                                                                   Vector3 {target_X, target_Y, target_Z}));
         }
 
         data.door = LoadModel("models/door.glb");
@@ -350,50 +484,30 @@ namespace Game {
         for(int material = 0; material < data.spoon.materialCount; material++)
             data.spoon.materials[material].shader = data.lighting;
 
-        Mod_Callback("Init_Game", (void*)&data);
-    }
+        std::istringstream config_File(LoadFileText("config.txt"));
 
-    // Get map collision with ray (map + doors)
-    RayCollision Get_Collision_Ray(Ray ray) {
-        RayCollision collision = { 0 };
-        collision.distance = 1000000.f;
-        for (int m = 0; m < data.house.meshCount; m++)
-        {
-            // NOTE: We consider the model.transform for the collision check but 
-            // it can be checked against any transform Matrix, used when checking against same
-            // model drawn multiple times with multiple transforms
-            RayCollision houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
-
-            if (houseCollision.hit)
-            {
-                if(houseCollision.distance < collision.distance) {
-                    collision = houseCollision;
-                }
-            }
-        }
-
-        for(Game_Data::Door_Data &door_Data : data.doors) {
-            // Fun fact: Matrix multiplication order matters
-            // bruh it literaly says that in the MatrixMultiply documentation ._.
-            Matrix matrix = MatrixIdentity();
-            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
+        while (std::getline(config_File, line)) {
+            std::stringstream string_Stream(line);
             
-            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
-            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+            std::vector<std::string> strings = {};
+            std::string string;
 
-            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
-
-            RayCollision doorCollision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
-            if (doorCollision.hit)
-            {
-                if(doorCollision.distance < collision.distance) {
-                    collision = doorCollision;
+            while(string_Stream >> string) {
+                strings.push_back(string);
+            }
+            
+            if(strings.size() > 2 && strings[1] == "=") {
+                if(strings[0] == "SPOON_SPAWNS" && (strings.size() - 2) % 4 == 0) {
+                    for(int index = 2; index < strings.size(); index += 4) {
+                        data.spoon_Spawns.push_back(Game_Data::Item_Data({std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, std::stof(strings[index + 3])));
+                    }
+                } else {
+                    LOG("Unknown variable or bad value %s", strings[0].c_str());
                 }
             }
         }
 
-        return collision;
+        Mod_Callback("Init_Game", (void*)&data);
     }
 
     bool Ray_Side_Collision(Ray ray, Vector3 old_Position) {
@@ -435,18 +549,31 @@ namespace Game {
         for(int material = 0; material < Menu::data.pribinacek.materialCount; material++)
             Menu::data.pribinacek.materials[material].shader = data.lighting;
 
+        int spoon_Position_Index = rand() % data.spoon_Spawns.size();
+
         data.item_Data = {
-            Game_Data::Item_Data({0.f, 0.f, 0.f}),          // NONE
-            Game_Data::Item_Data({2.129f, 6.114f, 25.6f}),  // PRIBINACEK
-            Game_Data::Item_Data({2.129f, 6.114f, 25.6f})   // SPOON
+            Game_Data::Item_Data({0.f, 0.f, 0.f}),              // NONE
+            Game_Data::Item_Data(B2RL(26.5f, -41.f, 8.f)),      // PRIBINACEK
+            data.spoon_Spawns[spoon_Position_Index]             // SPOON
         };
+
+        data.guide_Texts.clear();
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepžekonatelnou chuť na pribiňáčka"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Tvým cílem je jít pro pribiňáčka a sníst si ho tady v pokoji"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Jo a táta vždycky na noc vypíná pojistky, aby jsem nemohl být na mobilu"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý no"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribiňáček", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("2. najdi lžičku", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. vem pribináček a\nlžíci do pokoje", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribiňáček", false));
+
+        data.guide_Finished = false;
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
     void Update_Camera_Android(int touch_Id, bool update_Camera) {
-        Vector3 target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
-        data.camera.target = Vector3Add(data.camera.position, target);
+        data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
         Vector2 delta = Vector2Subtract(data.old_Mouse_Position, GetTouchPosition(touch_Id));
 
@@ -455,8 +582,8 @@ namespace Game {
         if(!update_Camera)
             return;
 
-        data.camera_Rotation = Vector3Add(data.camera_Rotation, {-delta.y * GetFrameTime() * 10.f, delta.x * GetFrameTime() * 10.f, 0.f});
-        data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -75.f, 75.f);
+        data.camera_Rotation = Vector3Add(data.camera_Rotation, {-delta.y * GetFrameTime() * 5.f, delta.x * GetFrameTime() * 5.f, 0.f});
+        data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -85.f, 85.f);
     }
 
     void Update_Camera_Desktop(float speed) {
@@ -469,11 +596,15 @@ namespace Game {
                 0.0f                                                                     // Move up-down
             },
             (Vector3){
-                GetMouseDelta().x*0.05f,                                                 // Rotation: yaw
-                GetMouseDelta().y*0.05f,                                                 // Rotation: pitch
-                0.0f                                                                     // Rotation: roll
+                0.f, 0.f, 0.f                                                            // Rotation: roll
             },
-            GetMouseWheelMove()*2.0f);
+            0.f);
+
+        data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
+
+        Vector2 delta = GetMouseDelta();
+        data.camera_Rotation = Vector3Add(data.camera_Rotation, {delta.y * GetFrameTime() * 5.f, -delta.x * GetFrameTime() * 5.f, 0.f});
+        data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -85.f, 85.f);
     }
 
     void Update() {
@@ -488,6 +619,7 @@ namespace Game {
         SetShaderValue(data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         Vector3 enemy_Position;
+        bool action_Used = false; // If any action was used this frame (preventing click-through)
 
         BeginMode3D(data.camera); {
             Mod_Callback("Update_Game_3D", (void*)&data);
@@ -497,205 +629,226 @@ namespace Game {
 
 	        UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
 
-
             data.animation_Frame_Count += 50.f * GetFrameTime();
             if(data.animation_Frame_Count >= data.animations[0].frameCount)
                 data.animation_Frame_Count = 0;
 
+            /* WAKE ANIMATION */ {
+                if(data.debug) {
+                    for(int index = 0; index < data.wake_Animation.size(); index++) {
+                        DrawCube(data.wake_Animation[index].position, 1.f, 1.f, 1.f, RED);
+                        DrawLine3D(data.wake_Animation[index].position, Vector3Add(data.wake_Animation[index].position, data.wake_Animation[index].target), WHITE);
+                    }
+                }
 
-            if(data.debug) {
-                for(int index = 0; index < data.wake_Animation.size(); index++) {
-                    DrawCube(data.wake_Animation[index].position, 1.f, 1.f, 1.f, RED);
-                    DrawLine3D(data.wake_Animation[index].position, data.wake_Animation[index].target, WHITE);
+                if(data.wake_Animation_Tick < data.wake_Animation.size() - 1) {
+                    Vector3 source_Position = data.wake_Animation[(int)data.wake_Animation_Tick].position;
+                    Vector3 target_Position = data.wake_Animation[(int)data.wake_Animation_Tick + 1].position;
+
+                    #define WAKE_EASING EaseSineInOut
+                    #define WAKE_EASING_2 EaseLinearNone
+
+                    Vector3 current_Position = {
+                        (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.x, target_Position.x - source_Position.x, 1.f) +
+                            WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.x, target_Position.x - source_Position.x, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.y, target_Position.y - source_Position.y, 1.f) +
+                            WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.y, target_Position.y - source_Position.y, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.z, target_Position.z - source_Position.z, 1.f) +
+                            WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.z, target_Position.z - source_Position.z, 1.f)) / 2.f
+                    };
+
+                    Vector3 source_Target = data.wake_Animation[(int)data.wake_Animation_Tick].target;
+                    Vector3 target_Target = data.wake_Animation[(int)data.wake_Animation_Tick + 1].target;
+
+                    Vector3 current_Target = {
+                        (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.x, target_Target.x - source_Target.x, 1.f) + 
+                            WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.x, target_Target.x - source_Target.x, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.y, target_Target.y - source_Target.y, 1.f) + 
+                            WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.y, target_Target.y - source_Target.y, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.z, target_Target.z - source_Target.z, 1.f) + 
+                            WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.z, target_Target.z - source_Target.z, 1.f)) / 2.f
+                    };
+
+                    bool can_Update = true;
+                    if(data.wake_Animation_Tick && data.guide_Index < 1) can_Update = false;
+                    if((int)data.wake_Animation_Tick == 3 && !data.guide_Finished) can_Update = false;
+
+                    if(can_Update) {
+                        data.wake_Animation_Tick += 1.f * GetFrameTime();
+                    }
+
+                    if(data.wake_Animation_Tick >= data.wake_Animation.size() - 1) {
+                        data.wake_Animation_Finished = true;
+                    }
+                    
+                    data.camera.position = current_Position;
+                    data.camera_Target = current_Target;
                 }
             }
 
-            if(data.wake_Animation_Tick < data.wake_Animation.size() - 1) {
-                Vector3 source_Position = data.wake_Animation[(int)data.wake_Animation_Tick].position;
-                Vector3 target_Position = data.wake_Animation[(int)data.wake_Animation_Tick + 1].position;
+            /* DOORS */ {
+                bool door_Opened = false;
+                for(Game_Data::Door_Data &door_Data : data.doors) {
+                    // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
+                    // DrawLine3D(data.camera.position, door_Data.position, RED);
 
-                #define WAKE_EASING EaseSineInOut
-                #define WAKE_EASING_2 EaseLinearNone
+                    float rotation_Player = door_Data.rotation;
+                    float rotation_Father = door_Data.rotation_Father;
 
-                Vector3 current_Position = {
-                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.x, target_Position.x - source_Position.x, 1.f) +
-                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.x, target_Position.x - source_Position.x, 1.f)) / 2.f,
-                    
-                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.y, target_Position.y - source_Position.y, 1.f) +
-                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.y, target_Position.y - source_Position.y, 1.f)) / 2.f,
-                    
-                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.z, target_Position.z - source_Position.z, 1.f) +
-                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Position.z, target_Position.z - source_Position.z, 1.f)) / 2.f
-                };
-
-                Vector3 source_Target = data.wake_Animation[(int)data.wake_Animation_Tick].target;
-                Vector3 target_Target = data.wake_Animation[(int)data.wake_Animation_Tick + 1].target;
-
-                Vector3 current_Target = {
-                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.x, target_Target.x - source_Target.x, 1.f) + 
-                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.x, target_Target.x - source_Target.x, 1.f)) / 2.f,
-                    
-                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.y, target_Target.y - source_Target.y, 1.f) + 
-                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.y, target_Target.y - source_Target.y, 1.f)) / 2.f,
-                    
-                    (WAKE_EASING(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.z, target_Target.z - source_Target.z, 1.f) + 
-                        WAKE_EASING_2(data.wake_Animation_Tick - (int)data.wake_Animation_Tick, source_Target.z, target_Target.z - source_Target.z, 1.f)) / 2.f
-                };
-
-                data.wake_Animation_Tick += 1.f * GetFrameTime();
-                if(data.wake_Animation_Tick >= data.wake_Animation.size() - 1) {
-                    data.wake_Animation_Finished = true;
-                }
-                
-                data.camera.position = current_Position;
-                data.camera.target = current_Target;
-            }
-
-
-            bool door_Opened = false;
-            for(Game_Data::Door_Data &door_Data : data.doors) {
-                // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
-                // DrawLine3D(data.camera.position, door_Data.position, RED);
-
-                float rotation_Player = door_Data.rotation;
-                float rotation_Father = door_Data.rotation_Father;
-
-                float rotation = 0.f;
-                if(door_Data.default_Rotation < door_Data.opened_Rotation) {
-                    rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
-                } else {
-                    rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
-                }
-
-                Matrix matrix = MatrixIdentity();
-                matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
-
-                matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-                matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
-                matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
-
-                matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
-
-                DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
-                
-                Matrix matrixDoorHandle = MatrixIdentity();
-                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
-
-                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
-                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(rotation * DEG2RAD));
-                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
-
-                matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
-                DrawMesh(data.doorHandle, *door_Data.material, matrixDoorHandle);
-
-                Ray ray = GetMouseRay({(float)GetScreenWidth() / 2.f, (float)GetScreenHeight() / 2.f}, data.camera);
-                RayCollision collision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
-
-                if(collision.hit && collision.distance < 10.f && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !door_Opened) {
-                    door_Data.opening = !door_Data.opening;
-                    door_Opened = true;
-                }
-                
-                if(door_Data.default_Rotation < door_Data.opened_Rotation) {
-                    if(door_Data.opening) {
-                        if(door_Data.rotation < door_Data.opened_Rotation) {
-                            door_Data.rotation += 100.f * GetFrameTime();
-                        }
+                    float rotation = 0.f;
+                    if(door_Data.default_Rotation < door_Data.opened_Rotation) {
+                        rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
                     } else {
-                        if(door_Data.rotation > door_Data.default_Rotation) {
-                            door_Data.rotation -= 100.f * GetFrameTime();
-                        }
+                        rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
                     }
 
-                    if(door_Data.opening_Father) {
-                        if(door_Data.rotation_Father < door_Data.opened_Rotation) {
-                            door_Data.rotation_Father += 100.f * GetFrameTime();
-                        }
-                    } else {
-                        if(door_Data.rotation_Father > door_Data.default_Rotation) {
-                            door_Data.rotation_Father -= 100.f * GetFrameTime();
-                        }
-                    }
-                } else {
-                    if(door_Data.opening) {
-                        if(door_Data.rotation > door_Data.opened_Rotation) {
-                            door_Data.rotation -= 100.f * GetFrameTime();
-                        }
-                    } else {
-                        if(door_Data.rotation < door_Data.default_Rotation) {
-                            door_Data.rotation += 100.f * GetFrameTime();
-                        }
-                    }
+                    Matrix matrix = MatrixIdentity();
+                    matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
 
-                    if(door_Data.opening_Father) {
-                        if(door_Data.rotation_Father > door_Data.opened_Rotation) {
-                            door_Data.rotation_Father -= 100.f * GetFrameTime();
+                    matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
+                    matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
+                    matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+
+                    matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+
+                    DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
+                    
+                    Matrix matrixDoorHandle = MatrixIdentity();
+                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
+
+                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
+                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(rotation * DEG2RAD));
+                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+
+                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+                    DrawMesh(data.doorHandle, *door_Data.material, matrixDoorHandle);
+
+                    Ray ray = GetMouseRay({(float)GetScreenWidth() / 2.f, (float)GetScreenHeight() / 2.f}, data.camera);
+                    RayCollision collision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
+
+                    if(collision.hit && collision.distance < 10.f && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !door_Opened && !action_Used) {
+                        door_Data.opening = !door_Data.opening;
+                        door_Opened = true;
+                        action_Used = true;
+                    }
+                    
+                    if(door_Data.default_Rotation < door_Data.opened_Rotation) {
+                        if(door_Data.opening) {
+                            if(door_Data.rotation < door_Data.opened_Rotation) {
+                                door_Data.rotation += 100.f * GetFrameTime();
+                            }
+                        } else {
+                            if(door_Data.rotation > door_Data.default_Rotation) {
+                                door_Data.rotation -= 100.f * GetFrameTime();
+                            }
+                        }
+
+                        if(door_Data.opening_Father) {
+                            if(door_Data.rotation_Father < door_Data.opened_Rotation) {
+                                door_Data.rotation_Father += 100.f * GetFrameTime();
+                            }
+                        } else {
+                            if(door_Data.rotation_Father > door_Data.default_Rotation) {
+                                door_Data.rotation_Father -= 100.f * GetFrameTime();
+                            }
                         }
                     } else {
-                        if(door_Data.rotation_Father < door_Data.default_Rotation) {
-                            door_Data.rotation_Father += 100.f * GetFrameTime();
+                        if(door_Data.opening) {
+                            if(door_Data.rotation > door_Data.opened_Rotation) {
+                                door_Data.rotation -= 100.f * GetFrameTime();
+                            }
+                        } else {
+                            if(door_Data.rotation < door_Data.default_Rotation) {
+                                door_Data.rotation += 100.f * GetFrameTime();
+                            }
+                        }
+
+                        if(door_Data.opening_Father) {
+                            if(door_Data.rotation_Father > door_Data.opened_Rotation) {
+                                door_Data.rotation_Father -= 100.f * GetFrameTime();
+                            }
+                        } else {
+                            if(door_Data.rotation_Father < door_Data.default_Rotation) {
+                                door_Data.rotation_Father += 100.f * GetFrameTime();
+                            }
                         }
                     }
                 }
             }
-
 
             DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
-            
-            Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
-            Mesh *bbox_Mesh = nullptr;
-            
-            for(int index = 0; index < data.item_Data.size(); index++) {
-                switch(index) {
-                    case Game_Data::PRIBINACEK: {
-                        DrawModelEx(Menu::data.pribinacek, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
-                        bbox_Mesh = &Menu::data.pribinacek.meshes[1];
-                        break;
-                    }
 
-                    case Game_Data::SPOON: {
-                        DrawModelEx(data.spoon, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
-                        bbox_Mesh = &data.spoon.meshes[0];
-                        break;
-                    }
-
-                    default: break;
-                }
-
-                if((Game_Data::Item)index != Game_Data::NONE && (Game_Data::Item)index != Game_Data::_LAST) {
-                    if(data.holding_Item == (Game_Data::Item)index) {
-                        data.item_Data[index].position = Vector3Add(data.camera.position, Vector3Multiply(Vector3Normalize(Vector3Subtract(data.camera.target, data.camera.position)), {3.f, 3.f, 3.f}));
-                        
-                        Vector3 diff = Vector3Subtract(data.camera.target, data.camera.position);
-                        data.item_Data[index].y_Rotation = -atan2(diff.z, diff.x) * RAD2DEG;
-                    } else {
-                        Ray down = {data.item_Data[index].position, {0.f, -0.1f, 0.f}};
-                        RayCollision collision = Get_Collision_Ray(down);
-                        if(data.debug) DrawRay(down, RED);
-                        if(collision.distance > 1.f) {
-                            data.item_Data[index].position.y -= data.item_Data[index].fall_Acceleration;
-                            data.item_Data[index].fall_Acceleration += 0.01f * GetFrameTime();
+            /* ITEMS */ {
+                Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
+                Mesh *bbox_Mesh = nullptr;
+                
+                for(int index = 0; index < data.item_Data.size(); index++) {
+                    switch(index) {
+                        case Game_Data::PRIBINACEK: {
+                            DrawModelEx(Menu::data.pribinacek, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
+                            bbox_Mesh = &Menu::data.pribinacek.meshes[1];
+                            break;
                         }
+
+                        case Game_Data::SPOON: {
+                            DrawModelEx(data.spoon, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
+                            bbox_Mesh = &data.spoon.meshes[0];
+                            break;
+                        }
+
+                        default: break;
                     }
 
-                    if(bbox_Mesh != nullptr) {
-                        BoundingBox bbox = {{-1.f, -1.f, -1.f}, {1.f, 1.f, 1.f}};
-                        bbox.min = Vector3Add(bbox.min, data.item_Data[index].position);
-                        bbox.max = Vector3Add(bbox.max, data.item_Data[index].position);
-                        
-                        if(data.debug) DrawBoundingBox(bbox, RED);
+                    if((Game_Data::Item)index != Game_Data::NONE && (Game_Data::Item)index != Game_Data::_LAST) {
+                        if(data.holding_Item == (Game_Data::Item)index) {
+                            data.item_Data[index].position = Vector3Add(data.camera.position, Vector3Multiply(Vector3Normalize(Vector3Subtract(data.camera.target, data.camera.position)), {3.f, 3.f, 3.f}));
+                            
+                            data.item_Data[index].y_Rotation = -atan2(data.camera_Target.z, data.camera_Target.x) * RAD2DEG;
+                        } else {
+                            if(data.item_Data[index].collision.point.y > data.item_Data[index].position.y) {
+                                data.item_Data[index].position.y = data.item_Data[index].collision.point.y;
+                                data.item_Data[index].falling = false;
+                            }
 
-                        RayCollision player_Item_Collision = GetRayCollisionBox(player_Ray, bbox);
+                            if(data.item_Data[index].falling) {
+                                // data.item_Data[index].position.y -= 1.f * GetFrameTime();
+                                if(data.debug) DrawLine3D(data.item_Data[index].position, data.item_Data[index].collision.point, RED);
+                                data.item_Data[index].position.y -= data.item_Data[index].fall_Acceleration * 50.f * GetFrameTime();
+                                data.item_Data[index].fall_Acceleration += 1.f * GetFrameTime();
+                            }
+                        }
 
-                        bool item_Visible = player_Item_Collision.hit && player_Item_Collision.distance < 5.f;
+                        if(bbox_Mesh != nullptr) {
+                            BoundingBox bbox = {{-1.f, -1.f, -1.f}, {1.f, 1.f, 1.f}};
+                            bbox.min = Vector3Add(bbox.min, data.item_Data[index].position);
+                            bbox.max = Vector3Add(bbox.max, data.item_Data[index].position);
+                            
+                            if(data.debug) DrawBoundingBox(bbox, RED);
 
-                        if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                            if(data.holding_Item == (Game_Data::Item)index) {
-                                data.item_Data[index].fall_Acceleration = 0.f;
-                                data.holding_Item = Game_Data::NONE;
-                            } else {
-                                if(item_Visible) {
+                            RayCollision player_Item_Collision = GetRayCollisionBox(player_Ray, bbox);
+
+                            bool item_Visible = player_Item_Collision.hit && player_Item_Collision.distance < 5.f;
+
+                            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                                if(data.holding_Item == (Game_Data::Item)index && !action_Used) {
+                                    data.item_Data[index].fall_Acceleration = 0.1f;
+                                    data.item_Data[index].Calculate_Collision();
+                                    data.item_Data[index].falling = true;
+                                    data.holding_Item = Game_Data::NONE;
+                                    action_Used = true;
+                                } else if(item_Visible && !action_Used && data.holding_Item == Game_Data::NONE) {
                                     data.holding_Item = (Game_Data::Item)index;
+                                    action_Used = true;
+
+                                    if((Game_Data::Item)index == Game_Data::PRIBINACEK && data.guide_Index == 4)
+                                        data.guide_Index++;
+
+                                    if((Game_Data::Item)index == Game_Data::SPOON && data.guide_Index == 5)
+                                        data.guide_Index++;
                                 }
                             }
                         }
@@ -706,186 +859,199 @@ namespace Game {
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
 
-            /* {
-                if(IsKeyPressed(KEY_SPACE)) {
-                    father_Points.push_back(Father_Point(camera.position, Get_Door_States()));
-                } else if(IsKeyPressed(KEY_BACKSPACE)) {
-                    father_Points.back() = Father_Point(camera.position, Get_Door_States());
-                } else if(IsKeyPressed(KEY_ENTER)) {
-                    for(Father_Point point : father_Points) {
-                        std::string doors = "";
-                        for(bool state : point.door_States) {
-                            doors += " " + std::to_string(state);
-                        }
-               
-                        std::cout << point.position.x << " " << point.position.y << " " << point.position.z << doors << std::endl;
-                    }
-                }
+            if(CheckCollisionBoxSphere(data.players_Room, data.item_Data[Game_Data::PRIBINACEK].position, 0.1f) &&
+               CheckCollisionBoxSphere(data.players_Room, data.item_Data[Game_Data::SPOON].position, 0.1f) && data.guide_Index == 6) {
+                data.guide_Index++;
+            }
 
-                Vector3 previous_Point = {0.f, 0.f, 0.f};
-                int index = 0;
-                for(Father_Point point : father_Points) {
-                    if(index > 0) {
-                        DrawLine3D(previous_Point, point.position, RED);
+            /* FATHER */ {
+                /* {
+                    if(IsKeyPressed(KEY_SPACE)) {
+                        data.father_Points.push_back(Game_Data::Father_Point(data.camera.position, Get_Door_States()));
+                    } else if(IsKeyPressed(KEY_BACKSPACE)) {
+                        data.father_Points.back() = Game_Data::Father_Point(data.camera.position, Get_Door_States());
+                    } else if(IsKeyPressed(KEY_ENTER)) {
+                        for(Game_Data::Father_Point point : data.father_Points) {
+                            std::string doors = "";
+                            for(bool state : point.door_States) {
+                                doors += " " + std::to_string(state);
+                            }
+                
+                            std::cout << point.position.x << " " << point.position.y << " " << point.position.z << doors << std::endl;
+                        }
                     }
-                    DrawSphere(point.position, .5f, BLUE);
-                    previous_Point = point.position;
+
+                    Vector3 previous_Point = {0.f, 0.f, 0.f};
+                    int index = 0;
+                    for(Game_Data::Father_Point point : data.father_Points) {
+                        if(index > 0) {
+                            DrawLine3D(previous_Point, point.position, RED);
+                        }
+                        DrawSphere(point.position, .5f, BLUE);
+                        previous_Point = point.position;
+                        index++;
+                    }
+                } */
+
+                Vector3 source = data.father_Points[data.keyframe].position;
+                Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
+
+                int index = 0;
+                bool changing_Door_State = false;
+                for(bool state : data.father_Points[(data.keyframe + 1) % data.father_Points.size()].door_States) {
+                    if(data.doors[index].opening_Father != state)
+                        changing_Door_State = true;
+                    data.doors[index].opening_Father = state;
                     index++;
                 }
-            } */
 
-            Vector3 source = data.father_Points[data.keyframe].position;
-            Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
+                float max = Vector3Distance(source, target) / 4.f;
+                data.keyframe_Tick += 1.f * GetFrameTime();
 
-            int index = 0;
-            bool changing_Door_State = false;
-            for(bool state : data.father_Points[(data.keyframe + 1) % data.father_Points.size()].door_States) {
-                if(data.doors[index].opening_Father != state)
-                    changing_Door_State = true;
-                data.doors[index].opening_Father = state;
-                index++;
-            }
+                Ray ray = {{Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
+                            Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
+                            Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
 
-            float max = Vector3Distance(source, target) / 4.f;
-            data.keyframe_Tick += 1.f * GetFrameTime();
+                float y = Get_Collision_Ray(ray).point.y;
 
-            Ray ray = {{Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
-                        Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
-                        Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
+                enemy_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
+                                y,
+                                Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
 
-            float y = Get_Collision_Ray(ray).point.y;
+                Vector3 difference = Vector3Subtract(target, source);
+                float angle = -atan2(difference.z, difference.x) * RAD2DEG;
+                float angle_Result = angle;
 
-            enemy_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
-                              y,
-                              Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
+                float angle_Source = angle;
+                if(data.keyframe > 0) {
+                    Vector3 difference_Source = Vector3Subtract(source, data.father_Points[data.keyframe - 1].position);
+                    angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
 
-            Vector3 difference = Vector3Subtract(target, source);
-            float angle = -atan2(difference.z, difference.x) * RAD2DEG;
-            float angle_Result = angle;
+                    float lerp = Clamp(data.keyframe_Tick * 2.f, 0.f, 1.f);
+                    float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
 
-            float angle_Source = angle;
-            if(data.keyframe > 0) {
-                Vector3 difference_Source = Vector3Subtract(source, data.father_Points[data.keyframe - 1].position);
-                angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
+                    angle_Result = angle_Source + addition * lerp;
+                }
+                
+                DrawModelEx(data.father, enemy_Position, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
 
-                float lerp = Clamp(data.keyframe_Tick * 2.f, 0.f, 1.f);
-                float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
+                if(data.keyframe_Tick > max) {
+                    data.keyframe_Tick = 0.f;
+                    data.keyframe++;
+                }
 
-                angle_Result = angle_Source + addition * lerp;
-            }
-            
-            DrawModelEx(data.father, enemy_Position, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
-
-            if(data.keyframe_Tick > max) {
-                data.keyframe_Tick = 0.f;
-                data.keyframe++;
-            }
-
-            if(data.keyframe > data.father_Points.size() - 1) {
-                data.keyframe = 0;
+                if(data.keyframe > data.father_Points.size() - 1) {
+                    data.keyframe = 0;
+                }
             }
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
 
-        const float size = 10.f;
-        DrawLineEx({GetScreenWidth() / 2.f - size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + size, GetScreenHeight() / 2.f}, 2.f, Fade(WHITE, 0.2f));
-        DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + size}, 2.f, Fade(WHITE, 0.2f));
+        const float crosshair_size = 10.f;
+        DrawLineEx({GetScreenWidth() / 2.f - crosshair_size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + crosshair_size, GetScreenHeight() / 2.f}, 2.f, Fade(WHITE, 0.2f));
+        DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - crosshair_size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + crosshair_size}, 2.f, Fade(WHITE, 0.2f));
 
 #ifdef ANDROID_UI
-        data.movement.Render();
-        bool rotation_Updated = false;
+        if(data.wake_Animation_Finished) {
+            data.movement.Render();
+            bool rotation_Updated = false;
 
-        if(data.movement.draggin_Id >= GetTouchPointCount())
-            data.movement.dragging = false;
+            if(data.movement.draggin_Id >= GetTouchPointCount())
+                data.movement.dragging = false;
 
-        float size = GetScreenHeight() / 1300.f;
-        float margin = GetScreenHeight() / 30.f;
+            float size = GetScreenHeight() / 1300.f;
+            float margin = GetScreenHeight() / 30.f;
 
-        Texture texture = data.crouching ? data.un_Crouch : data.crouch;
-        DrawTextureEx(texture, {(float)GetScreenWidth() - texture.width * size - margin, margin}, 0.f, size, WHITE);
-        Rectangle crouch_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin, texture.width * size, texture.height * size};
+            Texture texture = data.crouching ? data.un_Crouch : data.crouch;
+            DrawTextureEx(texture, {(float)GetScreenWidth() - texture.width * size - margin, margin}, 0.f, size, WHITE);
+            Rectangle crouch_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin, texture.width * size, texture.height * size};
 
-        crouch_Rectangle.x -= crouch_Rectangle.width / 2.f;
-        crouch_Rectangle.y -= crouch_Rectangle.height / 2.f;
-        crouch_Rectangle.width *= 2.f;
-        crouch_Rectangle.height *= 2.f;
+            crouch_Rectangle.x -= crouch_Rectangle.width / 2.f;
+            crouch_Rectangle.y -= crouch_Rectangle.height / 2.f;
+            crouch_Rectangle.width *= 2.f;
+            crouch_Rectangle.height *= 2.f;
 
-        // TODO: Předělat celej systém dotyků pomocí gestures
-        for(int id = 0; id < GetTouchPointCount(); id++) {
-            bool can_Update = data.movement.Can_Update(id);
-            Game_Data::Joystick_Data joystick = data.movement.Update(id);
+            // TODO: Předělat celej systém dotyků pomocí gestures
+            for(int id = 0; id < GetTouchPointCount(); id++) {
+                bool can_Update = data.movement.Can_Update(id);
+                Game_Data::Joystick_Data joystick = data.movement.Update(id);
 
-            if(CheckCollisionPointRec(GetTouchPosition(id), crouch_Rectangle)) {
-                data.crouching = !data.crouching;
-            } else if (can_Update) {
-                // Basically, a very complex and buggy way to slow down the player if he is crouching
-                if ((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
-                    Update_Camera_Android(id, data.previous_Rotated);
-                }
-                rotation_Updated = true;
-            } else {
-                if(joystick.moving) {
-                    Vector3 diff = Vector3Subtract(data.camera.target, data.camera.position);
-                    float camera_Angle = atan2(diff.z, diff.x) + 90.f * DEG2RAD;
+                if(CheckCollisionPointRec(GetTouchPosition(id), crouch_Rectangle)) {
+                    data.crouching = !data.crouching;
+                } else if (can_Update) {
+                    // Basically, a very complex and buggy way to slow down the player if he is crouching
+                    if ((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
+                        Update_Camera_Android(id, data.previous_Rotated);
+                    }
+                    rotation_Updated = true;
+                } else {
+                    if(joystick.moving) {
+                        float camera_Angle = atan2(data.camera_Target.z, data.camera_Target.x) + 90.f * DEG2RAD;
 
-                    Vector3 offset = {
-                            cos(joystick.rotation * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f, 0.f,
-                            sin(joystick.rotation * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f};
-                    data.camera.position = Vector3Add(data.camera.position, offset);
-                    data.camera.target = Vector3Add(data.camera.target, offset);
+                        Vector3 offset = {
+                                cos(joystick.rotation * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f, 0.f,
+                                sin(joystick.rotation * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f};
+                        data.camera.position = Vector3Add(data.camera.position, offset);
+                    }
                 }
             }
+
+            data.previous_Rotated = rotation_Updated;
         }
-
-        data.previous_Rotated = rotation_Updated;
 #else
-        float speed = 1.f;
-        if(data.crouching) speed /= 1.5f;
-        if(!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
+        data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
+        if(data.wake_Animation_Finished) {
+            float speed = 1.f;
+            if(data.crouching) speed /= 1.5f;
+            if(!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
 
-        Update_Camera_Desktop(speed);
+            Update_Camera_Desktop(speed);
+        }
 #endif
 
-        if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
-            data.camera.position.z = old_Position.z;
+        /* COLLISIONS */ {
+            if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
+                data.camera.position.z = old_Position.z;
 
-        // (if debug) we dont want the spheres to be rendered twice
-        bool is_Debug = data.debug;
-        data.debug = false;
-        if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
-            data.camera.position.x = old_Position.x;
-        data.debug = is_Debug;
+            // (if debug) we dont want the spheres to be rendered twice
+            bool is_Debug = data.debug;
+            data.debug = true;
+            if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
+                data.camera.position.x = old_Position.x;
+            data.debug = is_Debug;
 
-        RayCollision collision_Legs = {0};
-        if(data.wake_Animation_Finished) {
-            Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
-            collision_Legs = Get_Collision_Ray(bottom);
-            if(collision_Legs.hit) {
-                Vector3 target = Vector3Add(collision_Legs.point, {0.f, data.crouching ? 5.0f : 6.5f, 0.f});
-                if(data.camera.position.y < target.y) {
-                    data.camera.position = target;
-                    data.fall_Acceleration = 0.1f;
-                } else if(data.camera.position.y < target.y + 0.1f && data.camera.position.y > target.y - 0.1f) {
-                    // Do nothing there
-                    data.fall_Acceleration = 0.1f;
-                } else {
-                    data.camera.position.y -= data.fall_Acceleration * 50.f * GetFrameTime();
-                    data.fall_Acceleration += 1.f * GetFrameTime();
-                }
-            } else
-                data.camera.position = old_Position;
-        }
+            RayCollision collision_Legs = {0};
+            if(data.wake_Animation_Finished) {
+                Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
+                collision_Legs = Get_Collision_Ray(bottom);
+                if(collision_Legs.hit) {
+                    Vector3 target = Vector3Add(collision_Legs.point, {0.f, data.crouching ? 5.0f : 6.5f, 0.f});
+                    if(data.camera.position.y < target.y) {
+                        data.camera.position = target;
+                        data.fall_Acceleration = 0.1f;
+                    } else if(data.camera.position.y < target.y + 0.1f && data.camera.position.y > target.y - 0.1f) {
+                        // Do nothing there
+                        data.fall_Acceleration = 0.1f;
+                    } else {
+                        data.camera.position.y -= data.fall_Acceleration * 50.f * GetFrameTime();
+                        data.fall_Acceleration += 1.f * GetFrameTime();
+                    }
+                } else
+                    data.camera.position = old_Position;
+            }
 
-        if(data.debug) {
-            DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
-                                                                                                collision_Legs.normal.y < 0.99f || collision_Legs.normal.y > 1.01), 5, 5, 15, WHITE);
-            
-            Vector3 source = data.father_Points[data.keyframe].position;
-            Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
-            float max_Tick = Vector3Distance(source, target) / 4.f;
+            if(data.debug) {
+                DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
+                                                                                                    collision_Legs.normal.y < 0.99f || collision_Legs.normal.y > 1.01), 5, 5, 15, WHITE);
+                
+                Vector3 source = data.father_Points[data.keyframe].position;
+                Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
+                float max_Tick = Vector3Distance(source, target) / 4.f;
 
-            DrawText(TextFormat("AI data: keyframe tick %f/%f, keyframe %d/%d", data.keyframe_Tick, max_Tick, data.keyframe, data.father_Points.size()), 5, 5 + 15, 15, WHITE);
+                DrawText(TextFormat("AI data: keyframe tick %f/%f, keyframe %d/%d", data.keyframe_Tick, max_Tick, data.keyframe, data.father_Points.size()), 5, 5 + 15, 15, WHITE);
+                 DrawText(TextFormat("Basic data: camera position {%f, %f, %f}", data.camera.position.x, data.camera.position.y, data.camera.position.z), 5, 5 + 15 * 2, 15, WHITE);
+            }
         }
 
         DrawFPS(GetScreenWidth() / 500.f, GetScreenWidth() / 500.f);
@@ -901,6 +1067,38 @@ namespace Game {
         }
 
         bool trigger_Chase = player_Visible;
+
+        if(!data.guide_Finished && data.guide_Texts[data.guide_Index].Update()) {
+            data.guide_Index++;
+            if(data.guide_Index > 3) {
+                data.guide_Finished = true;
+            }
+        }
+
+        if(data.guide_Finished) {
+            float margin = GetScreenWidth() / 50.f;
+            Vector2 rectangle_Size = MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), 30.f, 0.f);
+            for(int i = 4 + 1; i < data.guide_Texts.size(); i++) {
+                rectangle_Size.y += MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[i].target_Text.c_str(), 30.f, 0.f).y;
+            }
+
+            Rectangle rectangle = {margin, margin, rectangle_Size.x, rectangle_Size.y};
+            DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
+            DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, 5.f, BLACK);
+
+            Vector2 text_Box_Size = MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), 25.f, 0.f);
+            for(int i = 4 + 1; i < data.guide_Texts.size(); i++) {
+                text_Box_Size.y += MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[i].target_Text.c_str(), 25.f, 0.f).y;
+            }
+
+            int y = 0;
+            for(int i = 0; i < 4; i++) {
+                const char* text = data.guide_Texts[4 + i].target_Text.c_str();
+                Vector2 line = MeasureTextEx(Menu::data.medium_Font, text, 25.f, 0.f);
+                DrawTextEx(Menu::data.medium_Font, text, {rectangle.x + rectangle.width / 2.f - text_Box_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Box_Size.y / 2.f + y}, 25.f, 0.f, (4 + i < data.guide_Index) ? GREEN : WHITE);
+                y += line.y;
+            }
+        }
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
     }
