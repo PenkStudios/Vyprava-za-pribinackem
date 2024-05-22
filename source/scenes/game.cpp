@@ -151,7 +151,8 @@ namespace Game {
         float max_Audio = 0.f;
         bool searching_Microphone = true;
 
-        enum Item {NONE, PRIBINACEK, SPOON, _LAST};
+        #define MAX_ITEMS 5 // NONE, PRIBINACEK, SPOON, KEY, LOCK
+        enum Item {NONE, PRIBINACEK, SPOON, KEY, LOCK, _LAST};
         class Item_Data {
         public:
             Vector3 position;
@@ -161,22 +162,20 @@ namespace Game {
             RayCollision collision;
             bool falling;
 
+            int item_Id;
+
             void Calculate_Collision();
 
-            void Init() {
-                fall_Acceleration = 0.1f;
-                Calculate_Collision();
-                falling = true;
-            }
-
-            Item_Data(Vector3 position, float y_Rotation) : position(position), y_Rotation(y_Rotation), fall_Acceleration(0), falling(true) { Init(); }
-            Item_Data(Vector3 position) : position(position), y_Rotation(0), fall_Acceleration(0), falling(true) { Init(); }
+            Item_Data(int item_Id, Vector3 position, float y_Rotation) : item_Id(item_Id), position(position), y_Rotation(y_Rotation), fall_Acceleration(0), falling(true) {}
+            Item_Data(int item_Id, Vector3 position) : item_Id(item_Id), position(position), y_Rotation(0), fall_Acceleration(0), falling(true) {}
         };
 
         std::vector<Item_Data> item_Data;
         Item holding_Item = Item::NONE;
 
         Model spoon;
+        Model key;
+        Model lock;
 
         Vector3 camera_Target = {0.f, 0.f, 1.f}; // Camera rotation from the point {0, 0, 0}
 
@@ -245,13 +244,33 @@ namespace Game {
         std::vector<Guide_Caption> guide_Texts = {};
 
         bool guide_Finished = false;
-        std::vector<Item_Data> spoon_Spawns;
+        std::vector<Item_Data> key_Spawns;
 
         const BoundingBox players_Room = {{-15.208473, 12.999510, 2.288752}, {-0.008472, 26.592718, 29.488750}};
+        
+        Model drawer;
+        BoundingBox drawer_BBox;
+
+        class Drawer_Data {
+        public:
+            Vector3 position;
+            Vector3 original_Position;
+            bool opening = false;
+
+            std::vector<Item_Data*> childs = {};
+
+            Drawer_Data(Vector3 position);
+        };
+        std::vector<Drawer_Data> drawers = {};
     } data;
 
-    // Get map collision with ray (map + doors)
-    RayCollision Get_Collision_Ray(Ray ray) {
+    Game_Data::Drawer_Data::Drawer_Data(Vector3 position) : position(position), original_Position(position), opening(false) {
+        for(int index = 0; index < MAX_ITEMS; index++)
+            childs.push_back(nullptr);
+    }
+
+    // Get map collision with ray (map + doors + drawers)
+    RayCollision Get_Collision_Ray(Ray ray, Game_Data::Item_Data *item = nullptr) {
         RayCollision collision = { 0 };
         collision.distance = 1000000.f;
         for (int m = 0; m < data.house.meshCount; m++)
@@ -291,12 +310,35 @@ namespace Game {
             }
         }
 
+        bool sticked = false;
+
+        for(Game_Data::Drawer_Data &drawer_Data : data.drawers) {
+            Matrix matrix = MatrixIdentity();
+            matrix = MatrixMultiply(matrix, MatrixTranslate(drawer_Data.position.x, drawer_Data.position.y, drawer_Data.position.z));
+
+            RayCollision doorCollision = GetRayCollisionMesh(ray, data.drawer.meshes[0], matrix);
+            if (doorCollision.hit)
+            {
+                if(doorCollision.distance < collision.distance) {
+                    if(item != nullptr) {
+                        drawer_Data.childs[item->item_Id] = item;
+                        sticked = true;
+                    }
+                    collision = doorCollision;
+                }
+            }
+        }
+
+        if(item != nullptr && !sticked)
+            for(int drawer_Index = 0; drawer_Index < data.drawers.size(); drawer_Index++)
+                data.drawers[drawer_Index].childs[item->item_Id] = nullptr;
+
         return collision;
     }
     
     void Game_Data::Item_Data::Calculate_Collision() {
         Ray down = {position, {0.f, -0.1f, 0.f}};
-        collision = Get_Collision_Ray(down);
+        collision = Get_Collision_Ray(down, this);
     }
 
     Game_Data::Joystick_Data Game_Data::Joystick::Update(int touch_Id) {
@@ -484,6 +526,20 @@ namespace Game {
         for(int material = 0; material < data.spoon.materialCount; material++)
             data.spoon.materials[material].shader = data.lighting;
 
+        data.key = LoadModel("models/key.glb");
+        for(int material = 0; material < data.key.materialCount; material++)
+            data.key.materials[material].shader = data.lighting;
+
+        data.drawer = LoadModel("models/drawer.glb");
+        for(int material = 0; material < data.drawer.materialCount; material++)
+            data.drawer.materials[material].shader = data.lighting;
+        
+        data.lock = LoadModel("models/lock.glb");
+        for(int material = 0; material < data.lock.materialCount; material++)
+            data.lock.materials[material].shader = data.lighting;
+
+        data.drawer_BBox = GetModelBoundingBox(data.drawer);
+
         std::istringstream config_File(LoadFileText("config.txt"));
 
         while (std::getline(config_File, line)) {
@@ -497,15 +553,24 @@ namespace Game {
             }
             
             if(strings.size() > 2 && strings[1] == "=") {
-                if(strings[0] == "SPOON_SPAWNS" && (strings.size() - 2) % 4 == 0) {
+                if(strings[0] == "KEY_SPAWNS" && (strings.size() - 2) % 4 == 0) {
                     for(int index = 2; index < strings.size(); index += 4) {
-                        data.spoon_Spawns.push_back(Game_Data::Item_Data({std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, std::stof(strings[index + 3])));
+                        data.key_Spawns.push_back(Game_Data::Item_Data(-1, {std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, std::stof(strings[index + 3])));
+                    }
+                } else if(strings[0] == "DRAWERS" && (strings.size() - 2) % 3 == 0) {
+                    for(int index = 2; index < strings.size(); index += 3) {
+                        data.drawers.push_back(Game_Data::Drawer_Data({std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}));
                     }
                 } else {
                     LOG("Unknown variable or bad value %s", strings[0].c_str());
                 }
             }
         }
+
+        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f})); //              NONE
+        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f))); //      PRIBINACEK
+        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f))); //     SPOON
+        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f})); //              KEY
 
         Mod_Callback("Init_Game", (void*)&data);
     }
@@ -549,23 +614,25 @@ namespace Game {
         for(int material = 0; material < Menu::data.pribinacek.materialCount; material++)
             Menu::data.pribinacek.materials[material].shader = data.lighting;
 
-        int spoon_Position_Index = rand() % data.spoon_Spawns.size();
+        int spoon_Position_Index = rand() % data.key_Spawns.size();
+        std::cout << spoon_Position_Index << std::endl;
+        data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[spoon_Position_Index].position, data.key_Spawns[spoon_Position_Index].y_Rotation);
 
-        data.item_Data = {
-            Game_Data::Item_Data({0.f, 0.f, 0.f}),              // NONE
-            Game_Data::Item_Data(B2RL(26.5f, -41.f, 8.f)),      // PRIBINACEK
-            data.spoon_Spawns[spoon_Position_Index]             // SPOON
-        };
+        for(Game_Data::Item_Data &item : data.item_Data) {
+            item.fall_Acceleration = 0.1f;
+            item.Calculate_Collision();
+            item.falling = true;
+        }
 
         data.guide_Texts.clear();
         data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepžekonatelnou chuť na pribiňáčka"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("Tvým cílem je jít pro pribiňáčka a sníst si ho tady v pokoji"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("Jo a táta vždycky na noc vypíná pojistky, aby jsem nemohl být na mobilu"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý no"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribiňáček", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribináček", false));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("2. najdi lžičku", false));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("3. vem pribináček a\nlžíci do pokoje", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribiňáček", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček", false));
 
         data.guide_Finished = false;
 
@@ -780,7 +847,7 @@ namespace Game {
                 }
             }
 
-            DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
+            if(!IsKeyDown(KEY_P)) DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
 
             /* ITEMS */ {
                 Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
@@ -797,6 +864,12 @@ namespace Game {
                         case Game_Data::SPOON: {
                             DrawModelEx(data.spoon, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
                             bbox_Mesh = &data.spoon.meshes[0];
+                            break;
+                        }
+
+                        case Game_Data::KEY: {
+                            DrawModelEx(data.key, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
+                            bbox_Mesh = &data.key.meshes[0];
                             break;
                         }
 
@@ -833,14 +906,17 @@ namespace Game {
 
                             bool item_Visible = player_Item_Collision.hit && player_Item_Collision.distance < 5.f;
 
-                            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                                if(data.holding_Item == (Game_Data::Item)index && !action_Used) {
+                            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsKeyPressed(KEY_Q)) {
+                                RayCollision player_Map_Collision = Get_Collision_Ray(player_Ray);
+
+                                if(data.holding_Item == (Game_Data::Item)index && !action_Used && IsKeyPressed(KEY_Q)) {
                                     data.item_Data[index].fall_Acceleration = 0.1f;
                                     data.item_Data[index].Calculate_Collision();
                                     data.item_Data[index].falling = true;
                                     data.holding_Item = Game_Data::NONE;
                                     action_Used = true;
-                                } else if(item_Visible && !action_Used && data.holding_Item == Game_Data::NONE) {
+                                } else if(item_Visible && !action_Used && data.holding_Item == Game_Data::NONE &&
+                                          player_Map_Collision.distance > player_Item_Collision.distance && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                                     data.holding_Item = (Game_Data::Item)index;
                                     action_Used = true;
 
@@ -854,6 +930,59 @@ namespace Game {
                         }
                     }
                 }
+            }
+
+            float nearest_Hit = 10000.f;
+            int nearest_Hit_Id = -1;
+
+            int index = 0;
+            for(Game_Data::Drawer_Data &drawer : data.drawers) {
+                DrawModel(data.drawer, drawer.position, 1.f, WHITE);
+                // DrawModel(data.lock, Vector3Add(drawer.position, {-2.f, 0.f, 0.f}), 1.f, WHITE);
+
+                if(drawer.opening) {
+                    drawer.position.x += 10.f * GetFrameTime();
+                    for(Game_Data::Item_Data* child : drawer.childs)
+                        if(child != nullptr)
+                            child->position.x += 10.f * GetFrameTime();
+                    if(drawer.position.x > drawer.original_Position.x + 2.f) {
+                        drawer.position.x -= 10.f * GetFrameTime();
+                        for(Game_Data::Item_Data* child : drawer.childs)
+                            if(child != nullptr)
+                                child->position.x -= 10.f * GetFrameTime();
+                    }
+                } else {
+                    drawer.position.x -= 10.f * GetFrameTime();
+                    for(Game_Data::Item_Data* child : drawer.childs)
+                        if(child != nullptr) {
+                            child->position.x -= 10.f * GetFrameTime();
+                        }
+            
+                    if(drawer.position.x < drawer.original_Position.x) {
+                        drawer.position.x += 10.f * GetFrameTime();
+                        for(Game_Data::Item_Data* child : drawer.childs)
+                            if(child != nullptr)
+                                child->position.x += 10.f * GetFrameTime();
+                    }
+                }
+
+                Ray ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
+                BoundingBox bbox = data.drawer_BBox;
+                bbox.min = Vector3Add(bbox.min, drawer.position);
+                bbox.max = Vector3Add(bbox.max, drawer.position);
+                RayCollision collision = GetRayCollisionBox(ray, bbox);
+
+                if(nearest_Hit > collision.distance && collision.hit) {
+                    nearest_Hit = collision.distance;
+                    nearest_Hit_Id = index;
+                }
+
+                index++;
+            }
+
+            if(nearest_Hit < 5.f && nearest_Hit_Id != -1 && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !action_Used) {
+                action_Used = true;
+                data.drawers[nearest_Hit_Id].opening = !data.drawers[nearest_Hit_Id].opening;
             }
 
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;

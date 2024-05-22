@@ -6,7 +6,7 @@ ai.txt
 Zachovává AI "nepřítele".
 Každá řádka = breakpoint
 
-(X) = počet dveří = počet řádků v doors.txt
+(X) - počet dveří = počet řádků v doors.txt
 Formát řádkou: `pozice_x pozice_y pozice_z dveře_1 dveře_2 ... dveře_(X)`
 
 NOTE: Rotace se v runtime vypočítá automaticky
@@ -39,5 +39,10 @@ NOTE: směr je od pozice 0, 0, 0 (0, 0, 1 je dopředu)
   -Z  /   | -Y
 */
 
-// Značí, kde se spawnuje lžíce (pozice_x1 pozice_y1 pozice_z1 rotace_y1 pozice_x2 pozice_y2 pozice_z2 rotace_y2 ...)
-SPOON_SPAWNS = -26 5 4 0 12 16 25 0 -7.51 11 29.12 90
+// Kde jsou šuplíky (pozice_x1 pozice_y1 pozice_z1 pozice_x2 pozice_y2 pozice_z2 ...)
+// NOTE: Rotate zatím není implementovaná
+DRAWERS = -27.42 4 -9.9 -27.42 4 -12.6
+
+// Kde se spawnuje klíč (pozice_x1 pozice_y1 pozice_z1 rotace_y1 pozice_x2 pozice_y2 pozice_z2 rotace_y2 ...)
+// NOTE: DRAWERS musí být definovány před KEY_SPAWNS, pokud se klíč spawnuje v šuplíku
+KEY_SPAWNS = 12 20 27.5 0 -10.5 15.5 27.5 0 0 10 37 45 
