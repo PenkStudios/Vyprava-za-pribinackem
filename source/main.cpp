@@ -28,8 +28,8 @@ int main() {
         {GAME,  {Game::Init,    Game::On_Switch,    Game::Update}}
     });
 
-    Switch_To_Scene(MENU);
     Init_Scenes();
+    Switch_To_Scene(MENU);
 
     Mod_Load_Directory("mods/");
     Mod_Callback("Init", nullptr);

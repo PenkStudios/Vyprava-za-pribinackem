@@ -14,6 +14,11 @@
             "cwd": "/home/zahon/projects/Vyprava za pribinackem/build",
             "binaryPath": "/home/zahon/projects/Vyprava za pribinackem/build/pribiňáček",
             "binaryArgs": []
+        },
+        {
+            "cwd": "/home/zahon/projects/Vyprava za pribinackem/build",
+            "binaryPath": "/home/zahon/projects/Vyprava za pribinackem/build/pribináček",
+            "binaryArgs": []
         }
     ],
     "files.associations": {

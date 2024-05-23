@@ -29,6 +29,17 @@
 // Convert blender coords to raylib coords
 #define B2RL(x, y, z) {x, z, -y}
 
+// Map constants. Probably could be in `config.txt`
+#define CHAIR_POSITION B2RL(-8.2f, -7.5f, 20)
+#define EATING_ROTATION 90.f
+#define PRIBINACEK_WIN_ANIMATION {-4.60577, 18.2854, 7.56896}
+#define SPOON_ROTATION_WIN_ANIMATION {0.f, 0.f, 0.f}
+#define SPOON_WIN_ANIMATION {-4.38755, 18.2854, 8.88417}
+#define PLAYERS_ROOM_TABLE {{-6.04131, 17.3548, 3.39275}, {-0.713218, 18.2854, 12.3022}}
+
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 // Odkomentujte pro android UI
 // #define ANDROID_UI
 
@@ -156,7 +167,7 @@ namespace Game {
         class Item_Data {
         public:
             Vector3 position;
-            float y_Rotation;
+            Vector3 rotation;
 
             float fall_Acceleration;
             RayCollision collision;
@@ -166,8 +177,8 @@ namespace Game {
 
             void Calculate_Collision();
 
-            Item_Data(int item_Id, Vector3 position, float y_Rotation) : item_Id(item_Id), position(position), y_Rotation(y_Rotation), fall_Acceleration(0), falling(true) {}
-            Item_Data(int item_Id, Vector3 position) : item_Id(item_Id), position(position), y_Rotation(0), fall_Acceleration(0), falling(true) {}
+            Item_Data(int item_Id, Vector3 position, Vector3 rotation) : item_Id(item_Id), position(position), rotation(rotation), fall_Acceleration(0), falling(true) {}
+            Item_Data(int item_Id, Vector3 position) : item_Id(item_Id), position(position), rotation({0.f, 0.f, 0.f}), fall_Acceleration(0), falling(true) {}
         };
 
         std::vector<Item_Data> item_Data;
@@ -246,7 +257,7 @@ namespace Game {
         bool guide_Finished = false;
         std::vector<Item_Data> key_Spawns;
 
-        const BoundingBox players_Room = {{-15.208473, 12.999510, 2.288752}, {-0.008472, 26.592718, 29.488750}};
+        const BoundingBox players_Room_Table = PLAYERS_ROOM_TABLE;
         
         Model drawer;
         BoundingBox drawer_BBox;
@@ -256,15 +267,123 @@ namespace Game {
             Vector3 position;
             Vector3 original_Position;
             bool opening = false;
+            bool has_Lock = false;
 
             std::vector<Item_Data*> childs = {};
 
-            Drawer_Data(Vector3 position);
+            Drawer_Data(Vector3 position, bool has_Lock);
         };
         std::vector<Drawer_Data> drawers = {};
+
+        class Win_Animation {
+        public:
+            bool playing = false;
+            int tick = 0;
+
+            int walk_Finish;
+            int fetch_Finish; // fetching of pribináček + spoon
+            int open_Finish; // opening pribinacek
+            int eat_Finish; // eating it
+
+            int pribinacek_Fetch;
+            int spoon_Fetch;
+
+            Vector3 from_Rotation;
+            Vector3 from_Position;
+
+            Vector3 from_Pribinacek_Position;
+            Vector3 from_Spoon_Rotation;
+            Vector3 from_Spoon_Position;
+
+            void Play();
+            void Update();
+        };
+
+        Win_Animation win;
     } data;
 
-    Game_Data::Drawer_Data::Drawer_Data(Vector3 position) : position(position), original_Position(position), opening(false) {
+    void Game_Data::Win_Animation::Play() {
+        // Once got into the room with pribináček & spoon
+        walk_Finish = Vector3Distance(data.camera.position, CHAIR_POSITION) * 10;
+        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 0.1;
+        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 0.1;
+        fetch_Finish = MAX(pribinacek_Fetch, spoon_Fetch) + walk_Finish;
+        open_Finish = fetch_Finish + Menu::data.animations[0].frameCount - 1;
+        eat_Finish = open_Finish + GetFPS() * 2.5f;
+
+        from_Rotation = data.camera_Rotation;
+        from_Position = data.camera.position;
+
+        from_Pribinacek_Position = data.item_Data[Game_Data::PRIBINACEK].position;
+        from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
+        from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
+
+        playing = true;
+    }
+
+    Vector3 LerpVector3XYZ(Vector3 source, Vector3 target, float amount) {
+        Vector3 addition = {(float)(((((int)target.x - (int)source.x) % 360) + 540) % 360) - 180,
+                            (float)(((((int)target.y - (int)source.y) % 360) + 540) % 360) - 180,
+                            (float)(((((int)target.z - (int)source.z) % 360) + 540) % 360) - 180};
+        return Vector3Add(source, Vector3Multiply(addition, {amount, amount, amount}));
+    }
+
+    void Game_Data::Win_Animation::Update() {
+        if(!playing) return;
+        if(IsKeyDown(KEY_T)) tick++;
+
+        if(tick < walk_Finish) {
+            int addition = (((((int)EATING_ROTATION - (int)from_Rotation.y) % 360) + 540) % 360) - 180;
+            data.camera_Rotation = Vector3Lerp(from_Rotation, {0.f, from_Rotation.y + addition, 0.f}, (float)tick / (float)walk_Finish);
+            data.camera.position = Vector3Lerp(from_Position, CHAIR_POSITION, (float)tick / (float)walk_Finish);
+        } else if(tick < fetch_Finish) {
+            data.item_Data[Game_Data::PRIBINACEK].position = Vector3Lerp(from_Pribinacek_Position, PRIBINACEK_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)pribinacek_Fetch, 0.f, 1.f));
+            data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, SPOON_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f));
+            data.item_Data[Game_Data::SPOON].rotation = Vector3Lerp(from_Spoon_Rotation, SPOON_ROTATION_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f));
+            if(tick + 1 >= fetch_Finish) {
+                from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
+                from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
+            }
+        } else if(tick < open_Finish) {
+            Menu::data.animation_Frame_Counter++;
+            UpdateModelAnimation(Menu::data.pribinacek, Menu::data.animations[0], Menu::data.animation_Frame_Counter);
+        } else if(tick < eat_Finish) {
+            float stage_Tick = Clamp((float)(tick - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
+            float next_Stage_Tick = Clamp((float)(tick + 1 - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
+            if(stage_Tick < 0.33f) {
+                // 0 - 0.33
+                Vector3 target = PRIBINACEK_WIN_ANIMATION;
+                target.x += 0.2f;
+                target.y += 2.f;
+                target.z += 0.4f;
+                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, stage_Tick / 0.33f);
+                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {-90.f, 0.f, 0.f}, stage_Tick / 0.33f);
+                if(next_Stage_Tick < 0.33f != true) {
+                    from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
+                    from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
+                }
+            } else if(stage_Tick < 0.66f) {
+                // 0.33 - 0.66
+                Vector3 target = PRIBINACEK_WIN_ANIMATION;
+                target.x += 0.2f;
+                target.z += 0.4f;
+                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.33f) / 0.33f);
+                if(next_Stage_Tick < 0.66f != true) {
+                    from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
+                }
+            } else {
+                Vector3 target = PRIBINACEK_WIN_ANIMATION;
+                target.x += 0.2f;
+                target.y += 2.f;
+                target.z += 0.4f;
+                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {180.f, -90.f, 0.f}, stage_Tick / 0.33f);
+                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.66f) / 0.33f);
+                // 0.66 - 1
+            }
+        }
+    }
+
+    Game_Data::Drawer_Data::Drawer_Data(Vector3 position, bool has_Lock) : has_Lock(has_Lock), position(position), original_Position(position), opening(false) {
         for(int index = 0; index < MAX_ITEMS; index++)
             childs.push_back(nullptr);
     }
@@ -292,11 +411,23 @@ namespace Game {
         for(Game_Data::Door_Data &door_Data : data.doors) {
             // Fun fact: Matrix multiplication order matters
             // bruh it literaly says that in the MatrixMultiply documentation ._.
+
             Matrix matrix = MatrixIdentity();
             matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
             
             matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
+
+            float rotation_Player = door_Data.rotation;
+            float rotation_Father = door_Data.rotation_Father;
+
+            float rotation = 0.f;
+            if(door_Data.default_Rotation < door_Data.opened_Rotation) {
+                rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
+            } else {
+                rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
+            }
+            matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
+            
             matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
             matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
@@ -555,11 +686,11 @@ namespace Game {
             if(strings.size() > 2 && strings[1] == "=") {
                 if(strings[0] == "KEY_SPAWNS" && (strings.size() - 2) % 4 == 0) {
                     for(int index = 2; index < strings.size(); index += 4) {
-                        data.key_Spawns.push_back(Game_Data::Item_Data(-1, {std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, std::stof(strings[index + 3])));
+                        data.key_Spawns.push_back(Game_Data::Item_Data(-1, {std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, {0.f, std::stof(strings[index + 3]), 0.f}));
                     }
-                } else if(strings[0] == "DRAWERS" && (strings.size() - 2) % 3 == 0) {
-                    for(int index = 2; index < strings.size(); index += 3) {
-                        data.drawers.push_back(Game_Data::Drawer_Data({std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}));
+                } else if(strings[0] == "DRAWERS" && (strings.size() - 2) % 4 == 0) {
+                    for(int index = 2; index < strings.size(); index += 4) {
+                        data.drawers.push_back(Game_Data::Drawer_Data({std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, (bool)std::stoi(strings[index + 3])));
                     }
                 } else {
                     LOG("Unknown variable or bad value %s", strings[0].c_str());
@@ -615,8 +746,7 @@ namespace Game {
             Menu::data.pribinacek.materials[material].shader = data.lighting;
 
         int spoon_Position_Index = rand() % data.key_Spawns.size();
-        std::cout << spoon_Position_Index << std::endl;
-        data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[spoon_Position_Index].position, data.key_Spawns[spoon_Position_Index].y_Rotation);
+        data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[spoon_Position_Index].position, data.key_Spawns[spoon_Position_Index].rotation);
 
         for(Game_Data::Item_Data &item : data.item_Data) {
             item.fall_Acceleration = 0.1f;
@@ -631,7 +761,7 @@ namespace Game {
         data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribináček", false));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("2. najdi lžičku", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. vem pribináček a\nlžíci do pokoje", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. vem pribináček a\nlžíci do pokoje\n na stůl", false));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček", false));
 
         data.guide_Finished = false;
@@ -847,7 +977,7 @@ namespace Game {
                 }
             }
 
-            if(!IsKeyDown(KEY_P)) DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
+            DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
 
             /* ITEMS */ {
                 Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
@@ -856,19 +986,28 @@ namespace Game {
                 for(int index = 0; index < data.item_Data.size(); index++) {
                     switch(index) {
                         case Game_Data::PRIBINACEK: {
-                            DrawModelEx(Menu::data.pribinacek, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
+                            Menu::data.pribinacek.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
+                                                                                                                data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                                data.item_Data[index].rotation.z * DEG2RAD}));
+                            DrawModel(Menu::data.pribinacek, data.item_Data[index].position, 1.f, WHITE);
                             bbox_Mesh = &Menu::data.pribinacek.meshes[1];
                             break;
                         }
 
                         case Game_Data::SPOON: {
-                            DrawModelEx(data.spoon, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
+                            data.spoon.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
+                                                                                                     data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                     data.item_Data[index].rotation.z * DEG2RAD}));
+                            DrawModel(data.spoon, data.item_Data[index].position, 1.f, WHITE);
                             bbox_Mesh = &data.spoon.meshes[0];
                             break;
                         }
 
                         case Game_Data::KEY: {
-                            DrawModelEx(data.key, data.item_Data[index].position, {0.f, 1.f, 0.f}, data.item_Data[index].y_Rotation, Vector3One(), WHITE);
+                            data.key.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
+                                                                                                   data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                   data.item_Data[index].rotation.z * DEG2RAD}));
+                            DrawModel(data.key, data.item_Data[index].position, 1.f, WHITE);
                             bbox_Mesh = &data.key.meshes[0];
                             break;
                         }
@@ -880,7 +1019,7 @@ namespace Game {
                         if(data.holding_Item == (Game_Data::Item)index) {
                             data.item_Data[index].position = Vector3Add(data.camera.position, Vector3Multiply(Vector3Normalize(Vector3Subtract(data.camera.target, data.camera.position)), {3.f, 3.f, 3.f}));
                             
-                            data.item_Data[index].y_Rotation = -atan2(data.camera_Target.z, data.camera_Target.x) * RAD2DEG;
+                            data.item_Data[index].rotation.y = -atan2(data.camera_Target.z, data.camera_Target.x) * RAD2DEG;
                         } else {
                             if(data.item_Data[index].collision.point.y > data.item_Data[index].position.y) {
                                 data.item_Data[index].position.y = data.item_Data[index].collision.point.y;
@@ -894,6 +1033,8 @@ namespace Game {
                                 data.item_Data[index].fall_Acceleration += 1.f * GetFrameTime();
                             }
                         }
+
+                        // std::cout << index << ": " << data.item_Data[index].position.x << " " << data.item_Data[index].position.y << " " << data.item_Data[index].position.z << std::endl;
 
                         if(bbox_Mesh != nullptr) {
                             BoundingBox bbox = {{-1.f, -1.f, -1.f}, {1.f, 1.f, 1.f}};
@@ -938,8 +1079,7 @@ namespace Game {
             int index = 0;
             for(Game_Data::Drawer_Data &drawer : data.drawers) {
                 DrawModel(data.drawer, drawer.position, 1.f, WHITE);
-                // DrawModel(data.lock, Vector3Add(drawer.position, {-2.f, 0.f, 0.f}), 1.f, WHITE);
-
+                if(drawer.has_Lock) DrawModel(data.lock, Vector3Add(drawer.position, {1.95f, 1.f, 0.f}), 1.f, WHITE);
                 if(drawer.opening) {
                     drawer.position.x += 10.f * GetFrameTime();
                     for(Game_Data::Item_Data* child : drawer.childs)
@@ -981,15 +1121,23 @@ namespace Game {
             }
 
             if(nearest_Hit < 5.f && nearest_Hit_Id != -1 && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !action_Used) {
-                action_Used = true;
-                data.drawers[nearest_Hit_Id].opening = !data.drawers[nearest_Hit_Id].opening;
+                if(data.drawers[nearest_Hit_Id].has_Lock) {
+                    if(data.holding_Item == Game_Data::KEY) {
+                        action_Used = true;
+                        data.drawers[nearest_Hit_Id].opening = !data.drawers[nearest_Hit_Id].opening;
+                    }
+                } else {
+                    action_Used = true;
+                    data.drawers[nearest_Hit_Id].opening = !data.drawers[nearest_Hit_Id].opening;
+                }
             }
 
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
 
-            if(CheckCollisionBoxSphere(data.players_Room, data.item_Data[Game_Data::PRIBINACEK].position, 0.1f) &&
-               CheckCollisionBoxSphere(data.players_Room, data.item_Data[Game_Data::SPOON].position, 0.1f) && data.guide_Index == 6) {
+            if(CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::PRIBINACEK].position, 0.1f) &&
+               CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::SPOON].position, 0.1f) && data.guide_Index == 6 &&
+               data.holding_Item != Game_Data::PRIBINACEK && data.holding_Item != Game_Data::SPOON) {
                 data.guide_Index++;
             }
 
@@ -1077,6 +1225,9 @@ namespace Game {
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
 
+        if(IsKeyPressed(KEY_P)) data.win.Play();
+        data.win.Update();
+
         const float crosshair_size = 10.f;
         DrawLineEx({GetScreenWidth() / 2.f - crosshair_size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + crosshair_size, GetScreenHeight() / 2.f}, 2.f, Fade(WHITE, 0.2f));
         DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - crosshair_size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + crosshair_size}, 2.f, Fade(WHITE, 0.2f));
@@ -1156,6 +1307,8 @@ namespace Game {
                 collision_Legs = Get_Collision_Ray(bottom);
                 if(collision_Legs.hit) {
                     Vector3 target = Vector3Add(collision_Legs.point, {0.f, data.crouching ? 5.0f : 6.5f, 0.f});
+                    if(target.y > 20.f && data.win.playing)
+                        data.crouching = true;
                     if(data.camera.position.y < target.y) {
                         data.camera.position = target;
                         data.fall_Acceleration = 0.1f;

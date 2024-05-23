@@ -1,11 +1,9 @@
-# Výprava za pribináčkem verze 0.5.2
+# Výprava za pribináčkem verze 0.5.5
 Velice vtipná hra o cestě pro pribiňáčka
 
 ## Přídáno
-- Šuplíky
-- Parentování itemů u šuplíků
-- Click-through u šuplíku
-- Klíč se nyní spawnuje
+- Opraveny kolize když byly dveře otevřeny "nepřítelem"
+- Začátek práce na animaci jezení pribináčka
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

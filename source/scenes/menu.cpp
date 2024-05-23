@@ -21,11 +21,13 @@ namespace Menu {
         Menu_Scene old_Scene;
 
         std::map<Menu_Scene, Vector3> scene_Perspectives = {
-            {MAIN, {2.f, 0.f, 0.f}},
-            {SETTINGS, {0.1f, 2.f, 0.f}}
+            {MAIN, {-2.f, 0.f, 0.f}},
+            {SETTINGS, {-0.01f /* raylib doesnt like perfect top-down views ._. */, 2.f, 0.f}}
         };
 
         Model pribinacek;
+        ModelAnimation *animations;
+        int animation_Frame_Counter = 0;
         Camera camera;
 
         Font medium_Font;
@@ -74,6 +76,9 @@ namespace Menu {
     void Init() {
         data.pribinacek = LoadModel("models/pribinacek.glb");
 
+        int animation_Count = 0;
+        data.animations = LoadModelAnimations("models/pribinacek.glb", &animation_Count);
+
         data.medium_Font = LoadFontEx("fonts/medium.ttf", 96, nullptr, 0x5ff);
         SetTextureFilter(data.medium_Font.texture, TEXTURE_FILTER_BILINEAR);
 
@@ -103,6 +108,8 @@ namespace Menu {
         for(int material = 0; material < data.pribinacek.materialCount; material++) {
             data.pribinacek.materials[material].shader = LoadMaterialDefault().shader;
         }
+
+        UpdateModelAnimation(data.pribinacek, data.animations[0], 0);
 
         Mod_Callback("Switch_Menu", (void*)&data);
     }
@@ -146,8 +153,8 @@ namespace Menu {
 
         Mod_Callback("Update_Menu_2D", (void*)&data, false);
 
-        DrawCircleGradient(GetScreenWidth() / 2, GetScreenHeight() / 2, GetScreenHeight() / 2.f, BLANK, BLACK);
-        DrawRing({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, GetScreenHeight() / 2.f - GetScreenHeight() / 500.f, 10000, 0.f, 360.f, 32, BLACK);
+        DrawCircleGradient(GetScreenWidth() / 2, GetScreenHeight() / 2, GetScreenHeight() / 2.2f, BLANK, BLACK);
+        DrawRing({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, GetScreenHeight() / 2.2f - GetScreenHeight() / 500.f, 10000, 0.f, 360.f, 32, BLACK);
 
         bool fading_In = data.old_Scene == data.scene;
         unsigned char alpha = fading_In ? Clamp(Remap(data.scene_Change_Tick, 0.f, 0.5f, 255.f, 0.f), 0.f, 255.f) : Clamp(Remap(data.scene_Change_Tick, 0.5f, 1.f, 0.f, 255.f), 0.f, 255.f);
