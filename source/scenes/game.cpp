@@ -26,10 +26,10 @@
 
 #include "menu.cpp"
 
-// Convert blender coords to raylib coords
+// Přemění blender souřadnice na raylib souřadnice
 #define B2RL(x, y, z) {x, z, -y}
 
-// Map constants. Probably could be in `config.txt`
+// Konstanty mapy. Mohlo by být v `config.txt`
 #define CHAIR_POSITION B2RL(-8.2f, -7.5f, 20)
 #define EATING_ROTATION 90.f
 #define PRIBINACEK_WIN_ANIMATION {-4.60577, 18.2854, 7.56896}
@@ -55,8 +55,8 @@ namespace Game {
 
             Material* material;
 
-            float rotation; // Rotation caused by player
-            float rotation_Father; // Rotation caused by daddy
+            float rotation; // Rotace způsobena hráčem
+            float rotation_Father; // Rotace způsobena tátou
 
             // -||-
             bool opening;
@@ -124,7 +124,7 @@ namespace Game {
 
         Vector3 camera_Rotation = {0.f, 180.f, 0.f};
         Vector2 old_Mouse_Position = {0.f, 0.f};
-        bool previous_Rotated = false; // If there was a rotate "event" previous frame
+        bool previous_Rotated = false; // Pokud byl rotate "event" předchozí frame
 
         class Joystick_Data {
         public:
@@ -188,14 +188,14 @@ namespace Game {
         Model key;
         Model lock;
 
-        Vector3 camera_Target = {0.f, 0.f, 1.f}; // Camera rotation from the point {0, 0, 0}
+        Vector3 camera_Target = {0.f, 0.f, 1.f}; // Rotace kamery z bodu {0, 0, 0}
 
         class Guide_Caption {
         public:
             std::string target_Text;
-            bool can_Skip; // tap to skip (for story)
+            bool can_Skip; // zmáčkněte mezerník pro skipnutí (pro příběk)
 
-            std::string text; // slowly written
+            std::string text; // pomalu napsaný
             float frame = 1;
 
             std::string _Utf8_Substr(const std::string& str, unsigned int start, unsigned int leng) {
@@ -222,7 +222,7 @@ namespace Game {
                 return str.substr(min,max);
             }
 
-            // Returns true if skipping this frame
+            // Vrátí true pokud přeskakuji tento frame
             bool Update() {
                 frame += 20.f * GetFrameTime();
                 if(frame > target_Text.size()) {
@@ -281,9 +281,9 @@ namespace Game {
             int tick = 0;
 
             int walk_Finish;
-            int fetch_Finish; // fetching of pribináček + spoon
-            int open_Finish; // opening pribinacek
-            int eat_Finish; // eating it
+            int fetch_Finish; // "sbírání" pribináčka + lžíci
+            int open_Finish; // otevířání přibiňáčka
+            int eat_Finish; // jezení ho
 
             int pribinacek_Fetch;
             int spoon_Fetch;
@@ -303,13 +303,15 @@ namespace Game {
     } data;
 
     void Game_Data::Win_Animation::Play() {
-        // Once got into the room with pribináček & spoon
+        // Potom co se hráč dostal do místnosti s pribináčkem a lžicí na stole
+        tick = 0;
+
         walk_Finish = Vector3Distance(data.camera.position, CHAIR_POSITION) * 10;
-        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 0.1;
-        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 0.1;
+        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 25;
+        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 25;
         fetch_Finish = MAX(pribinacek_Fetch, spoon_Fetch) + walk_Finish;
         open_Finish = fetch_Finish + Menu::data.animations[0].frameCount - 1;
-        eat_Finish = open_Finish + GetFPS() * 2.5f;
+        eat_Finish = open_Finish + GetFPS() * 4.166f;
 
         from_Rotation = data.camera_Rotation;
         from_Position = data.camera.position;
@@ -330,16 +332,22 @@ namespace Game {
 
     void Game_Data::Win_Animation::Update() {
         if(!playing) return;
-        if(IsKeyDown(KEY_T)) tick++;
+        tick++;
 
+        // std::cout << data.item_Data[Game_Data::SPOON].rotation.x << " " << data.item_Data[Game_Data::SPOON].rotation.y << " " << data.item_Data[Game_Data::SPOON].rotation.z << std::endl;
+        // 0 -90 0 začátek
+        // -75 0 0 začátek ponoření
+
+        // nečitelný kód, ale funguje
         if(tick < walk_Finish) {
             int addition = (((((int)EATING_ROTATION - (int)from_Rotation.y) % 360) + 540) % 360) - 180;
             data.camera_Rotation = Vector3Lerp(from_Rotation, {0.f, from_Rotation.y + addition, 0.f}, (float)tick / (float)walk_Finish);
             data.camera.position = Vector3Lerp(from_Position, CHAIR_POSITION, (float)tick / (float)walk_Finish);
         } else if(tick < fetch_Finish) {
             data.item_Data[Game_Data::PRIBINACEK].position = Vector3Lerp(from_Pribinacek_Position, PRIBINACEK_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)pribinacek_Fetch, 0.f, 1.f));
+            data.item_Data[Game_Data::SPOON].rotation = Vector3Lerp(from_Spoon_Rotation, {0.f, -90.f, 0.f}, Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f));
             data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, SPOON_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f));
-            data.item_Data[Game_Data::SPOON].rotation = Vector3Lerp(from_Spoon_Rotation, SPOON_ROTATION_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f));
+            // data.item_Data[Game_Data::SPOON].rotation = Vector3Lerp(from_Spoon_Rotation, SPOON_ROTATION_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f));
             if(tick + 1 >= fetch_Finish) {
                 from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                 from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
@@ -350,35 +358,52 @@ namespace Game {
         } else if(tick < eat_Finish) {
             float stage_Tick = Clamp((float)(tick - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
             float next_Stage_Tick = Clamp((float)(tick + 1 - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
-            if(stage_Tick < 0.33f) {
-                // 0 - 0.33
+            if(stage_Tick < 0.2f) {
+                // 0 - 0.2
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
                 target.x += 0.2f;
-                target.y += 2.f;
+                target.y += 2.5f;
+                target.z += 0.8f;
+                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, stage_Tick / 0.2f);
+                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {-75.f, 0.f, 0.f}, stage_Tick / 0.2f);
+                if(next_Stage_Tick < 0.2f != true) {
+                    from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
+                }
+            } else if(stage_Tick < 0.4f) {
+                // 0.2 - 0.4
+                Vector3 target = PRIBINACEK_WIN_ANIMATION;
+                target.x += 0.2f;
+                target.y += 0.5f;
                 target.z += 0.4f;
-                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, stage_Tick / 0.33f);
-                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {-90.f, 0.f, 0.f}, stage_Tick / 0.33f);
-                if(next_Stage_Tick < 0.33f != true) {
+                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.2f) / 0.2f);
+                if(next_Stage_Tick < 0.4f != true) {
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                     from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
                 }
-            } else if(stage_Tick < 0.66f) {
-                // 0.33 - 0.66
-                Vector3 target = PRIBINACEK_WIN_ANIMATION;
-                target.x += 0.2f;
-                target.z += 0.4f;
-                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.33f) / 0.33f);
-                if(next_Stage_Tick < 0.66f != true) {
-                    from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
-                }
-            } else {
+            } else if(stage_Tick < 0.6f) {
+                // 0.4 - 0.6
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
                 target.x += 0.2f;
                 target.y += 2.f;
+                target.z += 0.8f;
+                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.4f) / 0.2f);
+                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {-55.f, 20.f, 0.f}, (stage_Tick - 0.4f) / 0.2f);
+                if(next_Stage_Tick < 0.6f != true) {
+                    from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
+                }
+            } else if(stage_Tick < 0.8f) {
+                // 0.6 - 0.8
+                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {0.f, 90.f, 0.f}, (stage_Tick - 0.6f) / 0.2f);
+                if(next_Stage_Tick < 0.8f != true) {
+                    from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
+                }
+            } else {
+                // 0.8 - 1
+                Vector3 target = PRIBINACEK_WIN_ANIMATION;
+                target.x -= 1.f;
+                target.y += 2.f;
                 target.z += 0.4f;
-                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {180.f, -90.f, 0.f}, stage_Tick / 0.33f);
-                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.66f) / 0.33f);
-                // 0.66 - 1
+                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.8f) / 0.2f);
             }
         }
     }
@@ -388,7 +413,7 @@ namespace Game {
             childs.push_back(nullptr);
     }
 
-    // Get map collision with ray (map + doors + drawers)
+    // Získat kolize s střelou (mapa + dveře + šuplíky)
     RayCollision Get_Collision_Ray(Ray ray, Game_Data::Item_Data *item = nullptr) {
         RayCollision collision = { 0 };
         collision.distance = 1000000.f;
@@ -409,8 +434,8 @@ namespace Game {
         }
 
         for(Game_Data::Door_Data &door_Data : data.doors) {
-            // Fun fact: Matrix multiplication order matters
-            // bruh it literaly says that in the MatrixMultiply documentation ._.
+            // Fun fact: Pořádí v matrixové multiplikaci záleží
+            // aha ono je to reálně napsaný v dokumentaci MatrixMultiply ._.
 
             Matrix matrix = MatrixIdentity();
             matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
@@ -755,8 +780,8 @@ namespace Game {
         }
 
         data.guide_Texts.clear();
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepžekonatelnou chuť na pribiňáčka"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("Tvým cílem je jít pro pribiňáčka a sníst si ho tady v pokoji"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepžekonatelnou chuť na pribináčka"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Tvým cílem je jít pro pribináčka a sníst si ho tady v pokoji"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("Jo a táta vždycky na noc vypíná pojistky, aby jsem nemohl být na mobilu"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribináček", false));
@@ -793,11 +818,9 @@ namespace Game {
                 0.0f                                                                     // Move up-down
             },
             (Vector3){
-                0.f, 0.f, 0.f                                                            // Rotation: roll
+                0.f, 0.f, 0.f                                                            // Rotation: roll, yaw, pitch
             },
             0.f);
-
-        data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
         Vector2 delta = GetMouseDelta();
         data.camera_Rotation = Vector3Add(data.camera_Rotation, {delta.y * GetFrameTime() * 5.f, -delta.x * GetFrameTime() * 5.f, 0.f});
@@ -1139,6 +1162,7 @@ namespace Game {
                CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::SPOON].position, 0.1f) && data.guide_Index == 6 &&
                data.holding_Item != Game_Data::PRIBINACEK && data.holding_Item != Game_Data::SPOON) {
                 data.guide_Index++;
+                data.win.Play();
             }
 
             /* FATHER */ {
@@ -1225,7 +1249,6 @@ namespace Game {
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
 
-        if(IsKeyPressed(KEY_P)) data.win.Play();
         data.win.Update();
 
         const float crosshair_size = 10.f;
@@ -1260,7 +1283,7 @@ namespace Game {
                 if(CheckCollisionPointRec(GetTouchPosition(id), crouch_Rectangle)) {
                     data.crouching = !data.crouching;
                 } else if (can_Update) {
-                    // Basically, a very complex and buggy way to slow down the player if he is crouching
+                    // Jednoduše hodně komplexní a buggy cesta, jak zpomalit hráče, pokud crouchuje 
                     if ((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
                         Update_Camera_Android(id, data.previous_Rotated);
                     }
@@ -1281,7 +1304,9 @@ namespace Game {
         }
 #else
         data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
-        if(data.wake_Animation_Finished) {
+        data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
+
+        if(data.wake_Animation_Finished && !data.win.playing) {
             float speed = 1.f;
             if(data.crouching) speed /= 1.5f;
             if(!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
@@ -1294,7 +1319,7 @@ namespace Game {
             if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
                 data.camera.position.z = old_Position.z;
 
-            // (if debug) we dont want the spheres to be rendered twice
+            // (pokud debug) nechceme aby se koule renderovali dvakrát
             bool is_Debug = data.debug;
             data.debug = true;
             if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
@@ -1313,7 +1338,7 @@ namespace Game {
                         data.camera.position = target;
                         data.fall_Acceleration = 0.1f;
                     } else if(data.camera.position.y < target.y + 0.1f && data.camera.position.y > target.y - 0.1f) {
-                        // Do nothing there
+                        // Nedělat nic tady
                         data.fall_Acceleration = 0.1f;
                     } else {
                         data.camera.position.y -= data.fall_Acceleration * 50.f * GetFrameTime();

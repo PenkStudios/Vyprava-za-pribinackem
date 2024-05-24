@@ -165,9 +165,9 @@ namespace Menu {
                 for(int angle = 0; angle < 360; angle += 20) {
                     Vector2 offset = {cos(angle * DEG2RAD) * 3.f, sin(angle * DEG2RAD) * 3.f};
 
-                    DrawTextExC(data.bold_Font, "Výprava za pribiňáčkem", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, offset), font_Size, 1.f, Alpha_Modify(BLACK, alpha));
+                    DrawTextExC(data.bold_Font, "Výprava za pribináčkem", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, offset), font_Size, 1.f, Alpha_Modify(BLACK, alpha));
                 }
-                DrawTextExC(data.bold_Font, "Výprava za pribiňáčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, Alpha_Modify(WHITE, alpha));
+                DrawTextExC(data.bold_Font, "Výprava za pribináčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, Alpha_Modify(WHITE, alpha));
 
                 if(data.settings_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS);
                 if(data.play_Button.Update(alpha)) Switch_To_Scene(GAME);

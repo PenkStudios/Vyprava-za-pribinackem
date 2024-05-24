@@ -1,7 +1,7 @@
 #ifndef MOD_LOADER_CXX
 #define MOD_LOADER_CXX
 
-// Ordered - for 2d function where the order of drawing matters (extra bool argument "in_Front")
+// Ordered - pro 2d funkce, kde záleží na pořadí vykreslení (extra bool argument "in_Front")
 #define FUNCTION_LIST_ORDERED {{"Update_Intro_2D", nullptr}, {"Update_Menu_2D", nullptr}, {"Update_Game_2D", nullptr}}
 #define FUNCTION_LIST {{"Init", nullptr}, {"Init_Intro", nullptr}, {"Switch_Intro", nullptr}, {"Init_Menu", nullptr}, {"Switch_Menu", nullptr}, {"Update_Menu_3D", nullptr}, {"Init_Game", nullptr}, {"Switch_Game", nullptr}, {"Update_Game_3D", nullptr}}
 
@@ -68,7 +68,7 @@ void Mod_Callback(std::string function, void* context, bool in_Front = true) {
 
 #elif defined(PLATFORM_ANDROID)
 #include <string>
-// No modding support for android :/
+// Žádny modding support pro android :/
 
 bool Mod_Load_Path(std::string path) { return false; }
 void Mod_Load_Directory(std::string directory) {}

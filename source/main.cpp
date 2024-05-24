@@ -12,9 +12,9 @@ int main() {
     SetConfigFlags(FLAG_MSAA_4X_HINT);
 
 #ifdef PLATFORM_ANDROID
-    InitWindow(0, 0, "Výprava za pribiňáčkem");
+    InitWindow(0, 0, "Výprava za pribináčkem");
 #else
-    InitWindow(1000, 600, "Výprava za pribiňáčkem");
+    InitWindow(1000, 600, "Výprava za pribináčkem");
 #endif
 
     InitAudioDevice();

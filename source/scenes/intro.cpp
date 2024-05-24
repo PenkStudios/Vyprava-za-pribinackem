@@ -36,10 +36,7 @@ namespace Intro {
 
         Mod_Callback("Update_Intro_2D", (void*)&data, false);
 
-        // Dammit, the first day of coding and the code is already garbage
-        // Dont fucking know what this code does
-
-        // TODO: Add some useful comments
+        // TODO: Přidat nějaké užitečné komentáře
 
         data.tick++;
         float opacity_Logo = 0.f;
@@ -60,7 +57,6 @@ namespace Intro {
 
         opacity_Logo = 255;
 
-        // God damn, why would you even set the FPS to 0?!
         if(GetFPS() != 0) {
             if(data.tick > GetFPS() * 6) {
                 Switch_To_Scene(MENU);
