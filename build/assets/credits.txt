@@ -1,0 +1,27 @@
+
+~Výprava za pribináčkem~
+
+Námět: Rezerwe
+
+Zpracování: Zahon
+Grafický design: Zahon
+Design gameplaye: Zahon
+
+Hlavní programátor: Zahon
+Hlavní modelátor: Zahon
+Implementace systému modů: Zahon
+
+Design tlačítek: Zahon
+Design táty: Zahon
+Design domu: Zahon
+
+Softwary použity:
+Blender
+Visual Studio Code
+Gimp
+
+~~Skvělá 3D a 2D knihovna raylib, vytvořena: Rayem~~
+
+~Rezerwe - chibi.enjoyer na discordu~
+~Zahon - zahon._. na discordu~
+~Ray - raysan5 na discordu a na githubu~

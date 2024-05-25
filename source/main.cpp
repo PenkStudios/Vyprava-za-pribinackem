@@ -6,6 +6,7 @@
 #include "scenes/intro.cpp"
 #include "scenes/menu.cpp"
 #include "scenes/game.cpp"
+#include "scenes/credits.cpp"
 
 int main() {
     srand(time(NULL));
@@ -23,9 +24,10 @@ int main() {
     ChangeDirectory("assets");
 
     Set_Scene_Data({
-        {INTRO, {Intro::Init,   Intro::On_Switch,   Intro::Update}},
-        {MENU,  {Menu::Init,    Menu::On_Switch,    Menu::Update}},
-        {GAME,  {Game::Init,    Game::On_Switch,    Game::Update}}
+        {INTRO,   {Intro::Init,   Intro::On_Switch,   Intro::Update}},
+        {MENU,    {Menu::Init,    Menu::On_Switch,    Menu::Update}},
+        {GAME,    {Game::Init,    Game::On_Switch,    Game::Update}},
+        {CREDITS, {Credits::Init, Credits::On_Switch, Credits::Update}}
     });
 
     Init_Scenes();

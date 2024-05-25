@@ -32,7 +32,7 @@
 // Konstanty mapy. Mohlo by být v `config.txt`
 #define CHAIR_POSITION B2RL(-8.2f, -7.5f, 20)
 #define EATING_ROTATION 90.f
-#define PRIBINACEK_WIN_ANIMATION {-4.60577, 18.2854, 7.56896}
+#define PRIBINACEK_WIN_ANIMATION {-4.60577, 18.2854, 7.5}
 #define SPOON_ROTATION_WIN_ANIMATION {0.f, 0.f, 0.f}
 #define SPOON_WIN_ANIMATION {-4.38755, 18.2854, 8.88417}
 #define PLAYERS_ROOM_TABLE {{-6.04131, 17.3548, 3.39275}, {-0.713218, 18.2854, 12.3022}}
@@ -188,7 +188,7 @@ namespace Game {
         Model key;
         Model lock;
 
-        Vector3 camera_Target = {0.f, 0.f, 1.f}; // Rotace kamery z bodu {0, 0, 0}
+        Vector3 camera_Target = {0.f, 0.f, 1.f}; // "cíl" kamery z bodu {0, 0, 0}
 
         class Guide_Caption {
         public:
@@ -307,8 +307,8 @@ namespace Game {
         tick = 0;
 
         walk_Finish = Vector3Distance(data.camera.position, CHAIR_POSITION) * 10;
-        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 25;
-        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 25;
+        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 0.05f;
+        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 0.05f;
         fetch_Finish = MAX(pribinacek_Fetch, spoon_Fetch) + walk_Finish;
         open_Finish = fetch_Finish + Menu::data.animations[0].frameCount - 1;
         eat_Finish = open_Finish + GetFPS() * 4.166f;
@@ -373,12 +373,11 @@ namespace Game {
                 // 0.2 - 0.4
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
                 target.x += 0.2f;
-                target.y += 0.5f;
-                target.z += 0.4f;
+                target.y += 1.f;
+                target.z += 0.8f;
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.2f) / 0.2f);
                 if(next_Stage_Tick < 0.4f != true) {
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
-                    from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
                 }
             } else if(stage_Tick < 0.6f) {
                 // 0.4 - 0.6
@@ -387,22 +386,27 @@ namespace Game {
                 target.y += 2.f;
                 target.z += 0.8f;
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.4f) / 0.2f);
-                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {-55.f, 20.f, 0.f}, (stage_Tick - 0.4f) / 0.2f);
                 if(next_Stage_Tick < 0.6f != true) {
+                    from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                     from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
                 }
             } else if(stage_Tick < 0.8f) {
                 // 0.6 - 0.8
+                Vector3 target = PRIBINACEK_WIN_ANIMATION;
+                target.x += 0.2f;
+                target.y += 2.f;
+                target.z += 0.1f;
                 data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {0.f, 90.f, 0.f}, (stage_Tick - 0.6f) / 0.2f);
+                data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.6f) / 0.2f);
                 if(next_Stage_Tick < 0.8f != true) {
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                 }
             } else {
                 // 0.8 - 1
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
-                target.x -= 1.f;
+                target.x -= 2.f;
                 target.y += 2.f;
-                target.z += 0.4f;
+                target.z += 0.1f;
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.8f) / 0.2f);
             }
         }

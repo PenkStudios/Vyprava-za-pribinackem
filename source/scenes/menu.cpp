@@ -69,6 +69,7 @@ namespace Menu {
 
         Button settings_Button {};
         Button play_Button {};
+        Button credits_Button {};
 
         Button back_Button {};
     } data;
@@ -90,6 +91,7 @@ namespace Menu {
 
         data.settings_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 0.f}, "Nastavení", font_Size, data.medium_Font);
         data.play_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Hrát", font_Size, data.medium_Font);
+        data.credits_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 2.f}, "Titulky", font_Size, data.medium_Font);
         
         data.back_Button = Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.2f}, "Zpět", font_Size, data.medium_Font);
 
@@ -171,6 +173,7 @@ namespace Menu {
 
                 if(data.settings_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS);
                 if(data.play_Button.Update(alpha)) Switch_To_Scene(GAME);
+                if(data.credits_Button.Update(alpha)) Switch_To_Scene(CREDITS);
                 break;
             }
             case Menu::Menu_Data::Menu_Scene::SETTINGS: {

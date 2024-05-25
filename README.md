@@ -1,9 +1,9 @@
-# Výprava za pribináčkem verze 0.5.7
+# Výprava za pribináčkem verze 0.6.0
 Velice vtipná hra o cestě pro pribináčka
 
 ## Přídáno
-- České komentáře
-- Animace otvířání pribináčka
+- Doladěna animace jezení pribináčka
+- Základní titulky
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
