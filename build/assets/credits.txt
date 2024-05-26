@@ -15,7 +15,7 @@ Design tlačítek: Zahon
 Design táty: Zahon
 Design domu: Zahon
 
-Softwary použity:
+Software použit:
 Blender
 Visual Studio Code
 Gimp
@@ -25,3 +25,114 @@ Gimp
 ~Rezerwe - chibi.enjoyer na discordu~
 ~Zahon - zahon._. na discordu~
 ~Ray - raysan5 na discordu a na githubu~
+
+Lorem ipsum dolor sit
+amet, consectetur adipiscing elit.
+Integer sagittis, nisl at fermentum
+lacinia, urna elit suscipit quam, n on
+vestibulum ante est in lacus. Sed
+porttitor porta
+ligula, eget pretiu m
+dolor aliquam fermentum. Nunc
+vitae fringilla ligula, vitae
+placerat nulla. Curabitur ut lacus
+vel lectus aliquam euismod a nec
+augue. Phasellus dignissim urna at
+eros ultricies venenatis.
+Praesent consequat est eu bibendum
+tincidunt. Aliquam erat volutpat.
+Vivamus dignissim neque augue, in
+varius elit
+vulputate eu. Cras nec
+interdum neque, ut facilisis ex.
+Donec tortor nibh, malesuada eget
+euismod at, hendrerit nec magna. 
+Nunc aliquet ex vitae urna
+ultricies, in aliquet arcu mollis.
+Donec et orci eget nulla congue
+condimentum in in purus. Sed venena tis
+egestas sapien at placerat. In
+pretium lacus sem, in aliquam ante
+aliquam at. Nulla fermentum mauris
+sed nulla
+auctor aliquet. Nulla
+nisi metus, tincidunt ac justo
+id, ornare fringilla felis.
+Nulla vitae est enim. Proin
+pellentesque, purus ut mattis eleme ntum,
+lectus felis efficitur dui, a
+maximus metus dolor vitae est. Cras
+non facilisis tortor, quis
+fermentum ante. Nulla in interdum
+velit.  Donec nec sapien
+ullamcorper, sagittis augue ac, por ta
+ligula.
+Suspendisse quis volutpat
+velit, et maximus felis. Sed porta
+pellentesque turpis quis suscipit.  Cras
+in nunc fermentum, auctor magna
+luctus, vehicula ex. Nulla bibendum
+facilisis nibh, in ultricies odio
+dignissim eget. Phasellus et malesu ada
+leo. Quisque ut facilisis turpis,
+vel blandit magna. Duis eros
+lacus, pellentesque nec nunc id,
+tincidunt cursus neque. Curabitur
+imperdiet finibus feugiat. Donec
+rhoncus, mi eget pretium aliquam,
+magna elit
+laoreet mi, in
+malesuada nulla diam eu dolor. Quis que
+volutpat purus eu dolor ultricies, ac
+auctor odio aliquam. Aenean maximus
+consequat sagittis. Quisque leo era t,
+tincidunt sit amet nisl non, finibu s
+porttitor mauris. Curabitur pulvina r
+tellus ac volutpat pharetra. Sed
+lectus eros, hendrerit id libero
+sed, congue
+congue libero. 
+Nullam facilisis, elit sed
+consectetur rutrum, lorem erat fini bus
+risus, ac volutpat est justo sed
+mi. Etiam eu mauris non ligula
+vulputate consequat dignissim id qu am.
+Vivamus vel sem pretium, pretium
+tellus ac, congue nisi. Donec
+imperdiet viverra purus, eget maxim us
+elit. Pellentesque cursus arcu
+eget orci mollis, vel ultrices
+eros rutrum.
+Aliquam lobortis
+nulla eu molestie ornare. Maecenas
+elit tellus, blandit eget lacus
+eu, ultricies varius sem.
+Quisque id lorem nulla. Quisque
+blandit dignissim urna, non tempor
+justo. Duis sollicitudin nulla id
+magna maximus ornare. Suspendisse
+et lobortis magna. Suspendisse
+eget purus volutpat, consectetur
+leo fermentum,
+commodo sapien.
+Praesent in tempor urna, at mollis
+diam. Cras feugiat nibh nec
+aliquam eleifend. Ut varius feugiat
+risus, id condimentum mi iaculis a.
+Aenean eleifend quis dui ut
+faucibus.  Ut
+dictum a odio ut
+viverra. Maecenas eu nibh vel urna
+imperdiet pulvinar. Sed eu ipsum se
+d metus eleifend porttitor nec sed
+nulla. Ut at odio vitae dolor
+tempor tempus. Curabitur lectus
+elit, viverra
+quis dapibus et,
+hendrerit et purus. Aliquam lacinia mi
+vitae augue pellentesque viverra.
+Duis sit amet vestibulum lacus.
+Nunc elit tellus, consectetur in
+velit sed, ornare fringilla ante.
+Duis bibendum porttitor velit non
+interdum.  
