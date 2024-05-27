@@ -23,6 +23,7 @@
 
 #include "../scene.cpp"
 #include "../mod_loader.cpp"
+#include "../path.cpp"
 
 #include "menu.cpp"
 
@@ -85,6 +86,7 @@ namespace Game {
         Shader lighting;
         Model house;
         std::vector<BoundingBox> house_BBoxes;
+        BoundingBox house_BBox;
         
         Model father;
         Camera3D camera;
@@ -586,6 +588,8 @@ namespace Game {
         for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
             data.house_BBoxes.push_back(GetMeshBoundingBox(data.house.meshes[mesh]));
         }
+
+        data.house_BBox = GetModelBoundingBox(data.house);
 
         data.father = LoadModel("models/human.iqm");
 
@@ -1410,6 +1414,8 @@ namespace Game {
                 y += line.y;
             }
         }
+
+        Draw_Path(data.camera.position, data.house_BBox);
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
     }
