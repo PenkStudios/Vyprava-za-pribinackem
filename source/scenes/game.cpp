@@ -10,13 +10,6 @@
 #include <sstream>
 #include <vector>
 
-#ifdef PLATFORM_ANDROID
-#include <android/log.h>
-#define LOG(message, ...) ((void)__android_log_print(ANDROID_LOG_VERBOSE, "PRIBINACEK", "[%s %s] " message, __FILE_NAME__, __func__, ##__VA_ARGS__))
-#else
-#define LOG(message, ...) ((void)printf("PRIBINACEK: " message "\n", ##__VA_ARGS__))
-#endif
-
 #define RLIGHTS_IMPLEMENTATION
 #include "../rlights.h"
 #include "../reasings.c"
@@ -41,8 +34,8 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-// Odkomentujte pro android UI
-// #define ANDROID_UI
+// Odkomentujte pro mobilní UI
+// #define MOBILE_UI
 
 namespace Game {
     class Game_Data {
@@ -563,24 +556,24 @@ namespace Game {
         data.camera.fovy = 90.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
-#ifdef ANDROID_UI
-        data.joystick_Base = LoadTexture("textures/joystick_base.png");
+#ifdef MOBILE_UI
+        data.joystick_Base = LoadTexture("assets/textures/joystick_base.png");
         SetTextureFilter(data.joystick_Base, TEXTURE_FILTER_BILINEAR);
 
-        data.joystick_Pointer = LoadTexture("textures/joystick.png");
+        data.joystick_Pointer = LoadTexture("assets/textures/joystick.png");
         SetTextureFilter(data.joystick_Pointer, TEXTURE_FILTER_BILINEAR);
 
         float margin = GetScreenHeight() / 30.f;
         data.movement = Game_Data::Joystick({GetScreenHeight() / 5.f + margin, GetScreenHeight() - GetScreenHeight() / 5.f - margin}, GetScreenHeight() / 5.f);
 
-        data.crouch = LoadTexture("textures/crouch.png");
+        data.crouch = LoadTexture("assets/textures/crouch.png");
         SetTextureFilter(data.crouch, TEXTURE_FILTER_BILINEAR);
 
-        data.un_Crouch = LoadTexture("textures/uncrouch.png");
+        data.un_Crouch = LoadTexture("assets/textures/uncrouch.png");
         SetTextureFilter(data.un_Crouch, TEXTURE_FILTER_BILINEAR);
 #endif
 
-        data.house = LoadModel("models/house.glb");
+        data.house = LoadModel("assets/models/house.glb");
         for(int material = 0; material < data.house.materialCount; material++) {
             SetTextureFilter(data.house.materials[material].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
         }
@@ -591,18 +584,18 @@ namespace Game {
 
         data.house_BBox = GetModelBoundingBox(data.house);
 
-        data.father = LoadModel("models/human.iqm");
+        data.father = LoadModel("assets/models/human.iqm");
 
-        Texture human = LoadTexture("textures/human.png");
+        Texture human = LoadTexture("assets/textures/human.png");
         SetMaterialTexture(&data.father.materials[0], MATERIAL_MAP_DIFFUSE, human);
 
         int animation_Count = 0; // (1)
-        data.animations = LoadModelAnimations("models/human.iqm", &animation_Count);
+        data.animations = LoadModelAnimations("assets/models/human.iqm", &animation_Count);
 
-#ifdef PLATFORM_ANDROID
-        data.lighting = LoadShader("shaders/vertex100.glsl", "shaders/fragment100.glsl");
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
+        data.lighting = LoadShader("assets/shaders/vertex100.glsl", "assets/shaders/fragment100.glsl");
 #else
-        data.lighting = LoadShader("shaders/vertex330.glsl", "shaders/fragment330.glsl");
+        data.lighting = LoadShader("assets/shaders/vertex330.glsl", "assets/shaders/fragment330.glsl");
 #endif
 
         data.lighting.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(data.lighting, "matModel");
@@ -622,7 +615,7 @@ namespace Game {
 
         data.flashlight = CreateLight(LIGHT_POINT, data.camera.position, {0.f, 0.f, 0.f}, WHITE, data.lighting);
 
-        std::istringstream ai_File(LoadFileText("ai.txt"));
+        std::istringstream ai_File(LoadFileText("assets/ai.txt"));
 
         std::string line;
         while (std::getline(ai_File, line)) {
@@ -645,7 +638,7 @@ namespace Game {
             }
         }
 
-        std::istringstream doors_File(LoadFileText("doors.txt"));
+        std::istringstream doors_File(LoadFileText("assets/doors.txt"));
         float position_X, position_Y, position_Z,
               scale_X, scale_Y, scale_Z,
               rotation_Start, rotation_End;
@@ -671,7 +664,7 @@ namespace Game {
                                                       rotation_Start, rotation_End, material));
         }
 
-        std::istringstream animation_File(LoadFileText("spawn_animation.txt"));
+        std::istringstream animation_File(LoadFileText("assets/spawn_animation.txt"));
         float keyframe_X, keyframe_Y, keyframe_Z,
               target_X, target_Y, target_Z;
 
@@ -682,29 +675,29 @@ namespace Game {
                                                                    Vector3 {target_X, target_Y, target_Z}));
         }
 
-        data.door = LoadModel("models/door.glb");
+        data.door = LoadModel("assets/models/door.glb");
         for(int material = 0; material < data.door.materialCount; material++)
             data.door.materials[material].shader = data.lighting;
 
-        data.spoon = LoadModel("models/spoon.glb");
+        data.spoon = LoadModel("assets/models/spoon.glb");
         for(int material = 0; material < data.spoon.materialCount; material++)
             data.spoon.materials[material].shader = data.lighting;
 
-        data.key = LoadModel("models/key.glb");
+        data.key = LoadModel("assets/models/key.glb");
         for(int material = 0; material < data.key.materialCount; material++)
             data.key.materials[material].shader = data.lighting;
 
-        data.drawer = LoadModel("models/drawer.glb");
+        data.drawer = LoadModel("assets/models/drawer.glb");
         for(int material = 0; material < data.drawer.materialCount; material++)
             data.drawer.materials[material].shader = data.lighting;
         
-        data.lock = LoadModel("models/lock.glb");
+        data.lock = LoadModel("assets/models/lock.glb");
         for(int material = 0; material < data.lock.materialCount; material++)
             data.lock.materials[material].shader = data.lighting;
 
         data.drawer_BBox = GetModelBoundingBox(data.drawer);
 
-        std::istringstream config_File(LoadFileText("config.txt"));
+        std::istringstream config_File(LoadFileText("assets/config.txt"));
 
         while (std::getline(config_File, line)) {
             std::stringstream string_Stream(line);
@@ -726,7 +719,7 @@ namespace Game {
                         data.drawers.push_back(Game_Data::Drawer_Data({std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, (bool)std::stoi(strings[index + 3])));
                     }
                 } else {
-                    LOG("Unknown variable or bad value %s", strings[0].c_str());
+                    TraceLog(LOG_WARNING, "Unknown variable or bad value %s", strings[0].c_str());
                 }
             }
         }
@@ -1263,7 +1256,7 @@ namespace Game {
         DrawLineEx({GetScreenWidth() / 2.f - crosshair_size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + crosshair_size, GetScreenHeight() / 2.f}, 2.f, Fade(WHITE, 0.2f));
         DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - crosshair_size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + crosshair_size}, 2.f, Fade(WHITE, 0.2f));
 
-#ifdef ANDROID_UI
+#ifdef MOBILE_UI
         if(data.wake_Animation_Finished) {
             data.movement.Render();
             bool rotation_Updated = false;

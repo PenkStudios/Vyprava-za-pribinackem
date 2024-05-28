@@ -1,8 +1,8 @@
-# Výprava za pribináčkem verze 0.6.3
+# Výprava za pribináčkem verze 0.6.5
 Velice vtipná hra o cestě pro pribináčka
 
 ## Přídáno
-- Začátek práce na AI táty
+- Základní IOS support
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

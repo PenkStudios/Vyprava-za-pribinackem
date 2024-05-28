@@ -8,11 +8,23 @@
 #include "scenes/menu.cpp"
 #include "scenes/game.cpp"
 
-int main() {
+#ifdef PLATFORM_IOS // IOS struktura
+extern "C" {
+    void ios_ready();
+    void ios_update();
+    void ios_destroy();
+}
+
+#define Ready ios_ready
+#define Update ios_update
+#define Destroy ios_destroy
+#endif
+
+void Ready() {
     srand(time(NULL));
     SetConfigFlags(FLAG_MSAA_4X_HINT);
 
-#ifdef PLATFORM_ANDROID
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
     InitWindow(0, 0, "Výprava za pribináčkem");
 #else
     InitWindow(1000, 600, "Výprava za pribináčkem");
@@ -21,7 +33,6 @@ int main() {
     InitAudioDevice();
     
     ChangeDirectory(GetApplicationDirectory());
-    ChangeDirectory("assets");
 
     Set_Scene_Data({
         {INTRO,   {Intro::Init,   Intro::On_Switch,   Intro::Update}},
@@ -34,19 +45,32 @@ int main() {
 
     Init_Path(50, Game::data.house_BBoxes, Game::data.house_BBox);
 
-    Mod_Load_Directory("mods/");
+    Mod_Load_Directory("assets/mods/");
     Mod_Callback("Init", nullptr);
 
     SetTargetFPS(60);
     EnableCursor();
+}
+
+void Update() {
+    BeginDrawing(); {
+        Update_Scene();
+    } EndDrawing();
+}
+
+void Destroy() {
+    CloseWindow();
+}
+
+#ifndef PLATFORM_IOS // Normální main funkce
+int main() {
+    Ready();
 
     while(!WindowShouldClose()) {
-        BeginDrawing(); {
-            Update_Scene();
-        } EndDrawing();
+        Update();
     }
 
-    CloseWindow();
-
+    Destroy();
     return 0;
 }
+#endif

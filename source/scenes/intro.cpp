@@ -18,8 +18,8 @@ namespace Intro {
     } data;
     
     void Init() {
-        data.intro_Sound = LoadSound("audio/intro.wav");
-        data.intro_Texture = LoadTexture("textures/logo.png");
+        data.intro_Sound = LoadSound("assets/audio/intro.wav");
+        data.intro_Texture = LoadTexture("assets/textures/logo.png");
         PlaySound(data.intro_Sound);
 
         data.tick = 0.f;

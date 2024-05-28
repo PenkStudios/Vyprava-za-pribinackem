@@ -74,15 +74,15 @@ namespace Menu {
     } data;
 
     void Init() {
-        data.pribinacek = LoadModel("models/pribinacek.glb");
+        data.pribinacek = LoadModel("assets/models/pribinacek.glb");
 
         int animation_Count = 0;
-        data.animations = LoadModelAnimations("models/pribinacek.glb", &animation_Count);
+        data.animations = LoadModelAnimations("assets/models/pribinacek.glb", &animation_Count);
 
-        data.medium_Font = LoadFontEx("fonts/medium.ttf", 96, nullptr, 0x5ff);
+        data.medium_Font = LoadFontEx("assets/fonts/medium.ttf", 96, nullptr, 0x5ff);
         SetTextureFilter(data.medium_Font.texture, TEXTURE_FILTER_BILINEAR);
 
-        data.bold_Font = LoadFontEx("fonts/bold.ttf", 96, nullptr, 0x5ff);
+        data.bold_Font = LoadFontEx("assets/fonts/bold.ttf", 96, nullptr, 0x5ff);
         SetTextureFilter(data.bold_Font.texture, TEXTURE_FILTER_BILINEAR);
 
         float font_Size = GetScreenHeight() / 15.f;
