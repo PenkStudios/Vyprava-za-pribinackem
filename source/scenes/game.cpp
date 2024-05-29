@@ -151,12 +151,6 @@ namespace Game {
 
         Joystick movement;
 
-        int microphone_Id = 0;
-        int microphone_Change_Cooldown;
-
-        float max_Audio = 0.f;
-        bool searching_Microphone = true;
-
         #define MAX_ITEMS 5 // NONE, PRIBINACEK, SPOON, KEY, LOCK
         enum Item {NONE, PRIBINACEK, SPOON, KEY, LOCK, _LAST};
         class Item_Data {
@@ -295,6 +289,10 @@ namespace Game {
         };
 
         Win_Animation win;
+
+        bool saw_Player = false;
+        Vector3 enemy_Position = {0.f, 0.f, 0.f};
+        float enemy_Rotation = 0.f;
     } data;
 
     void Game_Data::Win_Animation::Play() {
@@ -530,23 +528,7 @@ namespace Game {
     }
 
     void See_Player() {
-        int target_Breakpoint = -1;
-        float target_Breakpoint_Distance = 10000.f;
-
-        int index = 0;
-        for(Game_Data::Father_Point point : data.father_Points) {
-            float distance = Vector3DistanceSqr(point.position, data.camera.position);
-            if(distance < target_Breakpoint_Distance) {
-                target_Breakpoint = index;
-                target_Breakpoint_Distance = distance;
-            }
-            index++;
-        }
-
-        data.enemy_Direction = 1.f * GetFrameTime();
-        if(target_Breakpoint < data.keyframe) {
-            data.enemy_Direction *= -1.f;
-        }
+        
     }
 
     void Init() {
@@ -787,7 +769,7 @@ namespace Game {
         data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribináček", false));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("2. najdi lžičku", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. vem pribináček a\nlžíci do pokoje\n na stůl", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. vem pribináček a\nlžíci do pokoje\nna stůl", false));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček", false));
 
         data.guide_Finished = false;
@@ -839,7 +821,6 @@ namespace Game {
         int fogDensityLoc = GetShaderLocation(data.lighting, "fogDensity");
         SetShaderValue(data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
-        Vector3 enemy_Position;
         bool action_Used = false; // If any action was used this frame (preventing click-through)
 
         BeginMode3D(data.camera); {
@@ -1195,57 +1176,64 @@ namespace Game {
                     }
                 } */
 
-                Vector3 source = data.father_Points[data.keyframe].position;
-                Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
+                if(data.saw_Player) {
+                    Path_Update_Father(&data.enemy_Position, &data.enemy_Rotation, data.house_BBox);
+                    DrawModelEx(data.father, data.enemy_Position, {0.f, 1.f, 0.f}, data.enemy_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
+                } else {
+                    Vector3 source = data.father_Points[data.keyframe].position;
+                    Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
 
-                int index = 0;
-                bool changing_Door_State = false;
-                for(bool state : data.father_Points[(data.keyframe + 1) % data.father_Points.size()].door_States) {
-                    if(data.doors[index].opening_Father != state)
-                        changing_Door_State = true;
-                    data.doors[index].opening_Father = state;
-                    index++;
-                }
+                    int index = 0;
+                    bool changing_Door_State = false;
+                    for(bool state : data.father_Points[(data.keyframe + 1) % data.father_Points.size()].door_States) {
+                        if(data.doors[index].opening_Father != state)
+                            changing_Door_State = true;
+                        data.doors[index].opening_Father = state;
+                        index++;
+                    }
 
-                float max = Vector3Distance(source, target) / 4.f;
-                data.keyframe_Tick += 1.f * GetFrameTime();
+                    float max = Vector3Distance(source, target) / 4.f;
+                    data.keyframe_Tick += 1.f * GetFrameTime();
 
-                Ray ray = {{Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
-                            Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
-                            Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
+                    Ray ray = {{Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
+                                Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
+                                Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
 
-                float y = Get_Collision_Ray(ray).point.y;
+                    float y = Get_Collision_Ray(ray).point.y;
 
-                enemy_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
-                                y,
-                                Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
+                    data.enemy_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
+                                           y,
+                                           Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
 
-                Vector3 difference = Vector3Subtract(target, source);
-                float angle = -atan2(difference.z, difference.x) * RAD2DEG;
-                float angle_Result = angle;
+                    Vector3 difference = Vector3Subtract(target, source);
+                    float angle = -atan2(difference.z, difference.x) * RAD2DEG;
+                    data.enemy_Rotation = angle;
 
-                float angle_Source = angle;
-                if(data.keyframe > 0) {
-                    Vector3 difference_Source = Vector3Subtract(source, data.father_Points[data.keyframe - 1].position);
-                    angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
+                    float angle_Source = angle;
+                    if(data.keyframe > 0) {
+                        Vector3 difference_Source = Vector3Subtract(source, data.father_Points[data.keyframe - 1].position);
+                        angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
 
-                    float lerp = Clamp(data.keyframe_Tick * 2.f, 0.f, 1.f);
-                    float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
+                        float lerp = Clamp(data.keyframe_Tick * 2.f, 0.f, 1.f);
+                        float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
 
-                    angle_Result = angle_Source + addition * lerp;
-                }
-                
-                DrawModelEx(data.father, enemy_Position, {0.f, 1.f, 0.f}, angle_Result + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
+                        data.enemy_Rotation = angle_Source + addition * lerp;
+                    }
+                    
+                    DrawModelEx(data.father, data.enemy_Position, {0.f, 1.f, 0.f}, data.enemy_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
 
-                if(data.keyframe_Tick > max) {
-                    data.keyframe_Tick = 0.f;
-                    data.keyframe++;
-                }
+                    if(data.keyframe_Tick > max) {
+                        data.keyframe_Tick = 0.f;
+                        data.keyframe++;
+                    }
 
-                if(data.keyframe > data.father_Points.size() - 1) {
-                    data.keyframe = 0;
+                    if(data.keyframe > data.father_Points.size() - 1) {
+                        data.keyframe = 0;
+                    }
                 }
             }
+
+            if(data.debug) Draw_Path_3D(data.house_BBox, data.house_BBoxes, data.camera.position, data.enemy_Position);
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
@@ -1364,8 +1352,8 @@ namespace Game {
 
         DrawFPS(GetScreenWidth() / 500.f, GetScreenWidth() / 500.f);
 
-        Ray enemy_Ray = {enemy_Position, Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, enemy_Position)), {10.f, 10.f, 10.f})};
-        float player_Distance = Vector3DistanceSqr(enemy_Position, data.camera.position);
+        Ray enemy_Ray = {data.enemy_Position, Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.enemy_Position)), {10.f, 10.f, 10.f})};
+        float player_Distance = Vector3DistanceSqr(data.enemy_Position, data.camera.position);
         RayCollision scene_Collision = Get_Collision_Ray(enemy_Ray);
 
         bool player_Visible = player_Distance < scene_Collision.distance;
@@ -1408,7 +1396,30 @@ namespace Game {
             }
         }
 
-        Draw_Path(data.camera.position, data.house_BBox);
+        if(IsKeyPressed(KEY_KP_0)) {
+            Vector2 player = Path_World_To_Grid(data.camera.position, data.house_BBox);
+            Path_Find({roundf(player.x), roundf(player.y)}, data.house_BBoxes);
+            data.saw_Player = true;
+        }
+
+        if(IsKeyPressed(KEY_KP_ENTER)) {
+            int nearest_Keyframe = 0;
+            float nearest_Keyframe_Distance = 1000000.f;
+            for(int keyframe = 0; keyframe < data.father_Points.size(); keyframe++) {
+                Vector3 position = data.father_Points[keyframe].position;
+                float distance = Vector3DistanceSqr(data.enemy_Position, position);
+                if(distance < nearest_Keyframe_Distance) {
+                    nearest_Keyframe = keyframe;
+                    nearest_Keyframe_Distance = distance;
+                }
+            }
+            Vector3 nearest_Keyframe_Position = data.father_Points[nearest_Keyframe].position;
+            Vector2 player = Path_World_To_Grid(nearest_Keyframe_Position, data.house_BBox);
+            Path_Find({roundf(player.x), roundf(player.y)}, data.house_BBoxes);
+            data.saw_Player = true;
+        }
+
+        if(IsKeyPressed(KEY_TAB)) data.debug = !data.debug;
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
     }

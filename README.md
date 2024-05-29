@@ -1,8 +1,8 @@
-# Výprava za pribináčkem verze 0.6.5
+# Výprava za pribináčkem verze 0.6.7
 Velice vtipná hra o cestě pro pribináčka
 
 ## Přídáno
-- Základní IOS support
+- Dokončeno path-finding
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

@@ -43,7 +43,7 @@ void Ready() {
     Init_Scenes();
     Switch_To_Scene(MENU);
 
-    Init_Path(50, Game::data.house_BBoxes, Game::data.house_BBox);
+    Init_Path(25, Game::data.house_BBoxes, Game::data.house_BBox);
 
     Mod_Load_Directory("assets/mods/");
     Mod_Callback("Init", nullptr);
