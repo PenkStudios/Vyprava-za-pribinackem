@@ -290,9 +290,18 @@ namespace Game {
 
         Win_Animation win;
 
-        bool saw_Player = false;
-        Vector3 enemy_Position = {0.f, 0.f, 0.f};
-        float enemy_Rotation = 0.f;
+        Vector3 father_Position = {0.f, 0.f, 0.f};
+        float father_Rotation = 0.f;
+
+        int nearest_Keyframe = 0;
+        enum Enemy_State {NORMAL_AI, FIND_PLAYER, FIND_NEAREST_KEYFRAME, ALIGN_NEAREST_KEYFRAME};
+        Enemy_State father_State = NORMAL_AI;
+
+        float align_Keyframe_Tick = 0.f;
+        float align_Keyframe_Max = 0.f;
+
+        Vector3 father_Start_Position;
+        float father_Start_Rotation;
     } data;
 
     void Game_Data::Win_Animation::Play() {
@@ -300,8 +309,8 @@ namespace Game {
         tick = 0;
 
         walk_Finish = Vector3Distance(data.camera.position, CHAIR_POSITION) * 10;
-        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 0.05f;
-        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 0.05f;
+        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 10.f;
+        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 10.f;
         fetch_Finish = MAX(pribinacek_Fetch, spoon_Fetch) + walk_Finish;
         open_Finish = fetch_Finish + Menu::data.animations[0].frameCount - 1;
         eat_Finish = open_Finish + GetFPS() * 4.166f;
@@ -1176,10 +1185,51 @@ namespace Game {
                     }
                 } */
 
-                if(data.saw_Player) {
-                    Path_Update_Father(&data.enemy_Position, &data.enemy_Rotation, data.house_BBox);
-                    DrawModelEx(data.father, data.enemy_Position, {0.f, 1.f, 0.f}, data.enemy_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
-                } else {
+                if(data.father_State == Game::Game_Data::ALIGN_NEAREST_KEYFRAME) {
+                    data.father_Position = Vector3Lerp(data.father_Start_Position, data.father_Points[data.nearest_Keyframe].position, data.align_Keyframe_Tick / data.align_Keyframe_Max);
+                    
+                    Vector3 diff = Vector3Subtract(data.father_Points[data.nearest_Keyframe - 1].position, data.father_Points[data.nearest_Keyframe].position);
+                    float angle = atan2(diff.z, diff.x);
+
+                    data.father_Rotation = LerpVector3XYZ({0.f, data.father_Start_Rotation, 0.f}, {0.f, angle * RAD2DEG, 0.f}, data.align_Keyframe_Tick / data.align_Keyframe_Max).y;
+                    data.align_Keyframe_Tick += 1.f * GetFrameTime();
+                
+                    if(data.align_Keyframe_Tick > data.align_Keyframe_Max) {
+                        data.keyframe = data.nearest_Keyframe;
+                        data.keyframe_Tick = 0.f;
+                        data.father_State = Game::Game_Data::NORMAL_AI;
+                    }
+                } else if(data.father_State == Game::Game_Data::FIND_PLAYER || data.father_State == Game::Game_Data::FIND_NEAREST_KEYFRAME) {
+                    Path_Update_Father(&data.father_Position, &data.father_Rotation, data.house_BBox);
+
+                    Vector2 father_Grid_Position = Path_World_To_Grid(data.father_Position, data.house_BBox);
+                    if((int)roundf(father_Grid_Position.x) == (int)path_Target.x &&
+                       (int)roundf(father_Grid_Position.y) == (int)path_Target.y) {
+                        if(data.father_State == Game::Game_Data::FIND_PLAYER) {
+                            data.nearest_Keyframe = 0;
+                            float nearest_Keyframe_Distance = 1000000.f;
+                            for(int keyframe = 0; keyframe < data.father_Points.size(); keyframe++) {
+                                Vector3 position = data.father_Points[keyframe].position;
+                                float distance = Vector3DistanceSqr(data.father_Position, position);
+                                float distance_Y = fabs(data.father_Position.y + 6.5f - position.y);
+                                if(distance < nearest_Keyframe_Distance && distance_Y < 3.f) {
+                                    data.nearest_Keyframe = keyframe;
+                                    nearest_Keyframe_Distance = distance;
+                                }
+                            }
+                            Vector3 nearest_Keyframe_Position = data.father_Points[data.nearest_Keyframe].position;
+                            Vector2 position = Path_World_To_Grid(nearest_Keyframe_Position, data.house_BBox);
+                            Path_Find({roundf(position.x), roundf(position.y)}, data.house_BBoxes);
+                            data.father_State = Game::Game_Data::FIND_NEAREST_KEYFRAME;
+                        } else if(data.father_State == Game::Game_Data::FIND_NEAREST_KEYFRAME) {
+                            data.father_State = Game::Game_Data::ALIGN_NEAREST_KEYFRAME;
+                            data.align_Keyframe_Max = Vector3Distance(data.father_Position, data.father_Points[data.nearest_Keyframe].position) / 4.f;
+                            
+                            data.father_Start_Rotation = data.father_Rotation;
+                            data.father_Start_Position = data.father_Position;
+                        }
+                       }
+                } else if(data.father_State == Game::Game_Data::NORMAL_AI) {
                     Vector3 source = data.father_Points[data.keyframe].position;
                     Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
 
@@ -1195,19 +1245,13 @@ namespace Game {
                     float max = Vector3Distance(source, target) / 4.f;
                     data.keyframe_Tick += 1.f * GetFrameTime();
 
-                    Ray ray = {{Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
-                                Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
-                                Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)}, {0.f, -0.1f, 0.f}};
-
-                    float y = Get_Collision_Ray(ray).point.y;
-
-                    data.enemy_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
-                                           y,
-                                           Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
+                    data.father_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
+                                            Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
+                                            Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
 
                     Vector3 difference = Vector3Subtract(target, source);
                     float angle = -atan2(difference.z, difference.x) * RAD2DEG;
-                    data.enemy_Rotation = angle;
+                    data.father_Rotation = angle;
 
                     float angle_Source = angle;
                     if(data.keyframe > 0) {
@@ -1217,10 +1261,8 @@ namespace Game {
                         float lerp = Clamp(data.keyframe_Tick * 2.f, 0.f, 1.f);
                         float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
 
-                        data.enemy_Rotation = angle_Source + addition * lerp;
+                        data.father_Rotation = angle_Source + addition * lerp;
                     }
-                    
-                    DrawModelEx(data.father, data.enemy_Position, {0.f, 1.f, 0.f}, data.enemy_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
 
                     if(data.keyframe_Tick > max) {
                         data.keyframe_Tick = 0.f;
@@ -1231,9 +1273,16 @@ namespace Game {
                         data.keyframe = 0;
                     }
                 }
+
+                Ray ray = {{data.father_Position.x, data.father_Position.y, data.father_Position.z}, {0.f, -0.1f, 0.f}};
+                float y = Get_Collision_Ray(ray).point.y;
+
+                data.father_Position.y = y;
+
+                DrawModelEx(data.father, data.father_Position, {0.f, 1.f, 0.f}, data.father_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
             }
 
-            if(data.debug) Draw_Path_3D(data.house_BBox, data.house_BBoxes, data.camera.position, data.enemy_Position);
+            if(data.debug) Draw_Path_3D(data.house_BBox, data.house_BBoxes, data.camera.position, data.father_Position);
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
@@ -1352,8 +1401,8 @@ namespace Game {
 
         DrawFPS(GetScreenWidth() / 500.f, GetScreenWidth() / 500.f);
 
-        Ray enemy_Ray = {data.enemy_Position, Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.enemy_Position)), {10.f, 10.f, 10.f})};
-        float player_Distance = Vector3DistanceSqr(data.enemy_Position, data.camera.position);
+        Ray enemy_Ray = {data.father_Position, Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.father_Position)), {10.f, 10.f, 10.f})};
+        float player_Distance = Vector3DistanceSqr(data.father_Position, data.camera.position);
         RayCollision scene_Collision = Get_Collision_Ray(enemy_Ray);
 
         bool player_Visible = player_Distance < scene_Collision.distance;
@@ -1396,27 +1445,27 @@ namespace Game {
             }
         }
 
-        if(IsKeyPressed(KEY_KP_0)) {
+        if(IsKeyPressed(KEY_ENTER)) {
             Vector2 player = Path_World_To_Grid(data.camera.position, data.house_BBox);
             Path_Find({roundf(player.x), roundf(player.y)}, data.house_BBoxes);
-            data.saw_Player = true;
+            data.father_State = Game::Game_Data::FIND_PLAYER;
         }
 
-        if(IsKeyPressed(KEY_KP_ENTER)) {
-            int nearest_Keyframe = 0;
+        if(IsKeyPressed(KEY_BACKSPACE)) {
+            data.nearest_Keyframe = 0;
             float nearest_Keyframe_Distance = 1000000.f;
             for(int keyframe = 0; keyframe < data.father_Points.size(); keyframe++) {
                 Vector3 position = data.father_Points[keyframe].position;
-                float distance = Vector3DistanceSqr(data.enemy_Position, position);
+                float distance = Vector3DistanceSqr(data.father_Position, position);
                 if(distance < nearest_Keyframe_Distance) {
-                    nearest_Keyframe = keyframe;
+                    data.nearest_Keyframe = keyframe;
                     nearest_Keyframe_Distance = distance;
                 }
             }
-            Vector3 nearest_Keyframe_Position = data.father_Points[nearest_Keyframe].position;
+            Vector3 nearest_Keyframe_Position = data.father_Points[data.nearest_Keyframe].position;
             Vector2 player = Path_World_To_Grid(nearest_Keyframe_Position, data.house_BBox);
             Path_Find({roundf(player.x), roundf(player.y)}, data.house_BBoxes);
-            data.saw_Player = true;
+            data.father_State = Game::Game_Data::FIND_NEAREST_KEYFRAME;
         }
 
         if(IsKeyPressed(KEY_TAB)) data.debug = !data.debug;

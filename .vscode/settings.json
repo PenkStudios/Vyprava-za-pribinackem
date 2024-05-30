@@ -77,6 +77,8 @@
         "codecvt": "cpp",
         "ctime": "cpp",
         "ratio": "cpp",
-        "iomanip": "cpp"
+        "iomanip": "cpp",
+        "thread": "cpp",
+        "*.rh": "cpp"
     }
 }

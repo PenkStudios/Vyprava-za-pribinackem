@@ -27,6 +27,7 @@ int path_Grid_Size;
 Path_Block *path_Grid;
 
 std::deque<Vector2> path_Todo_List = {};
+Vector2 path_Target = {};
 
 Path_Block *Path_Grid(int x, int y) {
     return &path_Grid[x * path_Grid_Size + y];
@@ -172,6 +173,7 @@ void Path_Find(Vector2 player_Position, std::vector<BoundingBox> bboxes) {
     }
 
     Path_Block *player_Block = Path_Grid(player_Position.x, player_Position.y);
+    path_Target = player_Position;
     
     if(player_Block->type == PATH_BLOCK_TO_CALCULATE)
         player_Block->type = PATH_BLOCK_UP;
