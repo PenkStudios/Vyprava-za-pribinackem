@@ -79,6 +79,7 @@
         "ratio": "cpp",
         "iomanip": "cpp",
         "thread": "cpp",
-        "*.rh": "cpp"
+        "*.rh": "cpp",
+        "stop_token": "cpp"
     }
 }

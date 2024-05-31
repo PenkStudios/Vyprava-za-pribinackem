@@ -43,7 +43,8 @@ void Ready() {
     Init_Scenes();
     Switch_To_Scene(MENU);
 
-    Init_Path(25, Game::data.house_BBoxes, Game::data.house_BBox);
+    bottom_Grid = Init_Path(50, Game::data.house_BBoxes, Game::data.house_BBox, 5.f);
+    top_Grid = Init_Path(50, Game::data.house_BBoxes, Game::data.house_BBox, 20.f);
 
     Mod_Load_Directory("assets/mods/");
     Mod_Callback("Init", nullptr);

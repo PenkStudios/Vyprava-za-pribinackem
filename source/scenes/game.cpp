@@ -1200,9 +1200,9 @@ namespace Game {
                         data.father_State = Game::Game_Data::NORMAL_AI;
                     }
                 } else if(data.father_State == Game::Game_Data::FIND_PLAYER || data.father_State == Game::Game_Data::FIND_NEAREST_KEYFRAME) {
-                    Path_Update_Father(&data.father_Position, &data.father_Rotation, data.house_BBox);
+                    Path_Update_Father(&bottom_Grid, &data.father_Position, &data.father_Rotation, data.house_BBox);
 
-                    Vector2 father_Grid_Position = Path_World_To_Grid(data.father_Position, data.house_BBox);
+                    Vector2 father_Grid_Position = Path_World_To_Grid(&bottom_Grid, data.father_Position, data.house_BBox);
                     if((int)roundf(father_Grid_Position.x) == (int)path_Target.x &&
                        (int)roundf(father_Grid_Position.y) == (int)path_Target.y) {
                         if(data.father_State == Game::Game_Data::FIND_PLAYER) {
@@ -1218,8 +1218,8 @@ namespace Game {
                                 }
                             }
                             Vector3 nearest_Keyframe_Position = data.father_Points[data.nearest_Keyframe].position;
-                            Vector2 position = Path_World_To_Grid(nearest_Keyframe_Position, data.house_BBox);
-                            Path_Find({roundf(position.x), roundf(position.y)}, data.house_BBoxes);
+                            Vector2 position = Path_World_To_Grid(&bottom_Grid, nearest_Keyframe_Position, data.house_BBox);
+                            Path_Find(&bottom_Grid, {roundf(position.x), roundf(position.y)}, data.house_BBoxes);
                             data.father_State = Game::Game_Data::FIND_NEAREST_KEYFRAME;
                         } else if(data.father_State == Game::Game_Data::FIND_NEAREST_KEYFRAME) {
                             data.father_State = Game::Game_Data::ALIGN_NEAREST_KEYFRAME;
@@ -1282,7 +1282,8 @@ namespace Game {
                 DrawModelEx(data.father, data.father_Position, {0.f, 1.f, 0.f}, data.father_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
             }
 
-            if(data.debug) Draw_Path_3D(data.house_BBox, data.house_BBoxes, data.camera.position, data.father_Position);
+            if(data.debug) Draw_Path_3D(&bottom_Grid, data.house_BBox, data.house_BBoxes);
+            if(data.debug) Draw_Path_3D(&top_Grid, data.house_BBox, data.house_BBoxes);
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
@@ -1446,26 +1447,10 @@ namespace Game {
         }
 
         if(IsKeyPressed(KEY_ENTER)) {
-            Vector2 player = Path_World_To_Grid(data.camera.position, data.house_BBox);
-            Path_Find({roundf(player.x), roundf(player.y)}, data.house_BBoxes);
+            Vector2 player = Path_World_To_Grid(&bottom_Grid, data.camera.position, data.house_BBox);
+            Path_Find(&bottom_Grid, {roundf(player.x), roundf(player.y)}, data.house_BBoxes);
+            Path_Find(&top_Grid, {roundf(player.x), roundf(player.y)}, data.house_BBoxes);
             data.father_State = Game::Game_Data::FIND_PLAYER;
-        }
-
-        if(IsKeyPressed(KEY_BACKSPACE)) {
-            data.nearest_Keyframe = 0;
-            float nearest_Keyframe_Distance = 1000000.f;
-            for(int keyframe = 0; keyframe < data.father_Points.size(); keyframe++) {
-                Vector3 position = data.father_Points[keyframe].position;
-                float distance = Vector3DistanceSqr(data.father_Position, position);
-                if(distance < nearest_Keyframe_Distance) {
-                    data.nearest_Keyframe = keyframe;
-                    nearest_Keyframe_Distance = distance;
-                }
-            }
-            Vector3 nearest_Keyframe_Position = data.father_Points[data.nearest_Keyframe].position;
-            Vector2 player = Path_World_To_Grid(nearest_Keyframe_Position, data.house_BBox);
-            Path_Find({roundf(player.x), roundf(player.y)}, data.house_BBoxes);
-            data.father_State = Game::Game_Data::FIND_NEAREST_KEYFRAME;
         }
 
         if(IsKeyPressed(KEY_TAB)) data.debug = !data.debug;
