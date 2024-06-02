@@ -16,7 +16,6 @@
 
 #include "../scene.cpp"
 #include "../mod_loader.cpp"
-#include "../path.cpp"
 
 #include "menu.cpp"
 
@@ -293,15 +292,14 @@ namespace Game {
         Vector3 father_Position = {0.f, 0.f, 0.f};
         float father_Rotation = 0.f;
 
-        int nearest_Keyframe = 0;
-        enum Enemy_State {NORMAL_AI, FIND_PLAYER, FIND_NEAREST_KEYFRAME, ALIGN_NEAREST_KEYFRAME};
-        Enemy_State father_State = NORMAL_AI;
-
         float align_Keyframe_Tick = 0.f;
         float align_Keyframe_Max = 0.f;
 
         Vector3 father_Start_Position;
         float father_Start_Rotation;
+
+        enum Father_State {NORMAL_AI, INSPECT, RETURN};
+        Father_State father_State;
     } data;
 
     void Game_Data::Win_Animation::Play() {
@@ -431,6 +429,12 @@ namespace Game {
             RayCollision houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
             if(data.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
 
+            /*
+            Vector3 size = Vector3Subtract(data.house_BBoxes[m].max, data.house_BBoxes[m].min);
+            Vector3 position = Vector3Divide(Vector3Add(data.house_BBoxes[m].max, data.house_BBoxes[m].min), {2.f, 2.f, 2.f});
+            DrawCubeV(position, size, ColorFromHSV((m * 70) % 360, 1.f, 1.f));
+            */
+
             if (houseCollision.hit)
             {
                 if(houseCollision.distance < collision.distance) {
@@ -537,7 +541,13 @@ namespace Game {
     }
 
     void See_Player() {
-        
+        data.father_Start_Position = data.father_Position;
+        data.father_Start_Rotation = data.father_Rotation;
+        data.father_State = Game_Data::INSPECT;
+    }
+
+    void Hear_Player() {
+
     }
 
     void Init() {
@@ -817,6 +827,16 @@ namespace Game {
         Vector2 delta = GetMouseDelta();
         data.camera_Rotation = Vector3Add(data.camera_Rotation, {delta.y * GetFrameTime() * 5.f, -delta.x * GetFrameTime() * 5.f, 0.f});
         data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -85.f, 85.f);
+    }
+
+    // Získat kolizi cylindru (ze předu delší) s mapou
+    bool Get_Collision_Cylinder(Vector3 position, float radius) {
+        DrawSphere(position, radius, RED);
+        for (int m = 0; m < data.house.meshCount; m++) {
+            bool collide = CheckCollisionBoxSphere(data.house_BBoxes[m], position, radius);
+            if(collide) return true;
+        }
+        return false;
     }
 
     void Update() {
@@ -1185,105 +1205,73 @@ namespace Game {
                     }
                 } */
 
-                if(data.father_State == Game::Game_Data::ALIGN_NEAREST_KEYFRAME) {
-                    data.father_Position = Vector3Lerp(data.father_Start_Position, data.father_Points[data.nearest_Keyframe].position, data.align_Keyframe_Tick / data.align_Keyframe_Max);
-                    
-                    Vector3 diff = Vector3Subtract(data.father_Points[data.nearest_Keyframe - 1].position, data.father_Points[data.nearest_Keyframe].position);
-                    float angle = atan2(diff.z, diff.x);
+                switch(data.father_State) {
+                    case Game_Data::INSPECT: {
+                        Vector3 old_Position = data.father_Position;
+                        data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
 
-                    data.father_Rotation = LerpVector3XYZ({0.f, data.father_Start_Rotation, 0.f}, {0.f, angle * RAD2DEG, 0.f}, data.align_Keyframe_Tick / data.align_Keyframe_Max).y;
-                    data.align_Keyframe_Tick += 1.f * GetFrameTime();
-                
-                    if(data.align_Keyframe_Tick > data.align_Keyframe_Max) {
-                        data.keyframe = data.nearest_Keyframe;
-                        data.keyframe_Tick = 0.f;
-                        data.father_State = Game::Game_Data::NORMAL_AI;
+                        Vector3 diff = Vector3Subtract(data.camera.position, data.father_Position);
+                        float angle = -atan2(diff.z, diff.x) * RAD2DEG;
+
+                        float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
+                        data.father_Rotation += addition / 20.f;
+                        break;
                     }
-                } else if(data.father_State == Game::Game_Data::FIND_PLAYER || data.father_State == Game::Game_Data::FIND_NEAREST_KEYFRAME) {
-                    Path_Update_Father(&bottom_Grid, &data.father_Position, &data.father_Rotation, data.house_BBox);
 
-                    Vector2 father_Grid_Position = Path_World_To_Grid(&bottom_Grid, data.father_Position, data.house_BBox);
-                    if((int)roundf(father_Grid_Position.x) == (int)path_Target.x &&
-                       (int)roundf(father_Grid_Position.y) == (int)path_Target.y) {
-                        if(data.father_State == Game::Game_Data::FIND_PLAYER) {
-                            data.nearest_Keyframe = 0;
-                            float nearest_Keyframe_Distance = 1000000.f;
-                            for(int keyframe = 0; keyframe < data.father_Points.size(); keyframe++) {
-                                Vector3 position = data.father_Points[keyframe].position;
-                                float distance = Vector3DistanceSqr(data.father_Position, position);
-                                float distance_Y = fabs(data.father_Position.y + 6.5f - position.y);
-                                if(distance < nearest_Keyframe_Distance && distance_Y < 3.f) {
-                                    data.nearest_Keyframe = keyframe;
-                                    nearest_Keyframe_Distance = distance;
-                                }
-                            }
-                            Vector3 nearest_Keyframe_Position = data.father_Points[data.nearest_Keyframe].position;
-                            Vector2 position = Path_World_To_Grid(&bottom_Grid, nearest_Keyframe_Position, data.house_BBox);
-                            Path_Find(&bottom_Grid, {roundf(position.x), roundf(position.y)}, data.house_BBoxes);
-                            data.father_State = Game::Game_Data::FIND_NEAREST_KEYFRAME;
-                        } else if(data.father_State == Game::Game_Data::FIND_NEAREST_KEYFRAME) {
-                            data.father_State = Game::Game_Data::ALIGN_NEAREST_KEYFRAME;
-                            data.align_Keyframe_Max = Vector3Distance(data.father_Position, data.father_Points[data.nearest_Keyframe].position) / 4.f;
-                            
-                            data.father_Start_Rotation = data.father_Rotation;
-                            data.father_Start_Position = data.father_Position;
+                    case Game_Data::NORMAL_AI: {
+                        Vector3 source = data.father_Points[data.keyframe].position;
+                        Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
+
+                        int index = 0;
+                        bool changing_Door_State = false;
+                        for(bool state : data.father_Points[(data.keyframe + 1) % data.father_Points.size()].door_States) {
+                            if(data.doors[index].opening_Father != state)
+                                changing_Door_State = true;
+                            data.doors[index].opening_Father = state;
+                            index++;
                         }
-                       }
-                } else if(data.father_State == Game::Game_Data::NORMAL_AI) {
-                    Vector3 source = data.father_Points[data.keyframe].position;
-                    Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
 
-                    int index = 0;
-                    bool changing_Door_State = false;
-                    for(bool state : data.father_Points[(data.keyframe + 1) % data.father_Points.size()].door_States) {
-                        if(data.doors[index].opening_Father != state)
-                            changing_Door_State = true;
-                        data.doors[index].opening_Father = state;
-                        index++;
-                    }
+                        float max = Vector3Distance(source, target) / 4.f;
+                        data.keyframe_Tick += 1.f * GetFrameTime();
 
-                    float max = Vector3Distance(source, target) / 4.f;
-                    data.keyframe_Tick += 1.f * GetFrameTime();
+                        data.father_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
+                                                Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
+                                                Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
 
-                    data.father_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
-                                            Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
-                                            Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
+                        Vector3 difference = Vector3Subtract(target, source);
+                        float angle = -atan2(difference.z, difference.x) * RAD2DEG;
+                        data.father_Rotation = angle;
 
-                    Vector3 difference = Vector3Subtract(target, source);
-                    float angle = -atan2(difference.z, difference.x) * RAD2DEG;
-                    data.father_Rotation = angle;
+                        float angle_Source = angle;
+                        if(data.keyframe > 0) {
+                            Vector3 difference_Source = Vector3Subtract(source, data.father_Points[data.keyframe - 1].position);
+                            angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
 
-                    float angle_Source = angle;
-                    if(data.keyframe > 0) {
-                        Vector3 difference_Source = Vector3Subtract(source, data.father_Points[data.keyframe - 1].position);
-                        angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
+                            float lerp = Clamp(data.keyframe_Tick * 2.f, 0.f, 1.f);
+                            float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
 
-                        float lerp = Clamp(data.keyframe_Tick * 2.f, 0.f, 1.f);
-                        float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
+                            data.father_Rotation = angle_Source + addition * lerp;
+                        }
 
-                        data.father_Rotation = angle_Source + addition * lerp;
-                    }
+                        if(data.keyframe_Tick > max) {
+                            data.keyframe_Tick = 0.f;
+                            data.keyframe++;
+                        }
 
-                    if(data.keyframe_Tick > max) {
-                        data.keyframe_Tick = 0.f;
-                        data.keyframe++;
-                    }
-
-                    if(data.keyframe > data.father_Points.size() - 1) {
-                        data.keyframe = 0;
+                        if(data.keyframe > data.father_Points.size() - 1) {
+                            data.keyframe = 0;
+                        }
+                        break;
                     }
                 }
 
-                Ray ray = {{data.father_Position.x, data.father_Position.y, data.father_Position.z}, {0.f, -0.1f, 0.f}};
+                Ray ray = {{data.father_Position.x, data.father_Position.y + 6.5f, data.father_Position.z}, {0.f, -0.1f, 0.f}};
                 float y = Get_Collision_Ray(ray).point.y;
 
                 data.father_Position.y = y;
 
                 DrawModelEx(data.father, data.father_Position, {0.f, 1.f, 0.f}, data.father_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
             }
-
-            if(data.debug) Draw_Path_3D(&bottom_Grid, data.house_BBox, data.house_BBoxes);
-            if(data.debug) Draw_Path_3D(&top_Grid, data.house_BBox, data.house_BBoxes);
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
@@ -1396,7 +1384,7 @@ namespace Game {
                 float max_Tick = Vector3Distance(source, target) / 4.f;
 
                 DrawText(TextFormat("AI data: keyframe tick %f/%f, keyframe %d/%d", data.keyframe_Tick, max_Tick, data.keyframe, data.father_Points.size()), 5, 5 + 15, 15, WHITE);
-                 DrawText(TextFormat("Basic data: camera position {%f, %f, %f}", data.camera.position.x, data.camera.position.y, data.camera.position.z), 5, 5 + 15 * 2, 15, WHITE);
+                DrawText(TextFormat("Basic data: camera position {%f, %f, %f}", data.camera.position.x, data.camera.position.y, data.camera.position.z), 5, 5 + 15 * 2, 15, WHITE);
             }
         }
 
@@ -1447,10 +1435,7 @@ namespace Game {
         }
 
         if(IsKeyPressed(KEY_ENTER)) {
-            Vector2 player = Path_World_To_Grid(&bottom_Grid, data.camera.position, data.house_BBox);
-            Path_Find(&bottom_Grid, {roundf(player.x), roundf(player.y)}, data.house_BBoxes);
-            Path_Find(&top_Grid, {roundf(player.x), roundf(player.y)}, data.house_BBoxes);
-            data.father_State = Game::Game_Data::FIND_PLAYER;
+            See_Player();
         }
 
         if(IsKeyPressed(KEY_TAB)) data.debug = !data.debug;

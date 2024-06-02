@@ -2,7 +2,6 @@
 #include <time.h>
 #include "scene.cpp"
 #include "mod_loader.cpp"
-#include "path.cpp"
 
 #include "scenes/intro.cpp"
 #include "scenes/menu.cpp"
@@ -42,9 +41,6 @@ void Ready() {
 
     Init_Scenes();
     Switch_To_Scene(MENU);
-
-    bottom_Grid = Init_Path(50, Game::data.house_BBoxes, Game::data.house_BBox, 5.f);
-    top_Grid = Init_Path(50, Game::data.house_BBoxes, Game::data.house_BBox, 20.f);
 
     Mod_Load_Directory("assets/mods/");
     Mod_Callback("Init", nullptr);
