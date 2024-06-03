@@ -829,11 +829,82 @@ namespace Game {
         data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -85.f, 85.f);
     }
 
+    // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
+    BoundingBox Get_Model_BBox_Matrix(Model model, Matrix transform) {
+        Mesh mesh = model.meshes[0];
+        BoundingBox bb = {Vector3Zero(), Vector3Zero()};
+
+        float x = model.meshes[0].vertices[0];
+        float y = model.meshes[0].vertices[1];
+        float z = model.meshes[0].vertices[2];
+
+        Vector3 v = {x, y, z};
+        v = Vector3Transform(v, transform);
+
+        bb.min = v;
+        bb.max = v;
+
+        for(int i = 0; i < model.meshes[0].vertexCount * 3.f; i += 3) {
+            x = model.meshes[0].vertices[i];
+            y = model.meshes[0].vertices[i+1];
+            z = model.meshes[0].vertices[i+2];
+
+            v = {x, y, z};
+            v = Vector3Transform(v, transform);
+
+            if(v.x < bb.min.x) {
+                bb.min.x = v.x;
+            }
+            if(v.y < bb.min.y) {
+                bb.min.y = v.y;
+            }
+            if(v.z < bb.min.z) {
+                bb.min.z = v.z;
+            }
+            if(v.x > bb.max.x) {
+                bb.max.x = v.x;
+            }
+            if(v.y > bb.max.y) {
+                bb.max.y = v.y;
+            }
+            if(v.z > bb.max.z) {
+                bb.max.z = v.z;
+            }
+
+        }
+
+        return bb;
+    }
+
     // Získat kolizi cylindru (ze předu delší) s mapou
     bool Get_Collision_Cylinder(Vector3 position, float radius) {
-        DrawSphere(position, radius, RED);
         for (int m = 0; m < data.house.meshCount; m++) {
             bool collide = CheckCollisionBoxSphere(data.house_BBoxes[m], position, radius);
+            if(collide) return true;
+        }
+        for(Game_Data::Door_Data &door_Data : data.doors) {
+            if(door_Data.opening) continue;
+
+            Matrix matrix = MatrixIdentity();
+            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
+            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
+
+            float rotation_Player = door_Data.rotation;
+            float rotation_Father = door_Data.rotation_Father;
+
+            float rotation = 0.f;
+            if(door_Data.default_Rotation < door_Data.opened_Rotation) {
+                rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
+            } else {
+                rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
+            }
+            
+            matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
+            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+
+            BoundingBox door = Get_Model_BBox_Matrix(data.door, matrix);
+            bool collide = CheckCollisionBoxSphere(door, position, radius);
             if(collide) return true;
         }
         return false;
@@ -1210,6 +1281,12 @@ namespace Game {
                         Vector3 old_Position = data.father_Position;
                         data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
 
+                        bool collide_X = Get_Collision_Cylinder({data.father_Position.x, data.father_Position.y + 6.5f, old_Position.z}, 1.5f);
+                        if(collide_X) data.father_Position.x = old_Position.x;
+
+                        bool collide_Z = Get_Collision_Cylinder({old_Position.x, data.father_Position.y + 6.5f, data.father_Position.z}, 1.5f);
+                        if(collide_Z) data.father_Position.z = old_Position.z;
+
                         Vector3 diff = Vector3Subtract(data.camera.position, data.father_Position);
                         float angle = -atan2(diff.z, diff.x) * RAD2DEG;
 
@@ -1390,12 +1467,11 @@ namespace Game {
 
         DrawFPS(GetScreenWidth() / 500.f, GetScreenWidth() / 500.f);
 
-        Ray enemy_Ray = {data.father_Position, Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.father_Position)), {10.f, 10.f, 10.f})};
+        Ray enemy_Ray = {Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.father_Position)), {10.f, 10.f, 10.f})};
         float player_Distance = Vector3DistanceSqr(data.father_Position, data.camera.position);
         RayCollision scene_Collision = Get_Collision_Ray(enemy_Ray);
 
         bool player_Visible = player_Distance < scene_Collision.distance;
-
         if(player_Visible) {
             See_Player();
         }
