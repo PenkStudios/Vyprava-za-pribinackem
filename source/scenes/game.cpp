@@ -298,8 +298,12 @@ namespace Game {
         Vector3 father_Start_Position;
         float father_Start_Rotation;
 
+        Father_Point *target_Keyframe = nullptr;
+
         enum Father_State {NORMAL_AI, INSPECT, RETURN};
         Father_State father_State;
+
+        float return_Tick = 0.f;
     } data;
 
     void Game_Data::Win_Animation::Play() {
@@ -910,6 +914,15 @@ namespace Game {
         return false;
     }
 
+    bool Player_Visible() {
+        Ray enemy_Ray = {Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.father_Position)), {10.f, 10.f, 10.f})};
+        float player_Distance = Vector3Distance(data.father_Position, data.camera.position) * 10.f;
+        RayCollision scene_Collision = Get_Collision_Ray(enemy_Ray);
+
+        bool player_Visible = player_Distance < scene_Collision.distance;
+        return player_Visible;
+    }
+
     void Update() {
         ClearBackground(BLACK);
         SetShaderValue(data.lighting, data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
@@ -1263,7 +1276,9 @@ namespace Game {
                             std::cout << point.position.x << " " << point.position.y << " " << point.position.z << doors << std::endl;
                         }
                     }
+                } */
 
+                if(data.debug) {
                     Vector3 previous_Point = {0.f, 0.f, 0.f};
                     int index = 0;
                     for(Game_Data::Father_Point point : data.father_Points) {
@@ -1274,7 +1289,7 @@ namespace Game {
                         previous_Point = point.position;
                         index++;
                     }
-                } */
+                }
 
                 switch(data.father_State) {
                     case Game_Data::INSPECT: {
@@ -1292,6 +1307,42 @@ namespace Game {
 
                         float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
                         data.father_Rotation += addition / 20.f;
+
+                        if(collide_X || collide_Z) {
+                            data.father_State = Game_Data::RETURN;
+                            data.father_Start_Position = data.father_Position;
+                            data.father_Start_Rotation = data.father_Rotation;
+                            data.target_Keyframe = &data.father_Points[0];
+                            float nearest_Keyframe_Distance = 10000.f;
+                            for(Game_Data::Father_Point &keyframe : data.father_Points) {
+                                float distance = Vector3Distance(data.camera.position, keyframe.position);
+
+                                if(distance < nearest_Keyframe_Distance) {
+                                    data.target_Keyframe = &keyframe;
+                                    nearest_Keyframe_Distance = distance;
+                                }
+                            }
+                            data.return_Tick = 0.f;
+                        }
+                        break;
+                    }
+
+                    case Game_Data::RETURN: {
+                        data.father_Position = Vector3Lerp(data.father_Start_Position, data.target_Keyframe->position, data.return_Tick);
+
+                        Vector3 diff = Vector3Subtract(data.target_Keyframe->position, data.father_Position);
+                        float angle = -atan2(diff.z, diff.x) * RAD2DEG;
+
+                        float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
+                        data.father_Rotation += addition / 20.f;
+
+                        data.return_Tick += 1.f * GetFrameTime();
+                        if(data.return_Tick > 1.f) {
+                            data.father_State = Game_Data::NORMAL_AI;
+                            data.keyframe = data.target_Keyframe - &data.father_Points[0];
+                            data.keyframe_Tick = 0.f;
+                        }
+
                         break;
                     }
 
@@ -1467,16 +1518,9 @@ namespace Game {
 
         DrawFPS(GetScreenWidth() / 500.f, GetScreenWidth() / 500.f);
 
-        Ray enemy_Ray = {Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.father_Position)), {10.f, 10.f, 10.f})};
-        float player_Distance = Vector3DistanceSqr(data.father_Position, data.camera.position);
-        RayCollision scene_Collision = Get_Collision_Ray(enemy_Ray);
-
-        bool player_Visible = player_Distance < scene_Collision.distance;
-        if(player_Visible) {
+        if(Player_Visible()) {
             See_Player();
         }
-
-        bool trigger_Chase = player_Visible;
 
         if(!data.guide_Finished && data.guide_Texts[data.guide_Index].Update()) {
             data.guide_Index++;
