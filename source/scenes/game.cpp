@@ -298,7 +298,7 @@ namespace Game {
         Vector3 father_Start_Position;
         float father_Start_Rotation;
 
-        Father_Point *target_Keyframe = nullptr;
+        int target_Keyframe = -1;
 
         enum Father_State {NORMAL_AI, INSPECT, RETURN};
         Father_State father_State;
@@ -1293,6 +1293,7 @@ namespace Game {
 
                 switch(data.father_State) {
                     case Game_Data::INSPECT: {
+                        TraceLog(LOG_INFO, "NAII");
                         Vector3 old_Position = data.father_Position;
                         data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
 
@@ -1312,15 +1313,17 @@ namespace Game {
                             data.father_State = Game_Data::RETURN;
                             data.father_Start_Position = data.father_Position;
                             data.father_Start_Rotation = data.father_Rotation;
-                            data.target_Keyframe = &data.father_Points[0];
+                            data.target_Keyframe = 0;
                             float nearest_Keyframe_Distance = 10000.f;
+                            int index = 0;
                             for(Game_Data::Father_Point &keyframe : data.father_Points) {
-                                float distance = Vector3Distance(data.camera.position, keyframe.position);
+                                float distance = Vector3Distance(data.father_Position, keyframe.position);
 
-                                if(distance < nearest_Keyframe_Distance) {
-                                    data.target_Keyframe = &keyframe;
+                                if(distance < nearest_Keyframe_Distance && fabs(data.father_Position.y + 6.5f - keyframe.position.y) < 3.f) {
+                                    data.target_Keyframe = index;
                                     nearest_Keyframe_Distance = distance;
                                 }
+                                index++;
                             }
                             data.return_Tick = 0.f;
                         }
@@ -1328,9 +1331,11 @@ namespace Game {
                     }
 
                     case Game_Data::RETURN: {
-                        data.father_Position = Vector3Lerp(data.father_Start_Position, data.target_Keyframe->position, data.return_Tick);
+                        TraceLog(LOG_INFO, "NAINR");
+                        Game_Data::Father_Point keyframe = data.father_Points[data.target_Keyframe];
+                        data.father_Position = Vector3Lerp(data.father_Start_Position, keyframe.position, data.return_Tick);
 
-                        Vector3 diff = Vector3Subtract(data.target_Keyframe->position, data.father_Position);
+                        Vector3 diff = Vector3Subtract(keyframe.position, data.father_Position);
                         float angle = -atan2(diff.z, diff.x) * RAD2DEG;
 
                         float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
@@ -1339,14 +1344,19 @@ namespace Game {
                         data.return_Tick += 1.f * GetFrameTime();
                         if(data.return_Tick > 1.f) {
                             data.father_State = Game_Data::NORMAL_AI;
-                            data.keyframe = data.target_Keyframe - &data.father_Points[0];
+                            data.keyframe = data.target_Keyframe;
                             data.keyframe_Tick = 0.f;
+                            data.father_Rotation = angle;
+                            data.father_Position = keyframe.position;
                         }
+
+                        DrawSphere(keyframe.position, 1.f, YELLOW);
 
                         break;
                     }
 
                     case Game_Data::NORMAL_AI: {
+                        TraceLog(LOG_INFO, "NAIN");
                         Vector3 source = data.father_Points[data.keyframe].position;
                         Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
 
@@ -1393,7 +1403,7 @@ namespace Game {
                     }
                 }
 
-                Ray ray = {{data.father_Position.x, data.father_Position.y + 6.5f, data.father_Position.z}, {0.f, -0.1f, 0.f}};
+                Ray ray = {{data.father_Position.x, data.father_Position.y + 3.5f, data.father_Position.z}, {0.f, -0.1f, 0.f}};
                 float y = Get_Collision_Ray(ray).point.y;
 
                 data.father_Position.y = y;
