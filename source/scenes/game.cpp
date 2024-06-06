@@ -26,15 +26,16 @@
 #define CHAIR_POSITION B2RL(-8.2f, -7.5f, 20)
 #define EATING_ROTATION 90.f
 #define PRIBINACEK_WIN_ANIMATION {-4.60577, 18.2854, 7.5}
-#define SPOON_ROTATION_WIN_ANIMATION {0.f, 0.f, 0.f}
+// #define SPOON_ROTATION_WIN_ANIMATION {0.f, 0.f, 0.f}
 #define SPOON_WIN_ANIMATION {-4.38755, 18.2854, 8.88417}
 #define PLAYERS_ROOM_TABLE {{-6.04131, 17.3548, 3.39275}, {-0.713218, 18.2854, 12.3022}}
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-// Odkomentujte pro mobilní UI
-// #define MOBILE_UI
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
+    #define MOBILE_UI
+#endif
 
 namespace Game {
     class Game_Data {
@@ -78,7 +79,6 @@ namespace Game {
         Shader lighting;
         Model house;
         std::vector<BoundingBox> house_BBoxes;
-        BoundingBox house_BBox;
         
         Model father;
         Camera3D camera;
@@ -97,7 +97,6 @@ namespace Game {
         std::vector<Father_Point> father_Points = {};
         float keyframe_Tick = 0.f;
         int keyframe = 0;
-        float enemy_Direction = 0.f;
 
         class Directional_Position {
         public:
@@ -223,13 +222,20 @@ namespace Game {
                 float height = GetScreenHeight() / 6.f;
                 Rectangle rectangle = {margin, margin, GetScreenWidth() - margin * 2.f, height};
 
+                float caption_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 30.f;
+                float border_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 120.f;
+
                 DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
-                DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, 5.f, Color {0, 0, 0, 255});
+                DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, border_Size, Color {0, 0, 0, 255});
 
-                Vector2 text_Size = MeasureTextEx(Menu::data.medium_Font, text.c_str(), 30.f, 0.f);
-                DrawTextEx(Menu::data.medium_Font, text.c_str(), {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, 30.f, 0.f, WHITE);
+                Vector2 text_Size = MeasureTextEx(Menu::data.medium_Font, text.c_str(), caption_Font_Size, 0.f);
+                DrawTextEx(Menu::data.medium_Font, text.c_str(), {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, caption_Font_Size, 0.f, WHITE);
 
+#ifdef MOBILE_UI
+                if(can_Skip && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+#else
                 if(can_Skip && IsKeyPressed(KEY_SPACE)) {
+#endif
                     return true;
                 }
                 return false;
@@ -292,9 +298,6 @@ namespace Game {
         Vector3 father_Position = {0.f, 0.f, 0.f};
         float father_Rotation = 0.f;
 
-        float align_Keyframe_Tick = 0.f;
-        float align_Keyframe_Max = 0.f;
-
         Vector3 father_Start_Position;
         float father_Start_Rotation;
 
@@ -304,6 +307,7 @@ namespace Game {
         Father_State father_State;
 
         float return_Tick = 0.f;
+        int holding_Crouch = -1;
     } data;
 
     void Game_Data::Win_Animation::Play() {
@@ -562,23 +566,23 @@ namespace Game {
         data.camera.projection = CAMERA_PERSPECTIVE;
 
 #ifdef MOBILE_UI
-        data.joystick_Base = LoadTexture("assets/textures/joystick_base.png");
+        data.joystick_Base = LoadTexture(ASSETS_ROOT "textures/joystick_base.png");
         SetTextureFilter(data.joystick_Base, TEXTURE_FILTER_BILINEAR);
 
-        data.joystick_Pointer = LoadTexture("assets/textures/joystick.png");
+        data.joystick_Pointer = LoadTexture(ASSETS_ROOT "textures/joystick.png");
         SetTextureFilter(data.joystick_Pointer, TEXTURE_FILTER_BILINEAR);
 
         float margin = GetScreenHeight() / 30.f;
         data.movement = Game_Data::Joystick({GetScreenHeight() / 5.f + margin, GetScreenHeight() - GetScreenHeight() / 5.f - margin}, GetScreenHeight() / 5.f);
 
-        data.crouch = LoadTexture("assets/textures/crouch.png");
+        data.crouch = LoadTexture(ASSETS_ROOT "textures/crouch.png");
         SetTextureFilter(data.crouch, TEXTURE_FILTER_BILINEAR);
 
-        data.un_Crouch = LoadTexture("assets/textures/uncrouch.png");
+        data.un_Crouch = LoadTexture(ASSETS_ROOT "textures/uncrouch.png");
         SetTextureFilter(data.un_Crouch, TEXTURE_FILTER_BILINEAR);
 #endif
 
-        data.house = LoadModel("assets/models/house.glb");
+        data.house = LoadModel(ASSETS_ROOT "models/house.glb");
         for(int material = 0; material < data.house.materialCount; material++) {
             SetTextureFilter(data.house.materials[material].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
         }
@@ -587,20 +591,18 @@ namespace Game {
             data.house_BBoxes.push_back(GetMeshBoundingBox(data.house.meshes[mesh]));
         }
 
-        data.house_BBox = GetModelBoundingBox(data.house);
+        data.father = LoadModel(ASSETS_ROOT "models/human.iqm");
 
-        data.father = LoadModel("assets/models/human.iqm");
-
-        Texture human = LoadTexture("assets/textures/human.png");
+        Texture human = LoadTexture(ASSETS_ROOT "textures/human.png");
         SetMaterialTexture(&data.father.materials[0], MATERIAL_MAP_DIFFUSE, human);
 
         int animation_Count = 0; // (1)
-        data.animations = LoadModelAnimations("assets/models/human.iqm", &animation_Count);
+        data.animations = LoadModelAnimations(ASSETS_ROOT "models/human.iqm", &animation_Count);
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
-        data.lighting = LoadShader("assets/shaders/vertex100.glsl", "assets/shaders/fragment100.glsl");
+        data.lighting = LoadShader(ASSETS_ROOT "shaders/vertex100.glsl", ASSETS_ROOT "shaders/fragment100.glsl");
 #else
-        data.lighting = LoadShader("assets/shaders/vertex330.glsl", "assets/shaders/fragment330.glsl");
+        data.lighting = LoadShader(ASSETS_ROOT "shaders/vertex330.glsl", ASSETS_ROOT "shaders/fragment330.glsl");
 #endif
 
         data.lighting.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(data.lighting, "matModel");
@@ -620,7 +622,7 @@ namespace Game {
 
         data.flashlight = CreateLight(LIGHT_POINT, data.camera.position, {0.f, 0.f, 0.f}, WHITE, data.lighting);
 
-        std::istringstream ai_File(LoadFileText("assets/ai.txt"));
+        std::istringstream ai_File(LoadFileText(ASSETS_ROOT "ai.txt"));
 
         std::string line;
         while (std::getline(ai_File, line)) {
@@ -643,7 +645,7 @@ namespace Game {
             }
         }
 
-        std::istringstream doors_File(LoadFileText("assets/doors.txt"));
+        std::istringstream doors_File(LoadFileText(ASSETS_ROOT "doors.txt"));
         float position_X, position_Y, position_Z,
               scale_X, scale_Y, scale_Z,
               rotation_Start, rotation_End;
@@ -669,7 +671,7 @@ namespace Game {
                                                       rotation_Start, rotation_End, material));
         }
 
-        std::istringstream animation_File(LoadFileText("assets/spawn_animation.txt"));
+        std::istringstream animation_File(LoadFileText(ASSETS_ROOT "spawn_animation.txt"));
         float keyframe_X, keyframe_Y, keyframe_Z,
               target_X, target_Y, target_Z;
 
@@ -680,29 +682,29 @@ namespace Game {
                                                                    Vector3 {target_X, target_Y, target_Z}));
         }
 
-        data.door = LoadModel("assets/models/door.glb");
+        data.door = LoadModel(ASSETS_ROOT "models/door.glb");
         for(int material = 0; material < data.door.materialCount; material++)
             data.door.materials[material].shader = data.lighting;
 
-        data.spoon = LoadModel("assets/models/spoon.glb");
+        data.spoon = LoadModel(ASSETS_ROOT "models/spoon.glb");
         for(int material = 0; material < data.spoon.materialCount; material++)
             data.spoon.materials[material].shader = data.lighting;
 
-        data.key = LoadModel("assets/models/key.glb");
+        data.key = LoadModel(ASSETS_ROOT "models/key.glb");
         for(int material = 0; material < data.key.materialCount; material++)
             data.key.materials[material].shader = data.lighting;
 
-        data.drawer = LoadModel("assets/models/drawer.glb");
+        data.drawer = LoadModel(ASSETS_ROOT "models/drawer.glb");
         for(int material = 0; material < data.drawer.materialCount; material++)
             data.drawer.materials[material].shader = data.lighting;
         
-        data.lock = LoadModel("assets/models/lock.glb");
+        data.lock = LoadModel(ASSETS_ROOT "models/lock.glb");
         for(int material = 0; material < data.lock.materialCount; material++)
             data.lock.materials[material].shader = data.lighting;
 
         data.drawer_BBox = GetModelBoundingBox(data.drawer);
 
-        std::istringstream config_File(LoadFileText("assets/config.txt"));
+        std::istringstream config_File(LoadFileText(ASSETS_ROOT "config.txt"));
 
         while (std::getline(config_File, line)) {
             std::stringstream string_Stream(line);
@@ -771,7 +773,6 @@ namespace Game {
 
     void On_Switch() {
         DisableCursor();
-        data.enemy_Direction = 1.f * GetFrameTime();
 
         for(int material = 0; material < Menu::data.pribinacek.materialCount; material++)
             Menu::data.pribinacek.materials[material].shader = data.lighting;
@@ -786,7 +787,7 @@ namespace Game {
         }
 
         data.guide_Texts.clear();
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepžekonatelnou chuť na pribináčka"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepřekonatelnou chuť na pribináčka"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("Tvým cílem je jít pro pribináčka a sníst si ho tady v pokoji"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("Jo a táta vždycky na noc vypíná pojistky, aby jsem nemohl být na mobilu"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý"));
@@ -804,13 +805,12 @@ namespace Game {
         data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
         Vector2 delta = Vector2Subtract(data.old_Mouse_Position, GetTouchPosition(touch_Id));
-
         data.old_Mouse_Position = GetTouchPosition(touch_Id);
 
         if(!update_Camera)
             return;
 
-        data.camera_Rotation = Vector3Add(data.camera_Rotation, {-delta.y * GetFrameTime() * 5.f, delta.x * GetFrameTime() * 5.f, 0.f});
+        data.camera_Rotation = Vector3Add(data.camera_Rotation, {-delta.y * GetFrameTime() * 10.f, delta.x * GetFrameTime() * 10.f, 0.f});
         data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -85.f, 85.f);
     }
 
@@ -1293,7 +1293,6 @@ namespace Game {
 
                 switch(data.father_State) {
                     case Game_Data::INSPECT: {
-                        TraceLog(LOG_INFO, "NAII");
                         Vector3 old_Position = data.father_Position;
                         data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
 
@@ -1331,7 +1330,6 @@ namespace Game {
                     }
 
                     case Game_Data::RETURN: {
-                        TraceLog(LOG_INFO, "NAINR");
                         Game_Data::Father_Point keyframe = data.father_Points[data.target_Keyframe];
                         data.father_Position = Vector3Lerp(data.father_Start_Position, keyframe.position, data.return_Tick);
 
@@ -1350,13 +1348,10 @@ namespace Game {
                             data.father_Position = keyframe.position;
                         }
 
-                        DrawSphere(keyframe.position, 1.f, YELLOW);
-
                         break;
                     }
 
                     case Game_Data::NORMAL_AI: {
-                        TraceLog(LOG_INFO, "NAIN");
                         Vector3 source = data.father_Points[data.keyframe].position;
                         Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
 
@@ -1421,6 +1416,9 @@ namespace Game {
         DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - crosshair_size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + crosshair_size}, 2.f, Fade(WHITE, 0.2f));
 
 #ifdef MOBILE_UI
+        data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
+        data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
+
         if(data.wake_Animation_Finished) {
             data.movement.Render();
             bool rotation_Updated = false;
@@ -1440,27 +1438,43 @@ namespace Game {
             crouch_Rectangle.width *= 2.f;
             crouch_Rectangle.height *= 2.f;
 
-            // TODO: Předělat celej systém dotyků pomocí gestures
-            for(int id = 0; id < GetTouchPointCount(); id++) {
+            if(data.holding_Crouch >= GetTouchPointCount() || !CheckCollisionPointRec(GetTouchPosition(data.holding_Crouch), crouch_Rectangle)) {
+                data.holding_Crouch = -1;
+            }
+
+            for(int index = 0; index < GetTouchPointCount(); index++) {
+                int id = GetTouchPointId(index);
+
                 bool can_Update = data.movement.Can_Update(id);
                 Game_Data::Joystick_Data joystick = data.movement.Update(id);
 
                 if(CheckCollisionPointRec(GetTouchPosition(id), crouch_Rectangle)) {
-                    data.crouching = !data.crouching;
-                } else if (can_Update) {
-                    // Jednoduše hodně komplexní a buggy cesta, jak zpomalit hráče, pokud crouchuje 
-                    if ((data.crouching && data.frame_Counter % 2 == 0) || !data.crouching) {
-                        Update_Camera_Android(id, data.previous_Rotated);
+                    if(data.holding_Crouch != id) {
+                        data.crouching = !data.crouching;
+                        data.holding_Crouch = id;
                     }
-                    rotation_Updated = true;
                 } else {
-                    if(joystick.moving) {
-                        float camera_Angle = atan2(data.camera_Target.z, data.camera_Target.x) + 90.f * DEG2RAD;
+                    if (can_Update) {
+                        rotation_Updated = true;
+                        if (data.wake_Animation_Finished && !data.win.playing) {
+                            Update_Camera_Android(id, data.previous_Rotated);
+                        }
+                    } else {
+                        if (joystick.moving && data.wake_Animation_Finished && !data.win.playing) {
+                            float speed = 1.f;
+                            if (data.crouching) speed /= 1.5f;
+                            if (!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
 
-                        Vector3 offset = {
-                                cos(joystick.rotation * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f, 0.f,
-                                sin(joystick.rotation * DEG2RAD + camera_Angle) * GetFrameTime() * 5.f};
-                        data.camera.position = Vector3Add(data.camera.position, offset);
+                            float camera_Angle = atan2(data.camera_Target.z, data.camera_Target.x) +
+                                                 90.f * DEG2RAD;
+
+                            Vector3 offset = {
+                                    cos(joystick.rotation * DEG2RAD + camera_Angle) *
+                                    GetFrameTime() * 7.f * speed, 0.f,
+                                    sin(joystick.rotation * DEG2RAD + camera_Angle) *
+                                    GetFrameTime() * 7.f * speed};
+                            data.camera.position = Vector3Add(data.camera.position, offset);
+                        }
                     }
                 }
             }
@@ -1540,32 +1554,32 @@ namespace Game {
         }
 
         if(data.guide_Finished) {
+            float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 30.f;
+            float font_Size_Smaller = (GetScreenWidth() + GetScreenHeight()) / 2.f / 35.f;
+            float border_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 120.f;
+
             float margin = GetScreenWidth() / 50.f;
-            Vector2 rectangle_Size = MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), 30.f, 0.f);
+            Vector2 rectangle_Size = MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), font_Size, 0.f);
             for(int i = 4 + 1; i < data.guide_Texts.size(); i++) {
-                rectangle_Size.y += MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[i].target_Text.c_str(), 30.f, 0.f).y;
+                rectangle_Size.y += MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[i].target_Text.c_str(), font_Size, 0.f).y;
             }
 
             Rectangle rectangle = {margin, margin, rectangle_Size.x, rectangle_Size.y};
             DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
-            DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, 5.f, BLACK);
+            DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, border_Size, BLACK);
 
-            Vector2 text_Box_Size = MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), 25.f, 0.f);
+            Vector2 text_Box_Size = MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), font_Size_Smaller, 0.f);
             for(int i = 4 + 1; i < data.guide_Texts.size(); i++) {
-                text_Box_Size.y += MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[i].target_Text.c_str(), 25.f, 0.f).y;
+                text_Box_Size.y += MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[i].target_Text.c_str(), font_Size_Smaller, 0.f).y;
             }
 
             int y = 0;
             for(int i = 0; i < 4; i++) {
                 const char* text = data.guide_Texts[4 + i].target_Text.c_str();
-                Vector2 line = MeasureTextEx(Menu::data.medium_Font, text, 25.f, 0.f);
-                DrawTextEx(Menu::data.medium_Font, text, {rectangle.x + rectangle.width / 2.f - text_Box_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Box_Size.y / 2.f + y}, 25.f, 0.f, (4 + i < data.guide_Index) ? GREEN : WHITE);
+                Vector2 line = MeasureTextEx(Menu::data.medium_Font, text, font_Size_Smaller, 0.f);
+                DrawTextEx(Menu::data.medium_Font, text, {rectangle.x + rectangle.width / 2.f - text_Box_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Box_Size.y / 2.f + y}, font_Size_Smaller, 0.f, (4 + i < data.guide_Index) ? GREEN : WHITE);
                 y += line.y;
             }
-        }
-
-        if(IsKeyPressed(KEY_ENTER)) {
-            See_Player();
         }
 
         if(IsKeyPressed(KEY_TAB)) data.debug = !data.debug;

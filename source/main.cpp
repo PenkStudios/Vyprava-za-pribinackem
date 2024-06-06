@@ -3,6 +3,12 @@
 #include "scene.cpp"
 #include "mod_loader.cpp"
 
+#ifdef PLATFORM_ANDROID
+#define ASSETS_ROOT ""
+#else
+#define ASSETS_ROOT "assets/"
+#endif
+
 #include "scenes/intro.cpp"
 #include "scenes/menu.cpp"
 #include "scenes/game.cpp"
@@ -42,7 +48,7 @@ void Ready() {
     Init_Scenes();
     Switch_To_Scene(MENU);
 
-    Mod_Load_Directory("assets/mods/");
+    Mod_Load_Directory(ASSETS_ROOT "mods/");
     Mod_Callback("Init", nullptr);
 
     SetTargetFPS(60);
