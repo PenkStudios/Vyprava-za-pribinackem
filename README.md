@@ -1,10 +1,8 @@
-# Výprava za pribináčkem verze 0.7.7
+# Výprava za pribináčkem verze 0.7.8
 Velice vtipná hra o cestě pro pribináčka
 
 ## Přídáno
-- Crouch tlačítko se nyní nebuguje po zmáčknutí
-- Opraven bug s multi-touchem s touch ids
-- Opravena wake animace
+- Optimizace kódu
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

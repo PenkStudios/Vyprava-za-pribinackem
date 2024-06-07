@@ -77,6 +77,7 @@ namespace Game {
         };
 
         Shader lighting;
+
         Model house;
         std::vector<BoundingBox> house_BBoxes;
         
@@ -935,14 +936,14 @@ namespace Game {
         SetShaderValue(data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         bool action_Used = false; // If any action was used this frame (preventing click-through)
-
+     
         BeginMode3D(data.camera); {
             Mod_Callback("Update_Game_3D", (void*)&data);
 
             data.frame_Counter++;
             if(data.frame_Counter > 100) data.frame_Counter = 0;
 
-	        UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
+            UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
 
             data.animation_Frame_Count += 50.f * GetFrameTime();
             if(data.animation_Frame_Count >= data.animations[0].frameCount)
@@ -1114,8 +1115,8 @@ namespace Game {
 
                         case Game_Data::SPOON: {
                             data.spoon.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
-                                                                                                     data.item_Data[index].rotation.y * DEG2RAD,
-                                                                                                     data.item_Data[index].rotation.z * DEG2RAD}));
+                                                                                                    data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                    data.item_Data[index].rotation.z * DEG2RAD}));
                             DrawModel(data.spoon, data.item_Data[index].position, 1.f, WHITE);
                             bbox_Mesh = &data.spoon.meshes[0];
                             break;
@@ -1123,8 +1124,8 @@ namespace Game {
 
                         case Game_Data::KEY: {
                             data.key.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
-                                                                                                   data.item_Data[index].rotation.y * DEG2RAD,
-                                                                                                   data.item_Data[index].rotation.z * DEG2RAD}));
+                                                                                                data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                data.item_Data[index].rotation.z * DEG2RAD}));
                             DrawModel(data.key, data.item_Data[index].position, 1.f, WHITE);
                             bbox_Mesh = &data.key.meshes[0];
                             break;
@@ -1175,7 +1176,7 @@ namespace Game {
                                     data.holding_Item = Game_Data::NONE;
                                     action_Used = true;
                                 } else if(item_Visible && !action_Used && data.holding_Item == Game_Data::NONE &&
-                                          player_Map_Collision.distance > player_Item_Collision.distance && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                                        player_Map_Collision.distance > player_Item_Collision.distance && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                                     data.holding_Item = (Game_Data::Item)index;
                                     action_Used = true;
 
@@ -1254,8 +1255,8 @@ namespace Game {
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
 
             if(CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::PRIBINACEK].position, 0.1f) &&
-               CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::SPOON].position, 0.1f) && data.guide_Index == 6 &&
-               data.holding_Item != Game_Data::PRIBINACEK && data.holding_Item != Game_Data::SPOON) {
+            CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::SPOON].position, 0.1f) && data.guide_Index == 6 &&
+            data.holding_Item != Game_Data::PRIBINACEK && data.holding_Item != Game_Data::SPOON) {
                 data.guide_Index++;
                 data.win.Play();
             }

@@ -13,8 +13,6 @@ uniform vec4 colDiffuse;
 // Output fragment color
 out vec4 finalColor;
 
-// NOTE: Add here your custom variables
-
 #define     MAX_LIGHTS              4
 #define     LIGHT_DIRECTIONAL       0
 #define     LIGHT_POINT             1
@@ -54,6 +52,7 @@ void main()
 
     // NOTE: Implement here your fragment shader code
 
+        
     for (int i = 0; i < MAX_LIGHTS; i++)
     {
         if (lights[i].enabled == 1)
