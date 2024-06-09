@@ -924,6 +924,10 @@ namespace Game {
         return player_Visible;
     }
 
+    void Handle_Click(int touch_Id) {
+
+    }
+
     void Update() {
         ClearBackground(BLACK);
         SetShaderValue(data.lighting, data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
@@ -1460,6 +1464,7 @@ namespace Game {
                         if (data.wake_Animation_Finished && !data.win.playing) {
                             Update_Camera_Android(id, data.previous_Rotated);
                         }
+                        Handle_Click(id);
                     } else {
                         if (joystick.moving && data.wake_Animation_Finished && !data.win.playing) {
                             float speed = 1.f;
@@ -1483,6 +1488,8 @@ namespace Game {
             data.previous_Rotated = rotation_Updated;
         }
 #else
+        Handle_Click(0);
+
         data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
         data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
