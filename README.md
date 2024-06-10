@@ -1,8 +1,8 @@
-# Výprava za pribináčkem verze 0.7.9
+# Výprava za pribináčkem verze 0.8.0
 Velice vtipná hra o cestě pro pribináčka
 
 ## Přídáno
-- Začátek optimalizace otevírání dveří, šuplíků a braní předmětů na mobilní zařízení
+- Optimalizace otevírání dveří, šuplíků a braní předmětů na mobilní zařízení
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
