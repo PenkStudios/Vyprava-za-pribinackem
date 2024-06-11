@@ -7,7 +7,7 @@ Zachovává AI "nepřítele".
 Každá řádka = breakpoint
 
 (X) - počet dveří = počet řádků v doors.txt
-Formát řádkou: `pozice_x pozice_y pozice_z dveře_1 dveře_2 ... dveře_(X)`
+Formát řádku: `pozice_x pozice_y pozice_z dveře_1 dveře_2 ... dveře_(X)`
 
 NOTE: Rotace se v runtime vypočítá automaticky
 
@@ -16,16 +16,16 @@ doors.txt
 Zachovává všechny informace o dveřích
 Každá žádka = jedny dveře
 
-Formát řádkou: `pozice_x pozice_y pozice_z velikost_x velikost_y velikost_z začáteční_rotace konečná_rotace materiál`
+Formát řádku: `pozice_x pozice_y pozice_z velikost_x velikost_y velikost_z začáteční_rotace konečná_rotace materiál`
 
 `materiál` - ID z předvybraných materiálů (id=0 dřevo, id=1 bílý materiál, dveře od lednice)
 
 spawn_animation.txt
 -------------------
-Zachovává value informace o "wake" animation_Count
+Zachovává value informace o "wake" animaci
 Každá řádka = breakpoint
 
-Formát řádkou: `pozice_x pozice_y pozice_z směr_x směr_y směr_z`
+Formát řádku: `pozice_x pozice_y pozice_z směr_x směr_y směr_z`
 NOTE: směr je od pozice 0, 0, 0 (0, 0, 1 je dopředu)
 
        +Y |   / +Z
@@ -37,6 +37,16 @@ NOTE: směr je od pozice 0, 0, 0 (0, 0, 1 je dopředu)
         / |
        /  |
   -Z  /   | -Y
+
+death_animation.txt
+-------------------
+Zachovává value informace o "death" animaci
+Každá řádka = breakpoint
+
+Formát řádku: `pozice_kamera_x pozice_kamera_y pozice_kamera_z
+                směr_kamera_x směr_kamera_y směr_kamera_z
+                pozice_táta_x pozice_táta_y pozice_táta_z
+                směr_táta_x směr_táta_y směr_táta_z`
 */
 
 // Kde jsou šuplíky (pozice_x1 pozice_y1 pozice_z1 má_zámek_1 pozice_x2 pozice_y2 pozice_z2 má_zámek_2 ...)

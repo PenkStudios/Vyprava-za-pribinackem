@@ -811,9 +811,11 @@ namespace Game {
         Vector2 delta = Vector2Subtract(data.old_Mouse_Position, GetTouchPosition(touch_Id));
         data.old_Mouse_Position = GetTouchPosition(touch_Id);
 
-        // DrawLineEx(data.start_Mouse_Position, data.old_Mouse_Position, 5.f, BLUE);
-        // DrawCircleV(data.start_Mouse_Position, 25.f, RED);
-        // DrawCircleV(data.old_Mouse_Position, 25.f, RED);
+        if(data.debug) {
+            DrawLineEx(data.start_Mouse_Position, data.old_Mouse_Position, 5.f, BLUE);
+            DrawCircleV(data.start_Mouse_Position, 25.f, RED);
+            DrawCircleV(data.old_Mouse_Position, 25.f, RED);
+        }
 
         if(roundf(data.start_Mouse_Position.x) == -1 && roundf(data.start_Mouse_Position.y) == -1)
             data.start_Mouse_Position = GetTouchPosition(touch_Id);
@@ -1059,7 +1061,7 @@ namespace Game {
         SetShaderValue(data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         data.action_Used = false; // If any action was used this frame (preventing click-through)
-     
+
         BeginMode3D(data.camera); {
             Mod_Callback("Update_Game_3D", (void*)&data);
 
