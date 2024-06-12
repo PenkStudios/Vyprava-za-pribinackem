@@ -106,9 +106,27 @@ namespace Game {
 
             Directional_Position(Vector3 position, Vector3 target) : position(position), target(target) {}
         };
+        
         std::vector<Directional_Position> wake_Animation = {};
         float wake_Animation_Tick = 0.f;
         bool wake_Animation_Finished = false;
+
+        class Death_Animation_Keyframe {
+        public:
+            Vector3 camera_Position;
+            Vector3 camera_Target;
+
+            Vector3 father_Position;
+            Vector3 father_Target;
+
+            Death_Animation_Keyframe(Vector3 camera_Position, Vector3 camera_Target, Vector3 father_Position, Vector3 father_Target) :
+                camera_Position(camera_Position), camera_Target(camera_Target),
+                father_Position(camera_Position), father_Target(camera_Target) {}
+        };
+
+        std::vector<Death_Animation_Keyframe> death_Animation = {};
+        float death_Animation_Tick = 0.f;
+        bool death_Animation_Finished = false;
 
         Texture joystick_Base;
         Texture joystick_Pointer;
@@ -686,6 +704,23 @@ namespace Game {
                                                                    Vector3 {target_X, target_Y, target_Z}));
         }
 
+        std::istringstream death_Animation_File(LoadFileText(ASSETS_ROOT "death_animation.txt"));
+        float keyframe_Camera_X, keyframe_Camera_Y, keyframe_Camera_Z,
+              target_Camera_X, target_Camera_Y, target_Camera_Z,
+              keyframe_Father_X, keyframe_Father_Y, keyframe_Father_Z,
+              target_Father_X, target_Father_Y, target_Father_Z;
+
+
+        while(death_Animation_File >> keyframe_Camera_X >> keyframe_Camera_Y >> keyframe_Camera_Z >>
+                                      target_Camera_X >> target_Camera_Y >> target_Camera_Z >>
+                                      keyframe_Father_X >> keyframe_Father_Y >> keyframe_Father_Z >>
+                                      target_Father_X >> target_Father_Y >> target_Father_Z) {
+            data.death_Animation.push_back(Game_Data::Death_Animation_Keyframe(Vector3 {keyframe_Camera_X, keyframe_Camera_Y, keyframe_Camera_Z},
+                                                                               Vector3 {target_Camera_X, target_Camera_Y, target_Camera_Z},
+                                                                               Vector3 {keyframe_Father_X, keyframe_Father_Y, keyframe_Father_Z},
+                                                                               Vector3 {target_Father_X, target_Father_Y, target_Father_Z}));
+        }
+
         data.door = LoadModel(ASSETS_ROOT "models/door.glb");
         for(int material = 0; material < data.door.materialCount; material++)
             data.door.materials[material].shader = data.lighting;
@@ -930,9 +965,9 @@ namespace Game {
     }
 
     bool Player_Visible() {
-        Ray enemy_Ray = {Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.father_Position)), {10.f, 10.f, 10.f})};
+        Ray father_Ray = {Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.father_Position)), {10.f, 10.f, 10.f})};
         float player_Distance = Vector3Distance(data.father_Position, data.camera.position) * 10.f;
-        RayCollision scene_Collision = Get_Collision_Ray(enemy_Ray);
+        RayCollision scene_Collision = Get_Collision_Ray(father_Ray);
 
         bool player_Visible = player_Distance < scene_Collision.distance;
         return player_Visible;
@@ -1129,6 +1164,67 @@ namespace Game {
                     data.camera.position = current_Position;
                     data.camera_Target = current_Target;
                 }
+            }
+
+            /* DEATH ANIMATION */ {
+                /*
+                for(int index = 0; index < data.death_Animation.size(); index++) {
+                    DrawCube(data.death_Animation[index].camera_Position, 1.f, 1.f, 1.f, RED);
+                    DrawLine3D(data.death_Animation[index].camera_Position, Vector3Add(data.death_Animation[index].camera_Position, data.death_Animation[index].camera_Target), WHITE);
+
+                    DrawCube(data.death_Animation[index].father_Position, 1.f, 1.f, 1.f, BLUE);
+                    DrawLine3D(data.death_Animation[index].father_Position, Vector3Add(data.death_Animation[index].father_Position, data.death_Animation[index].father_Target), WHITE);
+                }
+                
+
+                if(data.death_Animation_Tick < data.death_Animation.size() - 1) {
+                    Vector3 source_Camera_Position = data.death_Animation[(int)data.death_Animation_Tick].camera_Position;
+                    Vector3 target_Camera_Position = data.death_Animation[(int)data.death_Animation_Tick + 1].camera_Position;
+
+                    #define WAKE_EASING EaseSineInOut
+                    #define WAKE_EASING_2 EaseLinearNone
+
+                    Vector3 current_Camera_Position = {
+                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.x, target_Camera_Position.x - source_Camera_Position.x, 1.f) +
+                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.x, target_Camera_Position.x - source_Camera_Position.x, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.y, target_Camera_Position.y - source_Camera_Position.y, 1.f) +
+                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.y, target_Camera_Position.y - source_Camera_Position.y, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.z, target_Camera_Position.z - source_Camera_Position.z, 1.f) +
+                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.z, target_Camera_Position.z - source_Camera_Position.z, 1.f)) / 2.f
+                    };
+
+                    Vector3 source_Camera_Target = data.wake_Animation[(int)data.death_Animation_Tick].target;
+                    Vector3 target_Camera_Target = data.wake_Animation[(int)data.death_Animation_Tick + 1].target;
+
+                    Vector3 current_Camera_Target = {
+                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.x, target_Camera_Target.x - source_Camera_Target.x, 1.f) + 
+                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.x, target_Camera_Target.x - source_Camera_Target.x, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.y, target_Camera_Target.y - source_Camera_Target.y, 1.f) + 
+                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.y, target_Camera_Target.y - source_Camera_Target.y, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.z, target_Camera_Target.z - source_Camera_Target.z, 1.f) + 
+                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.z, target_Camera_Target.z - source_Camera_Target.z, 1.f)) / 2.f
+                    };
+
+                    bool can_Update = true;
+                    if(data.death_Animation_Tick && data.guide_Index < 1) can_Update = false;
+                    if((int)data.death_Animation_Tick == 3 && !data.guide_Finished) can_Update = false;
+
+                    if(can_Update) {
+                        data.death_Animation_Tick += 1.f * GetFrameTime();
+                    }
+
+                    if(data.death_Animation_Tick >= data.wake_Animation.size() - 1) {
+                        data.wake_Animation_Finished = true;
+                    }
+                    
+                    data.camera.position = current_Camera_Position;
+                    data.camera_Target = current_Camera_Target;
+                }
+                */
             }
 
             /* DOORS */ {
