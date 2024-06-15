@@ -117,16 +117,16 @@ namespace Game {
             Vector3 camera_Target;
 
             Vector3 father_Position;
-            Vector3 father_Target;
+            float father_Rotation;
 
-            Death_Animation_Keyframe(Vector3 camera_Position, Vector3 camera_Target, Vector3 father_Position, Vector3 father_Target) :
+            Death_Animation_Keyframe(Vector3 camera_Position, Vector3 camera_Target, Vector3 father_Position, float father_Rotation) :
                 camera_Position(camera_Position), camera_Target(camera_Target),
-                father_Position(camera_Position), father_Target(camera_Target) {}
+                father_Position(father_Position), father_Rotation(father_Rotation) {}
         };
 
         std::vector<Death_Animation_Keyframe> death_Animation = {};
-        float death_Animation_Tick = 0.f;
-        bool death_Animation_Finished = false;
+        float death_Animation_Tick;
+        bool death_Animation_Finished;
 
         Texture joystick_Base;
         Texture joystick_Pointer;
@@ -330,6 +330,11 @@ namespace Game {
         int holding_Crouch = -1;
 
         bool action_Used = false;
+        bool death_Animation_Playing;
+
+        // death obrazovka
+        Menu::Menu_Data::Button play_Again_Button;
+        Menu::Menu_Data::Button menu_Button;
     } data;
 
     void Game_Data::Win_Animation::Play() {
@@ -708,17 +713,17 @@ namespace Game {
         float keyframe_Camera_X, keyframe_Camera_Y, keyframe_Camera_Z,
               target_Camera_X, target_Camera_Y, target_Camera_Z,
               keyframe_Father_X, keyframe_Father_Y, keyframe_Father_Z,
-              target_Father_X, target_Father_Y, target_Father_Z;
+              father_Rotation;
 
 
         while(death_Animation_File >> keyframe_Camera_X >> keyframe_Camera_Y >> keyframe_Camera_Z >>
                                       target_Camera_X >> target_Camera_Y >> target_Camera_Z >>
                                       keyframe_Father_X >> keyframe_Father_Y >> keyframe_Father_Z >>
-                                      target_Father_X >> target_Father_Y >> target_Father_Z) {
+                                      father_Rotation) {
             data.death_Animation.push_back(Game_Data::Death_Animation_Keyframe(Vector3 {keyframe_Camera_X, keyframe_Camera_Y, keyframe_Camera_Z},
                                                                                Vector3 {target_Camera_X, target_Camera_Y, target_Camera_Z},
                                                                                Vector3 {keyframe_Father_X, keyframe_Father_Y, keyframe_Father_Z},
-                                                                               Vector3 {target_Father_X, target_Father_Y, target_Father_Z}));
+                                                                               father_Rotation));
         }
 
         data.door = LoadModel(ASSETS_ROOT "models/door.glb");
@@ -774,6 +779,12 @@ namespace Game {
         data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f))); //      PRIBINACEK
         data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f))); //     SPOON
         data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f})); //              KEY
+
+        float font_Size = GetScreenHeight() / 15.f;
+        float button_Height = GetScreenHeight() / 8.f;
+
+        data.play_Again_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height}, u8"Hrát znovu", font_Size, Menu::data.medium_Font);
+        data.menu_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Zpátky do menu", font_Size, Menu::data.medium_Font);
 
         Mod_Callback("Init_Game", (void*)&data);
     }
@@ -836,6 +847,10 @@ namespace Game {
         data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček", false));
 
         data.guide_Finished = false;
+
+        data.death_Animation_Tick = 0.f;
+        data.death_Animation_Finished = false;
+        data.death_Animation_Playing = false;
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -1103,7 +1118,7 @@ namespace Game {
             data.frame_Counter++;
             if(data.frame_Counter > 100) data.frame_Counter = 0;
 
-            UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
+            if(!data.death_Animation_Playing) UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
 
             data.animation_Frame_Count += 50.f * GetFrameTime();
             if(data.animation_Frame_Count >= data.animations[0].frameCount)
@@ -1166,16 +1181,17 @@ namespace Game {
                 }
             }
 
-            /* DEATH ANIMATION */ {
+            /* DEATH ANIMATION */ if(data.death_Animation_Playing) {
                 /*
                 for(int index = 0; index < data.death_Animation.size(); index++) {
                     DrawCube(data.death_Animation[index].camera_Position, 1.f, 1.f, 1.f, RED);
                     DrawLine3D(data.death_Animation[index].camera_Position, Vector3Add(data.death_Animation[index].camera_Position, data.death_Animation[index].camera_Target), WHITE);
 
                     DrawCube(data.death_Animation[index].father_Position, 1.f, 1.f, 1.f, BLUE);
-                    DrawLine3D(data.death_Animation[index].father_Position, Vector3Add(data.death_Animation[index].father_Position, data.death_Animation[index].father_Target), WHITE);
                 }
+                */
                 
+                bool can_Update = true;
 
                 if(data.death_Animation_Tick < data.death_Animation.size() - 1) {
                     Vector3 source_Camera_Position = data.death_Animation[(int)data.death_Animation_Tick].camera_Position;
@@ -1195,8 +1211,8 @@ namespace Game {
                             WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.z, target_Camera_Position.z - source_Camera_Position.z, 1.f)) / 2.f
                     };
 
-                    Vector3 source_Camera_Target = data.wake_Animation[(int)data.death_Animation_Tick].target;
-                    Vector3 target_Camera_Target = data.wake_Animation[(int)data.death_Animation_Tick + 1].target;
+                    Vector3 source_Camera_Target = data.death_Animation[(int)data.death_Animation_Tick].camera_Target;
+                    Vector3 target_Camera_Target = data.death_Animation[(int)data.death_Animation_Tick + 1].camera_Target;
 
                     Vector3 current_Camera_Target = {
                         (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.x, target_Camera_Target.x - source_Camera_Target.x, 1.f) + 
@@ -1209,22 +1225,50 @@ namespace Game {
                             WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.z, target_Camera_Target.z - source_Camera_Target.z, 1.f)) / 2.f
                     };
 
-                    bool can_Update = true;
+                    // ------------------
+
+                    Vector3 source_Father_Position = data.death_Animation[(int)data.death_Animation_Tick].father_Position;
+                    Vector3 target_Father_Position = data.death_Animation[(int)data.death_Animation_Tick + 1].father_Position;
+
+                    Vector3 current_Father_Position = {
+                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.x, target_Father_Position.x - source_Father_Position.x, 1.f) +
+                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.x, target_Father_Position.x - source_Father_Position.x, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.y, target_Father_Position.y - source_Father_Position.y, 1.f) +
+                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.y, target_Father_Position.y - source_Father_Position.y, 1.f)) / 2.f,
+                        
+                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.z, target_Father_Position.z - source_Father_Position.z, 1.f) +
+                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.z, target_Father_Position.z - source_Father_Position.z, 1.f)) / 2.f
+                    };
+
+                    float source_Father_Rotation = data.death_Animation[(int)data.death_Animation_Tick].father_Rotation;
+                    float target_Father_Rotation = data.death_Animation[(int)data.death_Animation_Tick + 1].father_Rotation;
+                    float current_Father_Rotation = LerpVector3XYZ({0.f, source_Father_Rotation, 0.f}, {0.f, target_Father_Rotation, 0.f}, data.death_Animation_Tick - (int)data.death_Animation_Tick).y;
+
                     if(data.death_Animation_Tick && data.guide_Index < 1) can_Update = false;
                     if((int)data.death_Animation_Tick == 3 && !data.guide_Finished) can_Update = false;
 
-                    if(can_Update) {
-                        data.death_Animation_Tick += 1.f * GetFrameTime();
-                    }
-
-                    if(data.death_Animation_Tick >= data.wake_Animation.size() - 1) {
-                        data.wake_Animation_Finished = true;
+                    if(data.death_Animation_Tick >= data.death_Animation.size() - 1) {
+                        data.death_Animation_Finished = true;
+                        data.death_Animation_Tick -= 1.f * GetFrameTime();
                     }
                     
                     data.camera.position = current_Camera_Position;
                     data.camera_Target = current_Camera_Target;
+
+                    data.father_Position = current_Father_Position;
+                    data.father_Rotation = current_Father_Rotation;
                 }
-                */
+
+                if(can_Update) {
+                    data.death_Animation_Tick += 1.f * GetFrameTime();
+                }
+            }
+
+            if(IsKeyPressed(KEY_P)) {
+                data.death_Animation_Playing = true;
+                EnableCursor();
+                UpdateModelAnimation(data.father, data.animations[0], 16);
             }
 
             /* DOORS */ {
@@ -1464,110 +1508,112 @@ namespace Game {
                     }
                 }
 
-                switch(data.father_State) {
-                    case Game_Data::INSPECT: {
-                        Vector3 old_Position = data.father_Position;
-                        data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
+                if(!data.death_Animation_Playing) {
+                    switch(data.father_State) {
+                        case Game_Data::INSPECT: {
+                            Vector3 old_Position = data.father_Position;
+                            data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
 
-                        bool collide_X = Get_Collision_Cylinder({data.father_Position.x, data.father_Position.y + 6.5f, old_Position.z}, 1.5f);
-                        if(collide_X) data.father_Position.x = old_Position.x;
+                            bool collide_X = Get_Collision_Cylinder({data.father_Position.x, data.father_Position.y + 6.5f, old_Position.z}, 1.5f);
+                            if(collide_X) data.father_Position.x = old_Position.x;
 
-                        bool collide_Z = Get_Collision_Cylinder({old_Position.x, data.father_Position.y + 6.5f, data.father_Position.z}, 1.5f);
-                        if(collide_Z) data.father_Position.z = old_Position.z;
+                            bool collide_Z = Get_Collision_Cylinder({old_Position.x, data.father_Position.y + 6.5f, data.father_Position.z}, 1.5f);
+                            if(collide_Z) data.father_Position.z = old_Position.z;
 
-                        Vector3 diff = Vector3Subtract(data.camera.position, data.father_Position);
-                        float angle = -atan2(diff.z, diff.x) * RAD2DEG;
+                            Vector3 diff = Vector3Subtract(data.camera.position, data.father_Position);
+                            float angle = -atan2(diff.z, diff.x) * RAD2DEG;
 
-                        float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
-                        data.father_Rotation += addition / 20.f;
+                            float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
+                            data.father_Rotation += addition / 20.f;
 
-                        if(collide_X || collide_Z) {
-                            data.father_State = Game_Data::RETURN;
-                            data.father_Start_Position = data.father_Position;
-                            data.father_Start_Rotation = data.father_Rotation;
-                            data.target_Keyframe = 0;
-                            float nearest_Keyframe_Distance = 10000.f;
-                            int index = 0;
-                            for(Game_Data::Father_Point &keyframe : data.father_Points) {
-                                float distance = Vector3Distance(data.father_Position, keyframe.position);
+                            if(collide_X || collide_Z) {
+                                data.father_State = Game_Data::RETURN;
+                                data.father_Start_Position = data.father_Position;
+                                data.father_Start_Rotation = data.father_Rotation;
+                                data.target_Keyframe = 0;
+                                float nearest_Keyframe_Distance = 10000.f;
+                                int index = 0;
+                                for(Game_Data::Father_Point &keyframe : data.father_Points) {
+                                    float distance = Vector3Distance(data.father_Position, keyframe.position);
 
-                                if(distance < nearest_Keyframe_Distance && fabs(data.father_Position.y + 6.5f - keyframe.position.y) < 3.f) {
-                                    data.target_Keyframe = index;
-                                    nearest_Keyframe_Distance = distance;
+                                    if(distance < nearest_Keyframe_Distance && fabs(data.father_Position.y + 6.5f - keyframe.position.y) < 3.f) {
+                                        data.target_Keyframe = index;
+                                        nearest_Keyframe_Distance = distance;
+                                    }
+                                    index++;
                                 }
+                                data.return_Tick = 0.f;
+                            }
+                            break;
+                        }
+
+                        case Game_Data::RETURN: {
+                            Game_Data::Father_Point keyframe = data.father_Points[data.target_Keyframe];
+                            data.father_Position = Vector3Lerp(data.father_Start_Position, keyframe.position, data.return_Tick);
+
+                            Vector3 diff = Vector3Subtract(keyframe.position, data.father_Position);
+                            float angle = -atan2(diff.z, diff.x) * RAD2DEG;
+
+                            float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
+                            data.father_Rotation += addition / 20.f;
+
+                            data.return_Tick += 1.f * GetFrameTime();
+                            if(data.return_Tick > 1.f) {
+                                data.father_State = Game_Data::NORMAL_AI;
+                                data.keyframe = data.target_Keyframe;
+                                data.keyframe_Tick = 0.f;
+                                data.father_Rotation = angle;
+                                data.father_Position = keyframe.position;
+                            }
+
+                            break;
+                        }
+
+                        case Game_Data::NORMAL_AI: {
+                            Vector3 source = data.father_Points[data.keyframe].position;
+                            Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
+
+                            int index = 0;
+                            bool changing_Door_State = false;
+                            for(bool state : data.father_Points[(data.keyframe + 1) % data.father_Points.size()].door_States) {
+                                if(data.doors[index].opening_Father != state)
+                                    changing_Door_State = true;
+                                data.doors[index].opening_Father = state;
                                 index++;
                             }
-                            data.return_Tick = 0.f;
-                        }
-                        break;
-                    }
 
-                    case Game_Data::RETURN: {
-                        Game_Data::Father_Point keyframe = data.father_Points[data.target_Keyframe];
-                        data.father_Position = Vector3Lerp(data.father_Start_Position, keyframe.position, data.return_Tick);
+                            float max = Vector3Distance(source, target) / 4.f;
+                            data.keyframe_Tick += 1.f * GetFrameTime();
 
-                        Vector3 diff = Vector3Subtract(keyframe.position, data.father_Position);
-                        float angle = -atan2(diff.z, diff.x) * RAD2DEG;
+                            data.father_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
+                                                    Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
+                                                    Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
 
-                        float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
-                        data.father_Rotation += addition / 20.f;
-
-                        data.return_Tick += 1.f * GetFrameTime();
-                        if(data.return_Tick > 1.f) {
-                            data.father_State = Game_Data::NORMAL_AI;
-                            data.keyframe = data.target_Keyframe;
-                            data.keyframe_Tick = 0.f;
+                            Vector3 difference = Vector3Subtract(target, source);
+                            float angle = -atan2(difference.z, difference.x) * RAD2DEG;
                             data.father_Rotation = angle;
-                            data.father_Position = keyframe.position;
+
+                            float angle_Source = angle;
+                            if(data.keyframe > 0) {
+                                Vector3 difference_Source = Vector3Subtract(source, data.father_Points[data.keyframe - 1].position);
+                                angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
+
+                                float lerp = Clamp(data.keyframe_Tick * 2.f, 0.f, 1.f);
+                                float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
+
+                                data.father_Rotation = angle_Source + addition * lerp;
+                            }
+
+                            if(data.keyframe_Tick > max) {
+                                data.keyframe_Tick = 0.f;
+                                data.keyframe++;
+                            }
+
+                            if(data.keyframe > data.father_Points.size() - 1) {
+                                data.keyframe = 0;
+                            }
+                            break;
                         }
-
-                        break;
-                    }
-
-                    case Game_Data::NORMAL_AI: {
-                        Vector3 source = data.father_Points[data.keyframe].position;
-                        Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
-
-                        int index = 0;
-                        bool changing_Door_State = false;
-                        for(bool state : data.father_Points[(data.keyframe + 1) % data.father_Points.size()].door_States) {
-                            if(data.doors[index].opening_Father != state)
-                                changing_Door_State = true;
-                            data.doors[index].opening_Father = state;
-                            index++;
-                        }
-
-                        float max = Vector3Distance(source, target) / 4.f;
-                        data.keyframe_Tick += 1.f * GetFrameTime();
-
-                        data.father_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
-                                                Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
-                                                Remap(data.keyframe_Tick, 0.f, max, source.z, target.z)};
-
-                        Vector3 difference = Vector3Subtract(target, source);
-                        float angle = -atan2(difference.z, difference.x) * RAD2DEG;
-                        data.father_Rotation = angle;
-
-                        float angle_Source = angle;
-                        if(data.keyframe > 0) {
-                            Vector3 difference_Source = Vector3Subtract(source, data.father_Points[data.keyframe - 1].position);
-                            angle_Source = -atan2(difference_Source.z, difference_Source.x) * RAD2DEG;
-
-                            float lerp = Clamp(data.keyframe_Tick * 2.f, 0.f, 1.f);
-                            float addition = (((((int)angle - (int)angle_Source) % 360) + 540) % 360) - 180;
-
-                            data.father_Rotation = angle_Source + addition * lerp;
-                        }
-
-                        if(data.keyframe_Tick > max) {
-                            data.keyframe_Tick = 0.f;
-                            data.keyframe++;
-                        }
-
-                        if(data.keyframe > data.father_Points.size() - 1) {
-                            data.keyframe = 0;
-                        }
-                        break;
                     }
                 }
 
@@ -1592,7 +1638,7 @@ namespace Game {
         data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
         data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
-        if(data.wake_Animation_Finished) {
+        if(data.wake_Animation_Finished && !data.death_Animation_Playing) {
             data.movement.Render();
             bool rotation_Updated = false;
 
@@ -1630,12 +1676,12 @@ namespace Game {
                 } else {
                     if (can_Update) {
                         rotation_Updated = true;
-                        if (data.wake_Animation_Finished && !data.win.playing) {
+                        if (data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
                             Update_Camera_Android(id, data.previous_Rotated);
                             camera_Rotated = true;
                         }
                     } else {
-                        if (joystick.moving && data.wake_Animation_Finished && !data.win.playing) {
+                        if (joystick.moving && data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
                             float speed = 1.f;
                             if (data.crouching) speed /= 1.5f;
                             if (!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
@@ -1670,7 +1716,7 @@ namespace Game {
         data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
         data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
-        if(data.wake_Animation_Finished && !data.win.playing) {
+        if(data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
             float speed = 1.f;
             if(data.crouching) speed /= 1.5f;
             if(!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
@@ -1691,7 +1737,7 @@ namespace Game {
             data.debug = is_Debug;
 
             RayCollision collision_Legs = {0};
-            if(data.wake_Animation_Finished) {
+            if(data.wake_Animation_Finished && !data.death_Animation_Playing) {
                 Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
                 collision_Legs = Get_Collision_Ray(bottom);
                 if(collision_Legs.hit) {
@@ -1768,6 +1814,32 @@ namespace Game {
         }
 
         if(IsKeyPressed(KEY_TAB)) data.debug = !data.debug;
+
+        if(data.death_Animation_Playing) {
+            if(data.death_Animation_Tick < 1.f) {
+                DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 1.f - data.death_Animation_Tick));
+            } else if(data.death_Animation_Tick > (float)data.death_Animation.size() - 2.f) {
+                DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, data.death_Animation_Tick - ((float)data.death_Animation.size() - 2.f)));
+            }
+
+            if(data.death_Animation_Tick > (float)data.death_Animation.size() - 1.f) {
+                float alpha = 1.f - Clamp((data.death_Animation_Tick - ((float)data.death_Animation.size() - 1.f)) * 0.5f, 0.f, 1.f);
+                Color color = Fade(WHITE, alpha);
+
+                float font_Size = GetScreenHeight() / 15.f;
+                for(int angle = 0; angle < 360; angle += 20) {
+                    Vector2 offset = {cos(angle * DEG2RAD) * 3.f, sin(angle * DEG2RAD) * 3.f};
+
+                    Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, offset), font_Size, 1.f, BLACK);
+                }
+                Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
+            
+                if(data.play_Again_Button.Update()) On_Switch(); // resetuje všechen progress
+                else if(data.menu_Button.Update()) Switch_To_Scene(MENU);
+
+                DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), ColorTint(color, BLACK));
+            }
+        }
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
     }

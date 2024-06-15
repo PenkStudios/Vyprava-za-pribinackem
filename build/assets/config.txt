@@ -46,7 +46,7 @@ Každá řádka = breakpoint
 Formát řádku: `pozice_kamera_x pozice_kamera_y pozice_kamera_z
                 směr_kamera_x směr_kamera_y směr_kamera_z
                 pozice_táta_x pozice_táta_y pozice_táta_z
-                směr_táta_x směr_táta_y směr_táta_z`
+                y_rotace_táta`
 */
 
 // Kde jsou šuplíky (pozice_x1 pozice_y1 pozice_z1 má_zámek_1 pozice_x2 pozice_y2 pozice_z2 má_zámek_2 ...)

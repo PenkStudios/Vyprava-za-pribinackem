@@ -1,8 +1,9 @@
-# Výprava za pribináčkem verze 0.8.2
+# Výprava za pribináčkem verze 0.8.3
 Velice vtipná hra o cestě pro pribináčka
 
 ## Přídáno
-- Vylepšení `death` animace (stále WIP)
+- Death animace (pořát je něco lehkého na vylepšení)
+- Začátek respawnování
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
