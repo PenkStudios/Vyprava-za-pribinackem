@@ -200,7 +200,7 @@ namespace Game {
         class Guide_Caption {
         public:
             std::string target_Text;
-            bool can_Skip; // zmáčkněte mezerník pro skipnutí (pro příběk)
+            bool can_Skip; // zmáčkněte mezerník pro skipnutí (pro příběh)
 
             std::string text; // pomalu napsaný
             float frame = 1;
@@ -230,36 +230,7 @@ namespace Game {
             }
 
             // Vrátí true pokud přeskakuji tento frame
-            bool Update() {
-                frame += 20.f * GetFrameTime();
-                if(frame > target_Text.size()) {
-                    frame = target_Text.size();
-                }
-
-                text = _Utf8_Substr(target_Text, 0, (int)frame);
-
-                float margin = GetScreenWidth() / 50.f;
-                float height = GetScreenHeight() / 6.f;
-                Rectangle rectangle = {margin, margin, GetScreenWidth() - margin * 2.f, height};
-
-                float caption_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 30.f;
-                float border_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 120.f;
-
-                DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
-                DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, border_Size, Color {0, 0, 0, 255});
-
-                Vector2 text_Size = MeasureTextEx(Menu::data.medium_Font, text.c_str(), caption_Font_Size, 0.f);
-                DrawTextEx(Menu::data.medium_Font, text.c_str(), {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, caption_Font_Size, 0.f, WHITE);
-
-#ifdef MOBILE_UI
-                if(can_Skip && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-#else
-                if(can_Skip && IsKeyPressed(KEY_SPACE)) {
-#endif
-                    return true;
-                }
-                return false;
-            }
+            bool Update();
 
             Guide_Caption(std::string text) : target_Text(text), can_Skip(true), text("") {}
             Guide_Caption(std::string text, bool can_Skip) : target_Text(text), can_Skip(can_Skip), text("") {}
@@ -335,7 +306,48 @@ namespace Game {
         // death obrazovka
         Menu::Menu_Data::Button play_Again_Button;
         Menu::Menu_Data::Button menu_Button;
+
+        Texture skip;
     } data;
+
+    bool Game::Game_Data::Guide_Caption::Update() {
+        frame += 20.f * GetFrameTime();
+        if(frame > target_Text.size()) {
+            frame = target_Text.size();
+        }
+
+        text = _Utf8_Substr(target_Text, 0, (int)frame);
+
+        float margin = GetScreenWidth() / 50.f;
+        float height = GetScreenHeight() / 6.f;
+        Rectangle rectangle = {margin, margin, GetScreenWidth() - margin * 2.f, height};
+
+        float caption_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 30.f;
+        float border_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 120.f;
+
+        DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
+        DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, border_Size, Color {0, 0, 0, 255});
+
+        Vector2 text_Size = MeasureTextEx(Menu::data.medium_Font, text.c_str(), caption_Font_Size, 0.f);
+        DrawTextEx(Menu::data.medium_Font, text.c_str(), {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, caption_Font_Size, 0.f, WHITE);
+
+        float skip_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 45.f;
+        Vector2 skip_Text_Size = MeasureTextEx(Menu::data.bold_Font, u8"Zmáčkněte E pro přeskočení", skip_Font_Size, 0.f);
+
+        float button_Size = skip_Font_Size / 17.7f;
+
+        DrawTextEx(Menu::data.bold_Font, u8"Zmáčkněte E pro přeskočení", {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size) / 2.f - skip_Text_Size.x / 2.f, (float)GetScreenHeight() - (data.skip.height * button_Size) * 1.75f - skip_Text_Size.y / 2.f}, skip_Font_Size, 0.f, WHITE);
+        DrawTextureEx(data.skip, {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size), (float)GetScreenHeight() - (data.skip.width * button_Size) * 1.5f}, 0.f, button_Size, WHITE);
+
+#ifdef MOBILE_UI
+        if(can_Skip && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+#else
+        if(can_Skip && IsKeyPressed(KEY_SPACE)) {
+#endif
+            return true;
+        }
+        return false;
+    }
 
     void Game_Data::Win_Animation::Play() {
         // Potom co se hráč dostal do místnosti s pribináčkem a lžicí na stole
@@ -786,6 +798,8 @@ namespace Game {
         data.play_Again_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height}, u8"Hrát znovu", font_Size, Menu::data.medium_Font);
         data.menu_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Zpátky do menu", font_Size, Menu::data.medium_Font);
 
+        data.skip = LoadTexture(ASSETS_ROOT "textures/skip.png");
+
         Mod_Callback("Init_Game", (void*)&data);
     }
 
@@ -847,10 +861,18 @@ namespace Game {
         data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček", false));
 
         data.guide_Finished = false;
+        data.guide_Index = 0;
 
         data.death_Animation_Tick = 0.f;
         data.death_Animation_Finished = false;
         data.death_Animation_Playing = false;
+
+        data.wake_Animation_Tick = 0.f;
+        data.wake_Animation_Finished = 0.f;
+
+        data.father_State = Game_Data::NORMAL_AI;
+        data.keyframe = 0;
+        data.keyframe_Tick = 0.f;
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -1190,85 +1212,88 @@ namespace Game {
                     DrawCube(data.death_Animation[index].father_Position, 1.f, 1.f, 1.f, BLUE);
                 }
                 */
-                
+
                 bool can_Update = true;
+                
+                if(data.death_Animation_Tick < 2.f) {
+                    if(data.death_Animation_Tick < 0.5f) {
+                        Vector3 target_Camera_Position = {data.father_Position.x + sinf((data.father_Rotation + 90.f) * DEG2RAD) * 5.f, data.father_Position.y + 6.5f, data.father_Position.z + cosf((data.father_Rotation + 90.f) * DEG2RAD) * 5.f};
+                        data.camera.position = Vector3MoveTowards(data.camera.position, target_Camera_Position, GetFrameTime() * 10.f);
+                    } else {
 
-                if(data.death_Animation_Tick < data.death_Animation.size() - 1) {
-                    Vector3 source_Camera_Position = data.death_Animation[(int)data.death_Animation_Tick].camera_Position;
-                    Vector3 target_Camera_Position = data.death_Animation[(int)data.death_Animation_Tick + 1].camera_Position;
-
-                    #define WAKE_EASING EaseSineInOut
-                    #define WAKE_EASING_2 EaseLinearNone
-
-                    Vector3 current_Camera_Position = {
-                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.x, target_Camera_Position.x - source_Camera_Position.x, 1.f) +
-                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.x, target_Camera_Position.x - source_Camera_Position.x, 1.f)) / 2.f,
-                        
-                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.y, target_Camera_Position.y - source_Camera_Position.y, 1.f) +
-                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.y, target_Camera_Position.y - source_Camera_Position.y, 1.f)) / 2.f,
-                        
-                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.z, target_Camera_Position.z - source_Camera_Position.z, 1.f) +
-                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Position.z, target_Camera_Position.z - source_Camera_Position.z, 1.f)) / 2.f
-                    };
-
-                    Vector3 source_Camera_Target = data.death_Animation[(int)data.death_Animation_Tick].camera_Target;
-                    Vector3 target_Camera_Target = data.death_Animation[(int)data.death_Animation_Tick + 1].camera_Target;
-
-                    Vector3 current_Camera_Target = {
-                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.x, target_Camera_Target.x - source_Camera_Target.x, 1.f) + 
-                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.x, target_Camera_Target.x - source_Camera_Target.x, 1.f)) / 2.f,
-                        
-                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.y, target_Camera_Target.y - source_Camera_Target.y, 1.f) + 
-                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.y, target_Camera_Target.y - source_Camera_Target.y, 1.f)) / 2.f,
-                        
-                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.z, target_Camera_Target.z - source_Camera_Target.z, 1.f) + 
-                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Camera_Target.z, target_Camera_Target.z - source_Camera_Target.z, 1.f)) / 2.f
-                    };
-
-                    // ------------------
-
-                    Vector3 source_Father_Position = data.death_Animation[(int)data.death_Animation_Tick].father_Position;
-                    Vector3 target_Father_Position = data.death_Animation[(int)data.death_Animation_Tick + 1].father_Position;
-
-                    Vector3 current_Father_Position = {
-                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.x, target_Father_Position.x - source_Father_Position.x, 1.f) +
-                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.x, target_Father_Position.x - source_Father_Position.x, 1.f)) / 2.f,
-                        
-                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.y, target_Father_Position.y - source_Father_Position.y, 1.f) +
-                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.y, target_Father_Position.y - source_Father_Position.y, 1.f)) / 2.f,
-                        
-                        (WAKE_EASING(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.z, target_Father_Position.z - source_Father_Position.z, 1.f) +
-                            WAKE_EASING_2(data.death_Animation_Tick - (int)data.death_Animation_Tick, source_Father_Position.z, target_Father_Position.z - source_Father_Position.z, 1.f)) / 2.f
-                    };
-
-                    float source_Father_Rotation = data.death_Animation[(int)data.death_Animation_Tick].father_Rotation;
-                    float target_Father_Rotation = data.death_Animation[(int)data.death_Animation_Tick + 1].father_Rotation;
-                    float current_Father_Rotation = LerpVector3XYZ({0.f, source_Father_Rotation, 0.f}, {0.f, target_Father_Rotation, 0.f}, data.death_Animation_Tick - (int)data.death_Animation_Tick).y;
-
-                    if(data.death_Animation_Tick && data.guide_Index < 1) can_Update = false;
-                    if((int)data.death_Animation_Tick == 3 && !data.guide_Finished) can_Update = false;
-
-                    if(data.death_Animation_Tick >= data.death_Animation.size() - 1) {
-                        data.death_Animation_Finished = true;
-                        data.death_Animation_Tick -= 1.f * GetFrameTime();
                     }
-                    
-                    data.camera.position = current_Camera_Position;
-                    data.camera_Target = current_Camera_Target;
+                } else {
+                    if(data.death_Animation_Tick - 2.f < data.death_Animation.size() - 1) {
+                        Vector3 source_Camera_Position = data.death_Animation[(int)(data.death_Animation_Tick - 2.f)].camera_Position;
+                        Vector3 target_Camera_Position = data.death_Animation[(int)(data.death_Animation_Tick - 2.f) + 1].camera_Position;
 
-                    data.father_Position = current_Father_Position;
-                    data.father_Rotation = current_Father_Rotation;
+                        #define WAKE_EASING EaseSineInOut
+                        #define WAKE_EASING_2 EaseLinearNone
+
+                        Vector3 current_Camera_Position = {
+                            (WAKE_EASING(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Position.x, target_Camera_Position.x - source_Camera_Position.x, 1.f) +
+                                WAKE_EASING_2(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Position.x, target_Camera_Position.x - source_Camera_Position.x, 1.f)) / 2.f,
+                            
+                            (WAKE_EASING(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Position.y, target_Camera_Position.y - source_Camera_Position.y, 1.f) +
+                                WAKE_EASING_2(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Position.y, target_Camera_Position.y - source_Camera_Position.y, 1.f)) / 2.f,
+                            
+                            (WAKE_EASING(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Position.z, target_Camera_Position.z - source_Camera_Position.z, 1.f) +
+                                WAKE_EASING_2(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Position.z, target_Camera_Position.z - source_Camera_Position.z, 1.f)) / 2.f
+                        };
+
+                        Vector3 source_Camera_Target = data.death_Animation[(int)(data.death_Animation_Tick - 2.f)].camera_Target;
+                        Vector3 target_Camera_Target = data.death_Animation[(int)(data.death_Animation_Tick - 2.f) + 1].camera_Target;
+
+                        Vector3 current_Camera_Target = {
+                            (WAKE_EASING(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Target.x, target_Camera_Target.x - source_Camera_Target.x, 1.f) + 
+                                WAKE_EASING_2(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Target.x, target_Camera_Target.x - source_Camera_Target.x, 1.f)) / 2.f,
+                            
+                            (WAKE_EASING(data.death_Animation_Tick - 2.f - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Target.y, target_Camera_Target.y - source_Camera_Target.y, 1.f) + 
+                                WAKE_EASING_2(data.death_Animation_Tick - (int)(data.death_Animation_Tick - 2.f), source_Camera_Target.y, target_Camera_Target.y - source_Camera_Target.y, 1.f)) / 2.f,
+                            
+                            (WAKE_EASING(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Target.z, target_Camera_Target.z - source_Camera_Target.z, 1.f) + 
+                                WAKE_EASING_2(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Camera_Target.z, target_Camera_Target.z - source_Camera_Target.z, 1.f)) / 2.f
+                        };
+
+                        // ------------------
+
+                        Vector3 source_Father_Position = data.death_Animation[(int)(data.death_Animation_Tick - 2.f)].father_Position;
+                        Vector3 target_Father_Position = data.death_Animation[(int)(data.death_Animation_Tick - 2.f) + 1].father_Position;
+
+                        Vector3 current_Father_Position = {
+                            (WAKE_EASING(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Father_Position.x, target_Father_Position.x - source_Father_Position.x, 1.f) +
+                                WAKE_EASING_2(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Father_Position.x, target_Father_Position.x - source_Father_Position.x, 1.f)) / 2.f,
+                            
+                            (WAKE_EASING(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Father_Position.y, target_Father_Position.y - source_Father_Position.y, 1.f) +
+                                WAKE_EASING_2(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Father_Position.y, target_Father_Position.y - source_Father_Position.y, 1.f)) / 2.f,
+                            
+                            (WAKE_EASING(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Father_Position.z, target_Father_Position.z - source_Father_Position.z, 1.f) +
+                                WAKE_EASING_2(data.death_Animation_Tick - 2.f - (int)(data.death_Animation_Tick - 2.f), source_Father_Position.z, target_Father_Position.z - source_Father_Position.z, 1.f)) / 2.f
+                        };
+
+                        float source_Father_Rotation = data.death_Animation[(int)(data.death_Animation_Tick - 2.f)].father_Rotation;
+                        float target_Father_Rotation = data.death_Animation[(int)(data.death_Animation_Tick - 2.f) + 1].father_Rotation;
+                        float current_Father_Rotation = LerpVector3XYZ({0.f, source_Father_Rotation, 0.f}, {0.f, target_Father_Rotation, 0.f}, data.death_Animation_Tick - (int)data.death_Animation_Tick).y;
+
+                        if(data.death_Animation_Tick - 2.f && data.guide_Index < 1) can_Update = false;
+                        if((int)(data.death_Animation_Tick - 2.f) == 3 && !data.guide_Finished) can_Update = false;
+
+                        if(data.death_Animation_Tick - 2.f >= data.death_Animation.size() - 1) {
+                            data.death_Animation_Finished = true;
+                            data.death_Animation_Tick -= 1.f * GetFrameTime();
+                        }
+                        
+                        data.camera.position = current_Camera_Position;
+                        data.camera_Target = current_Camera_Target;
+
+                        data.father_Position = current_Father_Position;
+                        data.father_Rotation = current_Father_Rotation;
+                    }
                 }
 
                 if(can_Update) {
                     data.death_Animation_Tick += 1.f * GetFrameTime();
                 }
-            }
-
-            if(IsKeyPressed(KEY_P)) {
-                data.death_Animation_Playing = true;
-                EnableCursor();
-                UpdateModelAnimation(data.father, data.animations[0], 16);
             }
 
             /* DOORS */ {
@@ -1777,11 +1802,48 @@ namespace Game {
             See_Player();
         }
 
-        if(!data.guide_Finished && data.guide_Texts[data.guide_Index].Update()) {
-            data.guide_Index++;
-            if(data.guide_Index > 3) {
-                data.guide_Finished = true;
+        if(!data.guide_Finished) {
+            if(data.guide_Texts[data.guide_Index].Update()) {
+                data.guide_Index++;
+                if(data.guide_Index > 3) {
+                    data.guide_Finished = true;
+                }
             }
+            #ifdef MOBILE_UI
+            float skip_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 45.f;
+            Vector2 skip_Text_Size = MeasureTextEx(Menu::data.bold_Font, u8"Zmáčkněte E pro přeskočení", skip_Font_Size, 0.f);
+            float button_Size = skip_Font_Size / 17.7f;
+
+            Rectangle rectangle = {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size), (float)GetScreenHeight() - (data.skip.width * button_Size) * 1.5f, data.skip.width * button_Size, data.skip.height * button_Size};
+            rectangle.x -= button_Size * 30.f;
+            rectangle.y -= button_Size * 30.f;
+            rectangle.width += button_Size * 60.f;
+            rectangle.height += button_Size * 60.f;
+
+            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle)) {
+                int index = 0;
+                for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
+                    if(caption.can_Skip == false) {
+                        data.guide_Index = index;
+                        data.guide_Finished = true;
+                        break;
+                    }
+                    index++;
+                }
+            }
+            #else
+            if(IsKeyPressed(KEY_E)) {
+                int index = 0;
+                for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
+                    if(caption.can_Skip == false) {
+                        data.guide_Index = index;
+                        data.guide_Finished = true;
+                        break;
+                    }
+                    index++;
+                }
+            }
+            #endif
         }
 
         if(data.guide_Finished) {
@@ -1816,29 +1878,38 @@ namespace Game {
         if(IsKeyPressed(KEY_TAB)) data.debug = !data.debug;
 
         if(data.death_Animation_Playing) {
-            if(data.death_Animation_Tick < 1.f) {
-                DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 1.f - data.death_Animation_Tick));
-            } else if(data.death_Animation_Tick > (float)data.death_Animation.size() - 2.f) {
-                DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, data.death_Animation_Tick - ((float)data.death_Animation.size() - 2.f)));
-            }
-
-            if(data.death_Animation_Tick > (float)data.death_Animation.size() - 1.f) {
-                float alpha = 1.f - Clamp((data.death_Animation_Tick - ((float)data.death_Animation.size() - 1.f)) * 0.5f, 0.f, 1.f);
-                Color color = Fade(WHITE, alpha);
-
-                float font_Size = GetScreenHeight() / 15.f;
-                for(int angle = 0; angle < 360; angle += 20) {
-                    Vector2 offset = {cos(angle * DEG2RAD) * 3.f, sin(angle * DEG2RAD) * 3.f};
-
-                    Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, offset), font_Size, 1.f, BLACK);
+            if(data.death_Animation_Tick < 2.f) {
+            } else {
+                if(data.death_Animation_Tick - 2.f < 1.f) {
+                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 1.f - data.death_Animation_Tick - 2.f));
+                } else if(data.death_Animation_Tick - 2.f > (float)data.death_Animation.size() - 2.f) {
+                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, data.death_Animation_Tick - 2.f - ((float)data.death_Animation.size() - 2.f)));
                 }
-                Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
-            
-                if(data.play_Again_Button.Update()) On_Switch(); // resetuje všechen progress
-                else if(data.menu_Button.Update()) Switch_To_Scene(MENU);
 
-                DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), ColorTint(color, BLACK));
+                if(data.death_Animation_Tick - 2.f > (float)data.death_Animation.size() - 1.f) {
+                    float alpha = 1.f - Clamp((data.death_Animation_Tick - 2.f - ((float)data.death_Animation.size() - 1.f)) * 0.5f, 0.f, 1.f);
+                    Color color = Fade(WHITE, alpha);
+
+                    float font_Size = GetScreenHeight() / 15.f;
+                    for(int angle = 0; angle < 360; angle += 20) {
+                        Vector2 offset = {cos(angle * DEG2RAD) * 3.f, sin(angle * DEG2RAD) * 3.f};
+
+                        Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, offset), font_Size, 1.f, BLACK);
+                    }
+                    Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
+                
+                    if(data.play_Again_Button.Update()) On_Switch(); // resetuje všechen progress
+                    else if(data.menu_Button.Update()) Switch_To_Scene(MENU);
+
+                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), ColorTint(color, BLACK));
+                }
             }
+        }
+
+        if(Vector3Distance(Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), data.camera.position) < 2.5f) {
+            data.death_Animation_Playing = true;
+            EnableCursor();
+            UpdateModelAnimation(data.father, data.animations[0], 16);
         }
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
