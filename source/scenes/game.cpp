@@ -33,10 +33,6 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
-    #define MOBILE_UI
-#endif
-
 namespace Game {
     class Game_Data {
     public:
@@ -89,7 +85,6 @@ namespace Game {
         Mesh doorHandle;
         float fall_Acceleration = 0.f;
 
-        bool debug = false;
         float fog_Density = 0.15f;
         bool crouching = false;
         int frame_Counter = 0;
@@ -308,6 +303,9 @@ namespace Game {
         Menu::Menu_Data::Button menu_Button;
 
         Texture skip;
+
+        Vector3 camera_Start_Target;
+        Vector3 camera_Start_Position;
     } data;
 
     bool Game::Game_Data::Guide_Caption::Update() {
@@ -339,14 +337,15 @@ namespace Game {
         DrawTextEx(Menu::data.bold_Font, u8"Zmáčkněte E pro přeskočení", {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size) / 2.f - skip_Text_Size.x / 2.f, (float)GetScreenHeight() - (data.skip.height * button_Size) * 1.75f - skip_Text_Size.y / 2.f}, skip_Font_Size, 0.f, WHITE);
         DrawTextureEx(data.skip, {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size), (float)GetScreenHeight() - (data.skip.width * button_Size) * 1.5f}, 0.f, button_Size, WHITE);
 
-#ifdef MOBILE_UI
-        if(can_Skip && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-#else
-        if(can_Skip && IsKeyPressed(KEY_SPACE)) {
-#endif
-            return true;
+        bool skip;
+
+        if(Menu::data.mobile_Mode.ticked) {
+            skip = can_Skip && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+        } else {
+            skip = can_Skip && IsKeyPressed(KEY_SPACE);
         }
-        return false;
+
+        return skip;
     }
 
     void Game_Data::Win_Animation::Play() {
@@ -354,8 +353,8 @@ namespace Game {
         tick = 0;
 
         walk_Finish = Vector3Distance(data.camera.position, CHAIR_POSITION) * 10;
-        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 10.f;
-        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 10.f;
+        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 0.1f;
+        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 0.1f;
         fetch_Finish = MAX(pribinacek_Fetch, spoon_Fetch) + walk_Finish;
         open_Finish = fetch_Finish + Menu::data.animations[0].frameCount - 1;
         eat_Finish = open_Finish + GetFPS() * 4.166f;
@@ -421,7 +420,7 @@ namespace Game {
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
                 target.x += 0.2f;
                 target.y += 1.f;
-                target.z += 0.8f;
+                target.z += 0.6f; // 0.8
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.2f) / 0.2f);
                 if(next_Stage_Tick < 0.4f != true) {
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
@@ -474,7 +473,7 @@ namespace Game {
             // it can be checked against any transform Matrix, used when checking against same
             // model drawn multiple times with multiple transforms
             RayCollision houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
-            if(data.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
+            if(Menu::data.settings.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
 
             /*
             Vector3 size = Vector3Subtract(data.house_BBoxes[m].max, data.house_BBoxes[m].min);
@@ -604,22 +603,22 @@ namespace Game {
         data.camera.fovy = 90.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
-#ifdef MOBILE_UI
-        data.joystick_Base = LoadTexture(ASSETS_ROOT "textures/joystick_base.png");
-        SetTextureFilter(data.joystick_Base, TEXTURE_FILTER_BILINEAR);
+        if(Menu::data.mobile_Mode.ticked) {
+            data.joystick_Base = LoadTexture(ASSETS_ROOT "textures/joystick_base.png");
+            SetTextureFilter(data.joystick_Base, TEXTURE_FILTER_BILINEAR);
 
-        data.joystick_Pointer = LoadTexture(ASSETS_ROOT "textures/joystick.png");
-        SetTextureFilter(data.joystick_Pointer, TEXTURE_FILTER_BILINEAR);
+            data.joystick_Pointer = LoadTexture(ASSETS_ROOT "textures/joystick.png");
+            SetTextureFilter(data.joystick_Pointer, TEXTURE_FILTER_BILINEAR);
 
-        float margin = GetScreenHeight() / 30.f;
-        data.movement = Game_Data::Joystick({GetScreenHeight() / 5.f + margin, GetScreenHeight() - GetScreenHeight() / 5.f - margin}, GetScreenHeight() / 5.f);
+            float margin = GetScreenHeight() / 30.f;
+            data.movement = Game_Data::Joystick({GetScreenHeight() / 5.f + margin, GetScreenHeight() - GetScreenHeight() / 5.f - margin}, GetScreenHeight() / 5.f);
 
-        data.crouch = LoadTexture(ASSETS_ROOT "textures/crouch.png");
-        SetTextureFilter(data.crouch, TEXTURE_FILTER_BILINEAR);
+            data.crouch = LoadTexture(ASSETS_ROOT "textures/crouch.png");
+            SetTextureFilter(data.crouch, TEXTURE_FILTER_BILINEAR);
 
-        data.un_Crouch = LoadTexture(ASSETS_ROOT "textures/uncrouch.png");
-        SetTextureFilter(data.un_Crouch, TEXTURE_FILTER_BILINEAR);
-#endif
+            data.un_Crouch = LoadTexture(ASSETS_ROOT "textures/uncrouch.png");
+            SetTextureFilter(data.un_Crouch, TEXTURE_FILTER_BILINEAR);
+        }
 
         data.house = LoadModel(ASSETS_ROOT "models/house.glb");
         for(int material = 0; material < data.house.materialCount; material++) {
@@ -809,7 +808,7 @@ namespace Game {
             return true;
         }
 
-        if(data.debug) {
+        if(Menu::data.settings.debug) {
             DrawLine3D(Vector3Add(data.camera.position, {0.f, -0.75f, 0.f}), collision.point, Color {255, 0, 0, 32});
             DrawSphere(collision.point, 0.5f, Color {0, 0, 255, 32});
         }
@@ -874,6 +873,8 @@ namespace Game {
         data.keyframe = 0;
         data.keyframe_Tick = 0.f;
 
+        data.camera_Target = {0.f, 0.f, 1.f};
+
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
@@ -883,7 +884,7 @@ namespace Game {
         Vector2 delta = Vector2Subtract(data.old_Mouse_Position, GetTouchPosition(touch_Id));
         data.old_Mouse_Position = GetTouchPosition(touch_Id);
 
-        if(data.debug) {
+        if(Menu::data.settings.debug) {
             DrawLineEx(data.start_Mouse_Position, data.old_Mouse_Position, 5.f, BLUE);
             DrawCircleV(data.start_Mouse_Position, 25.f, RED);
             DrawCircleV(data.old_Mouse_Position, 25.f, RED);
@@ -1069,14 +1070,14 @@ namespace Game {
                 bool item_Visible = player_Item_Collision.hit && player_Item_Collision.distance < 5.f;
                 RayCollision player_Map_Collision = Get_Collision_Ray(player_Ray);
 
-                if(data.holding_Item == (Game_Data::Item)index && !data.action_Used && IsKeyPressed(KEY_Q)) {
+                if(data.holding_Item == (Game_Data::Item)index && !data.action_Used && !data.win.playing) {
                     data.item_Data[index].fall_Acceleration = 0.1f;
                     data.item_Data[index].Calculate_Collision();
                     data.item_Data[index].falling = true;
                     data.holding_Item = Game_Data::NONE;
                     data.action_Used = true;
                 } else if(item_Visible && !data.action_Used && data.holding_Item == Game_Data::NONE &&
-                        player_Map_Collision.distance > player_Item_Collision.distance) {
+                        player_Map_Collision.distance > player_Item_Collision.distance && !data.win.playing) {
                     data.holding_Item = (Game_Data::Item)index;
                     data.action_Used = true;
 
@@ -1147,7 +1148,7 @@ namespace Game {
                 data.animation_Frame_Count = 0;
 
             /* WAKE ANIMATION */ {
-                if(data.debug) {
+                if(Menu::data.settings.debug) {
                     for(int index = 0; index < data.wake_Animation.size(); index++) {
                         DrawCube(data.wake_Animation[index].position, 1.f, 1.f, 1.f, RED);
                         DrawLine3D(data.wake_Animation[index].position, Vector3Add(data.wake_Animation[index].position, data.wake_Animation[index].target), WHITE);
@@ -1216,11 +1217,29 @@ namespace Game {
                 bool can_Update = true;
                 
                 if(data.death_Animation_Tick < 2.f) {
+                    const float range = 2.5f;
+                    Vector3 target_Camera_Position = {data.father_Position.x + sinf((data.father_Rotation + 90.f) * DEG2RAD) * range, data.father_Position.y + 10.f, data.father_Position.z + cosf((data.father_Rotation + 90.f) * DEG2RAD) * range};
+                    Vector3 target_Camera_Target = {sinf((data.father_Rotation + 90.f + 180.f) * DEG2RAD) * 5.f, 0.f, cosf((data.father_Rotation + 90.f + 180.f) * DEG2RAD) * 5.f};
                     if(data.death_Animation_Tick < 0.5f) {
-                        Vector3 target_Camera_Position = {data.father_Position.x + sinf((data.father_Rotation + 90.f) * DEG2RAD) * 5.f, data.father_Position.y + 6.5f, data.father_Position.z + cosf((data.father_Rotation + 90.f) * DEG2RAD) * 5.f};
-                        data.camera.position = Vector3MoveTowards(data.camera.position, target_Camera_Position, GetFrameTime() * 10.f);
-                    } else {
+                        #define DEATH_ANIMATION_EASING EaseElasticOut
+                        
+                        data.camera.position = {
+                            DEATH_ANIMATION_EASING(data.death_Animation_Tick, data.camera_Start_Position.x, target_Camera_Position.x - data.camera_Start_Position.x, 0.5f),
+                            DEATH_ANIMATION_EASING(data.death_Animation_Tick, data.camera_Start_Position.y, target_Camera_Position.y - data.camera_Start_Position.y, 0.5f),
+                            DEATH_ANIMATION_EASING(data.death_Animation_Tick, data.camera_Start_Position.z, target_Camera_Position.z - data.camera_Start_Position.z, 0.5f)
+                        };
 
+                        data.camera_Target = {
+                            DEATH_ANIMATION_EASING(data.death_Animation_Tick, data.camera_Start_Target.x, target_Camera_Target.x - data.camera_Start_Target.x, 0.5f),
+                            DEATH_ANIMATION_EASING(data.death_Animation_Tick, data.camera_Start_Target.y, target_Camera_Target.y - data.camera_Start_Target.y, 0.5f),
+                            DEATH_ANIMATION_EASING(data.death_Animation_Tick, data.camera_Start_Target.z, target_Camera_Target.z - data.camera_Start_Target.z, 0.5f)
+                        };
+
+                        // data.camera.position = Vector3Lerp(data.camera_Start_Position, target_Camera_Position, data.death_Animation_Tick * 4.f);
+                        // data.camera_Target = Vector3Lerp(data.camera_Start_Target, target_Camera_Target, data.death_Animation_Tick * 4.f);
+                    } else {
+                        data.camera.position = target_Camera_Position;
+                        data.camera_Target = target_Camera_Target;
                     }
                 } else {
                     if(data.death_Animation_Tick - 2.f < data.death_Animation.size() - 1) {
@@ -1426,7 +1445,7 @@ namespace Game {
 
                             if(data.item_Data[index].falling) {
                                 // data.item_Data[index].position.y -= 1.f * GetFrameTime();
-                                if(data.debug) DrawLine3D(data.item_Data[index].position, data.item_Data[index].collision.point, RED);
+                                if(Menu::data.settings.debug) DrawLine3D(data.item_Data[index].position, data.item_Data[index].collision.point, RED);
                                 data.item_Data[index].position.y -= data.item_Data[index].fall_Acceleration * 50.f * GetFrameTime();
                                 data.item_Data[index].fall_Acceleration += 1.f * GetFrameTime();
                             }
@@ -1438,7 +1457,7 @@ namespace Game {
                         bbox.min = Vector3Add(bbox.min, data.item_Data[index].position);
                         bbox.max = Vector3Add(bbox.max, data.item_Data[index].position);
                         
-                        if(data.debug) DrawBoundingBox(bbox, RED);
+                        if(Menu::data.settings.debug) DrawBoundingBox(bbox, RED);
                     }
                 }
             }
@@ -1492,7 +1511,7 @@ namespace Game {
 
             // ----------------------
 
-            if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
+            if(Menu::data.settings.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
 
             if(CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::PRIBINACEK].position, 0.1f) &&
@@ -1520,7 +1539,7 @@ namespace Game {
                     }
                 } */
 
-                if(data.debug) {
+                if(Menu::data.settings.debug) {
                     Vector3 previous_Point = {0.f, 0.f, 0.f};
                     int index = 0;
                     for(Game_Data::Father_Point point : data.father_Points) {
@@ -1659,107 +1678,107 @@ namespace Game {
         DrawLineEx({GetScreenWidth() / 2.f - crosshair_size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + crosshair_size, GetScreenHeight() / 2.f}, 2.f, Fade(WHITE, 0.2f));
         DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - crosshair_size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + crosshair_size}, 2.f, Fade(WHITE, 0.2f));
 
-#ifdef MOBILE_UI
-        data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
-        data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
+        if(Menu::data.mobile_Mode.ticked) {
+            data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
+            data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
-        if(data.wake_Animation_Finished && !data.death_Animation_Playing) {
-            data.movement.Render();
-            bool rotation_Updated = false;
+            if(data.wake_Animation_Finished && !data.death_Animation_Playing) {
+                data.movement.Render();
+                bool rotation_Updated = false;
 
-            if(data.movement.draggin_Id >= GetTouchPointCount())
-                data.movement.dragging = false;
+                if(data.movement.draggin_Id >= GetTouchPointCount())
+                    data.movement.dragging = false;
 
-            float size = GetScreenHeight() / 1300.f;
-            float margin = GetScreenHeight() / 30.f;
+                float size = GetScreenHeight() / 1300.f;
+                float margin = GetScreenHeight() / 30.f;
 
-            Texture texture = data.crouching ? data.un_Crouch : data.crouch;
-            DrawTextureEx(texture, {(float)GetScreenWidth() - texture.width * size - margin, margin}, 0.f, size, WHITE);
-            Rectangle crouch_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin, texture.width * size, texture.height * size};
+                Texture texture = data.crouching ? data.un_Crouch : data.crouch;
+                DrawTextureEx(texture, {(float)GetScreenWidth() - texture.width * size - margin, margin}, 0.f, size, WHITE);
+                Rectangle crouch_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin, texture.width * size, texture.height * size};
 
-            crouch_Rectangle.x -= crouch_Rectangle.width / 2.f;
-            crouch_Rectangle.y -= crouch_Rectangle.height / 2.f;
-            crouch_Rectangle.width *= 2.f;
-            crouch_Rectangle.height *= 2.f;
+                crouch_Rectangle.x -= crouch_Rectangle.width / 2.f;
+                crouch_Rectangle.y -= crouch_Rectangle.height / 2.f;
+                crouch_Rectangle.width *= 2.f;
+                crouch_Rectangle.height *= 2.f;
 
-            if(data.holding_Crouch >= GetTouchPointCount() || !CheckCollisionPointRec(GetTouchPosition(data.holding_Crouch), crouch_Rectangle)) {
-                data.holding_Crouch = -1;
-            }
+                if(data.holding_Crouch >= GetTouchPointCount() || !CheckCollisionPointRec(GetTouchPosition(data.holding_Crouch), crouch_Rectangle)) {
+                    data.holding_Crouch = -1;
+                }
 
-            bool camera_Rotated = false;
-            for(int index = 0; index < GetTouchPointCount(); index++) {
-                int id = GetTouchPointId(index);
+                bool camera_Rotated = false;
+                for(int index = 0; index < GetTouchPointCount(); index++) {
+                    int id = GetTouchPointId(index);
 
-                bool can_Update = data.movement.Can_Update(id);
-                Game_Data::Joystick_Data joystick = data.movement.Update(id);
+                    bool can_Update = data.movement.Can_Update(id);
+                    Game_Data::Joystick_Data joystick = data.movement.Update(id);
 
-                if(CheckCollisionPointRec(GetTouchPosition(index), crouch_Rectangle)) {
-                    if(data.holding_Crouch != id) {
-                        data.crouching = !data.crouching;
-                        data.holding_Crouch = id;
-                    }
-                } else {
-                    if (can_Update) {
-                        rotation_Updated = true;
-                        if (data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
-                            Update_Camera_Android(id, data.previous_Rotated);
-                            camera_Rotated = true;
+                    if(CheckCollisionPointRec(GetTouchPosition(index), crouch_Rectangle)) {
+                        if(data.holding_Crouch != id) {
+                            data.crouching = !data.crouching;
+                            data.holding_Crouch = id;
                         }
                     } else {
-                        if (joystick.moving && data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
-                            float speed = 1.f;
-                            if (data.crouching) speed /= 1.5f;
-                            if (!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
+                        if (can_Update) {
+                            rotation_Updated = true;
+                            if (data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
+                                Update_Camera_Android(id, data.previous_Rotated);
+                                camera_Rotated = true;
+                            }
+                        } else {
+                            if (joystick.moving && data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
+                                float speed = 1.f;
+                                if (data.crouching) speed /= 1.5f;
+                                if (!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
 
-                            float camera_Angle = atan2(data.camera_Target.z, data.camera_Target.x) +
-                                                 90.f * DEG2RAD;
+                                float camera_Angle = atan2(data.camera_Target.z, data.camera_Target.x) +
+                                                    90.f * DEG2RAD;
 
-                            Vector3 offset = {
-                                    cos(joystick.rotation * DEG2RAD + camera_Angle) *
-                                    GetFrameTime() * 7.f * speed, 0.f,
-                                    sin(joystick.rotation * DEG2RAD + camera_Angle) *
-                                    GetFrameTime() * 7.f * speed};
-                            data.camera.position = Vector3Add(data.camera.position, offset);
+                                Vector3 offset = {
+                                        cos(joystick.rotation * DEG2RAD + camera_Angle) *
+                                        GetFrameTime() * 7.f * speed, 0.f,
+                                        sin(joystick.rotation * DEG2RAD + camera_Angle) *
+                                        GetFrameTime() * 7.f * speed};
+                                data.camera.position = Vector3Add(data.camera.position, offset);
+                            }
                         }
                     }
                 }
-            }
 
-            if(!camera_Rotated) {
-                if(roundf(data.start_Mouse_Position.x) != -1 && roundf(data.start_Mouse_Position.y) != -1) {
-                    bool tap = Vector2Distance(data.start_Mouse_Position, data.old_Mouse_Position) < 5.f;
-                    if(tap) Handle_Click();
+                if(!camera_Rotated) {
+                    if(roundf(data.start_Mouse_Position.x) != -1 && roundf(data.start_Mouse_Position.y) != -1) {
+                        bool tap = Vector2Distance(data.start_Mouse_Position, data.old_Mouse_Position) < 5.f;
+                        if(tap) Handle_Click();
+                    }
+                    data.start_Mouse_Position = {-1.f, -1.f};
                 }
-                data.start_Mouse_Position = {-1.f, -1.f};
+
+                data.previous_Rotated = rotation_Updated;
             }
+        } else {
+            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) Handle_Click();
 
-            data.previous_Rotated = rotation_Updated;
+            data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
+            data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
+
+            if(data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
+                float speed = 1.f;
+                if(data.crouching) speed /= 1.5f;
+                if(!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
+
+                Update_Camera_Desktop(speed);
+            }
         }
-#else
-        if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) Handle_Click();
-
-        data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
-        data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
-
-        if(data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
-            float speed = 1.f;
-            if(data.crouching) speed /= 1.5f;
-            if(!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
-
-            Update_Camera_Desktop(speed);
-        }
-#endif
 
         /* COLLISIONS */ {
             if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
                 data.camera.position.z = old_Position.z;
 
-            // (pokud debug) nechceme aby se koule renderovali dvakrát
-            bool is_Debug = data.debug;
-            data.debug = true;
+            // (pokud Menu::data.settings.debug) nechceme aby se koule renderovali dvakrát
+            bool is_Debug = Menu::data.settings.debug;
+            Menu::data.settings.debug = true;
             if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
                 data.camera.position.x = old_Position.x;
-            data.debug = is_Debug;
+            Menu::data.settings.debug = is_Debug;
 
             RayCollision collision_Legs = {0};
             if(data.wake_Animation_Finished && !data.death_Animation_Playing) {
@@ -1783,7 +1802,7 @@ namespace Game {
                     data.camera.position = old_Position;
             }
 
-            if(data.debug) {
+            if(Menu::data.settings.debug) {
                 DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
                                                                                                     collision_Legs.normal.y < 0.99f || collision_Legs.normal.y > 1.01), 5, 5, 15, WHITE);
                 
@@ -1796,8 +1815,6 @@ namespace Game {
             }
         }
 
-        DrawFPS(GetScreenWidth() / 500.f, GetScreenWidth() / 500.f);
-
         if(Player_Visible()) {
             See_Player();
         }
@@ -1809,41 +1826,41 @@ namespace Game {
                     data.guide_Finished = true;
                 }
             }
-            #ifdef MOBILE_UI
-            float skip_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 45.f;
-            Vector2 skip_Text_Size = MeasureTextEx(Menu::data.bold_Font, u8"Zmáčkněte E pro přeskočení", skip_Font_Size, 0.f);
-            float button_Size = skip_Font_Size / 17.7f;
+            if(Menu::data.mobile_Mode.ticked) {
+                float skip_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 45.f;
+                Vector2 skip_Text_Size = MeasureTextEx(Menu::data.bold_Font, u8"Zmáčkněte E pro přeskočení", skip_Font_Size, 0.f);
+                float button_Size = skip_Font_Size / 17.7f;
 
-            Rectangle rectangle = {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size), (float)GetScreenHeight() - (data.skip.width * button_Size) * 1.5f, data.skip.width * button_Size, data.skip.height * button_Size};
-            rectangle.x -= button_Size * 30.f;
-            rectangle.y -= button_Size * 30.f;
-            rectangle.width += button_Size * 60.f;
-            rectangle.height += button_Size * 60.f;
+                Rectangle rectangle = {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size), (float)GetScreenHeight() - (data.skip.width * button_Size) * 1.5f, data.skip.width * button_Size, data.skip.height * button_Size};
+                rectangle.x -= button_Size * 30.f;
+                rectangle.y -= button_Size * 30.f;
+                rectangle.width += button_Size * 60.f;
+                rectangle.height += button_Size * 60.f;
 
-            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle)) {
-                int index = 0;
-                for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
-                    if(caption.can_Skip == false) {
-                        data.guide_Index = index;
-                        data.guide_Finished = true;
-                        break;
+                if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle)) {
+                    int index = 0;
+                    for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
+                        if(caption.can_Skip == false) {
+                            data.guide_Index = index;
+                            data.guide_Finished = true;
+                            break;
+                        }
+                        index++;
                     }
-                    index++;
+                }
+            } else {
+                if(IsKeyPressed(KEY_E)) {
+                    int index = 0;
+                    for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
+                        if(caption.can_Skip == false) {
+                            data.guide_Index = index;
+                            data.guide_Finished = true;
+                            break;
+                        }
+                        index++;
+                    }
                 }
             }
-            #else
-            if(IsKeyPressed(KEY_E)) {
-                int index = 0;
-                for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
-                    if(caption.can_Skip == false) {
-                        data.guide_Index = index;
-                        data.guide_Finished = true;
-                        break;
-                    }
-                    index++;
-                }
-            }
-            #endif
         }
 
         if(data.guide_Finished) {
@@ -1875,13 +1892,16 @@ namespace Game {
             }
         }
 
-        if(IsKeyPressed(KEY_TAB)) data.debug = !data.debug;
+        if(IsKeyPressed(KEY_TAB)) Menu::data.settings.debug = !Menu::data.settings.debug;
 
         if(data.death_Animation_Playing) {
             if(data.death_Animation_Tick < 2.f) {
+                if(data.death_Animation_Tick > 1.5f) {
+                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, (data.death_Animation_Tick - 1.5f) * 2.f));
+                }
             } else {
                 if(data.death_Animation_Tick - 2.f < 1.f) {
-                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 1.f - data.death_Animation_Tick - 2.f));
+                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 1.f - (data.death_Animation_Tick - 2.f)));
                 } else if(data.death_Animation_Tick - 2.f > (float)data.death_Animation.size() - 2.f) {
                     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, data.death_Animation_Tick - 2.f - ((float)data.death_Animation.size() - 2.f)));
                 }
@@ -1908,11 +1928,26 @@ namespace Game {
 
         if(Vector3Distance(Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), data.camera.position) < 2.5f) {
             data.death_Animation_Playing = true;
+            data.holding_Item = Game_Data::Item::NONE;
             EnableCursor();
+            data.camera_Start_Position = data.camera.position;
+            data.camera_Start_Target = data.camera_Target;
             UpdateModelAnimation(data.father, data.animations[0], 16);
         }
 
+        if(IsKeyPressed(KEY_F)) {
+            data.win.Play();
+        }
+
         Mod_Callback("Update_Game_2D", (void*)&data, true);
+
+        if(Menu::data.show_Fps.ticked) {
+            const char* text = TextFormat("FPS: %d", GetFPS());
+            float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 40.f;
+
+            Vector2 size = MeasureTextEx(Menu::data.medium_Font, text, font_Size, 0.f);
+            Menu::DrawTextExOutline(Menu::data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, size.y / 2.f + font_Size}, font_Size, 0.f, WHITE);
+        }
     }
 };
 

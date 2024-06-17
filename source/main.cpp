@@ -27,11 +27,11 @@ extern "C" {
 
 void Ready() {
     srand(time(NULL));
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
     InitWindow(0, 0, "Výprava za pribináčkem");
 #else
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(1000, 600, "Výprava za pribináčkem");
 #endif
 
@@ -59,6 +59,11 @@ void Update() {
     BeginDrawing(); {
         Update_Scene();
     } EndDrawing();
+
+    if(IsWindowResized()) {
+        // TODO: opravit memory leaky po resizování okna
+        Init_Scenes();
+    }
 }
 
 void Destroy() {
