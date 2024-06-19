@@ -18,7 +18,7 @@ Každá žádka = jedny dveře
 
 Formát řádku: `pozice_x pozice_y pozice_z velikost_x velikost_y velikost_z začáteční_rotace konečná_rotace materiál`
 
-`materiál` - ID z předvybraných materiálů (id=0 dřevo, id=1 bílý materiál, dveře od lednice)
+`materiál` - ID z předvybraných materiálů (id=0 dřevo, id=1 bílý materiál, dveře od lednice, id=2 pojistky)
 
 spawn_animation.txt
 -------------------
@@ -56,3 +56,6 @@ DRAWERS = -27.42 4 -10.1 1 -27.42 4 -12.8 1
 // Kde se spawnuje klíč (pozice_x1 pozice_y1 pozice_z1 rotace_y1 pozice_x2 pozice_y2 pozice_z2 rotace_y2 ...)
 // NOTE: DRAWERS musí být definovány před KEY_SPAWNS, pokud se klíč spawnuje v šuplíku
 KEY_SPAWNS = 12 20 27.5 0 -10.5 15.5 27.5 0 0 10 37 45 
+
+// Kde se spawnují pojistky. Prozatím nelze spawnovat náhodně na jiných místech jako u klíče
+FUSE_BOX = 1.3 8.3 25.8

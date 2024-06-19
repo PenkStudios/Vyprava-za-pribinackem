@@ -19,6 +19,17 @@
 
 #include "menu.cpp"
 
+/*
+float Triangular_Modulo(float x, float y) {
+    float m = fmod(x, y);
+    if((int)(x / y) % 2 == 0) {
+        return y - m;
+    } else {
+        return m;
+    }
+}
+*/
+
 // Přemění blender souřadnice na raylib souřadnice
 #define B2RL(x, y, z) {x, z, -y}
 
@@ -82,7 +93,7 @@ namespace Game {
         Light flashlight;
         Model door;
         ModelAnimation *animations;
-        Mesh doorHandle;
+        Mesh door_Handle;
         float fall_Acceleration = 0.f;
 
         float fog_Density = 0.15f;
@@ -306,6 +317,20 @@ namespace Game {
 
         Vector3 camera_Start_Target;
         Vector3 camera_Start_Position;
+
+        class Fuse_Box {
+        public:
+            Vector3 position;
+
+            Model model;
+            ModelAnimation *animations;
+
+            float lever_Tick;
+            bool lever_Turning;
+
+            Fuse_Box() : lever_Tick(0.f), lever_Turning(false) {}
+            void Reset() { lever_Tick = 0.f; lever_Turning = false; }
+        } fuse_Box;
     } data;
 
     bool Game::Game_Data::Guide_Caption::Update() {
@@ -656,7 +681,16 @@ namespace Game {
         for(int material = 0; material < data.house.materialCount; material++)
             data.house.materials[material].shader = data.lighting;
 
-        data.doorHandle = GenMeshSphere(0.5f, 15, 15);
+        data.door_Handle = GenMeshSphere(0.5f, 15, 15);
+        
+        int tex_Coords_size = data.door_Handle.vertexCount * 2;
+        for(int i = 0; i < tex_Coords_size; i += 2) {
+            Vector2 vector = {data.door_Handle.texcoords[i], data.door_Handle.texcoords[i + 1]};
+            vector = Vector2Multiply(vector, {0.5f, 0.5f});
+            data.door_Handle.texcoords[i] = vector.x;
+            data.door_Handle.texcoords[i + 1] = vector.y;
+        }
+        UpdateMeshBuffer(data.door_Handle, 1, data.door_Handle.texcoords, tex_Coords_size * sizeof(float), 0);
 
         data.flashlight = CreateLight(LIGHT_POINT, data.camera.position, {0.f, 0.f, 0.f}, WHITE, data.lighting);
 
@@ -688,6 +722,16 @@ namespace Game {
               scale_X, scale_Y, scale_Z,
               rotation_Start, rotation_End;
 
+        data.fuse_Box.model = LoadModel(ASSETS_ROOT "models/fusebox.glb");
+        for(int material = 0; material < data.fuse_Box.model.materialCount; material++)
+            data.fuse_Box.model.materials[material].shader = data.lighting;
+
+        SetTextureFilter(data.fuse_Box.model.materials[1].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
+        SetTextureFilter(data.fuse_Box.model.materials[2].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
+        
+        int fuse_Box_Animation_Count = 2 /* 2 animace */ - 1;
+        data.fuse_Box.animations = LoadModelAnimations(ASSETS_ROOT "models/fusebox.glb", &fuse_Box_Animation_Count);
+
         int material_Id;
         Material *material;
 
@@ -701,6 +745,10 @@ namespace Game {
                 }
                 case 1: {
                     material = &data.house.materials[0];
+                    break;
+                }
+                case 2: {
+                    material = &data.fuse_Box.model.materials[1];
                     break;
                 }
             }
@@ -780,6 +828,8 @@ namespace Game {
                     for(int index = 2; index < strings.size(); index += 4) {
                         data.drawers.push_back(Game_Data::Drawer_Data({std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, (bool)std::stoi(strings[index + 3])));
                     }
+                } else if(strings[0] == "FUSE_BOX" && strings.size() - 2 == 3) {
+                    data.fuse_Box.position = {std::stof(strings[2]), std::stof(strings[3]), std::stof(strings[4])};
                 } else {
                     TraceLog(LOG_WARNING, "Unknown variable or bad value %s", strings[0].c_str());
                 }
@@ -874,6 +924,7 @@ namespace Game {
         data.keyframe_Tick = 0.f;
 
         data.camera_Target = {0.f, 0.f, 1.f};
+        data.fuse_Box.Reset();
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -1039,14 +1090,16 @@ namespace Game {
             DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
             
             Matrix matrixDoorHandle = MatrixIdentity();
-            matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
+            // matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
+            float size = door_Data.scale.y / 5.f * 0.75f;
+            matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(size, size, size));
 
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(rotation * DEG2RAD));
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
-            DrawMesh(data.doorHandle, *door_Data.material, matrixDoorHandle);
+            DrawMesh(data.door_Handle, *door_Data.material, matrixDoorHandle);
 
             Ray ray = GetMouseRay({(float)GetScreenWidth() / 2.f, (float)GetScreenHeight() / 2.f}, data.camera);
             RayCollision collision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
@@ -1059,7 +1112,8 @@ namespace Game {
         }
 
         Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
-        
+        RayCollision player_Map_Collision = Get_Collision_Ray(player_Ray);
+
         for(int index = 0; index < data.item_Data.size(); index++) {
             if((Game_Data::Item)index != Game_Data::NONE && (Game_Data::Item)index != Game_Data::_LAST) {
                 BoundingBox bbox = {{-1.f, -1.f, -1.f}, {1.f, 1.f, 1.f}};
@@ -1068,8 +1122,7 @@ namespace Game {
                 
                 RayCollision player_Item_Collision = GetRayCollisionBox(player_Ray, bbox);
                 bool item_Visible = player_Item_Collision.hit && player_Item_Collision.distance < 5.f;
-                RayCollision player_Map_Collision = Get_Collision_Ray(player_Ray);
-
+                
                 if(data.holding_Item == (Game_Data::Item)index && !data.action_Used && !data.win.playing) {
                     data.item_Data[index].fall_Acceleration = 0.1f;
                     data.item_Data[index].Calculate_Collision();
@@ -1119,6 +1172,18 @@ namespace Game {
                 data.action_Used = true;
                 data.drawers[nearest_Hit_Id].opening = !data.drawers[nearest_Hit_Id].opening;
             }
+        }
+
+        Mesh mesh = data.fuse_Box.model.meshes[0];
+        
+        BoundingBox bbox = GetMeshBoundingBox(mesh);
+        bbox.min = Vector3Add(bbox.min, data.fuse_Box.position);
+        bbox.max = Vector3Add(bbox.max, data.fuse_Box.position);
+
+        RayCollision collision = GetRayCollisionBox(player_Ray, bbox);
+
+        if((player_Map_Collision.distance > collision.distance) && collision.hit) {
+            data.fuse_Box.lever_Turning = !data.fuse_Box.lever_Turning;
         }
     }
 
@@ -1343,14 +1408,18 @@ namespace Game {
                     DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
                     
                     Matrix matrixDoorHandle = MatrixIdentity();
-                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
+
+                    // matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
+                    float size = Remap(door_Data.scale.y, 0.f, 5.f, 0.35f, 0.75f);
+                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(size, size, size));
 
                     matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
                     matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(rotation * DEG2RAD));
                     matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
                     matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
-                    DrawMesh(data.doorHandle, *door_Data.material, matrixDoorHandle);
+                    
+                    DrawMesh(data.door_Handle, *door_Data.material, matrixDoorHandle);
                     
                     if(door_Data.default_Rotation < door_Data.opened_Rotation) {
                         if(door_Data.opening) {
@@ -1520,6 +1589,18 @@ namespace Game {
                 data.guide_Index++;
                 data.win.Play();
             }
+
+            UpdateModelAnimation(data.fuse_Box.model, data.fuse_Box.animations[0], data.fuse_Box.lever_Tick);
+            DrawModel(data.fuse_Box.model, data.fuse_Box.position, 1.f, WHITE);
+
+            if(data.fuse_Box.lever_Turning) {
+                data.fuse_Box.lever_Tick += GetFrameTime() * 80.f;
+            } else {
+                data.fuse_Box.lever_Tick -= GetFrameTime() * 80.f;
+            }
+
+            data.fuse_Box.lever_Tick = Clamp(data.fuse_Box.lever_Tick, 0.f, data.fuse_Box.animations[0].frameCount - 1.f);
+            
 
             /* FATHER */ {
                 /* {
