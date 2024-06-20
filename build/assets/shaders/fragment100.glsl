@@ -14,7 +14,7 @@ uniform vec4 colDiffuse;
 
 // NOTE: Add here your custom variables
 
-#define     MAX_LIGHTS              4
+#define     MAX_LIGHTS              25
 #define     LIGHT_DIRECTIONAL       0
 #define     LIGHT_POINT             1
 
@@ -63,12 +63,12 @@ void main()
 
             float specCo = 0.0;
             if (NdotL > 0.0) specCo = pow(max(0.0, dot(viewD, reflect(-(light), normal))), 16.0); // Shine: 16.0
-            specular += specCo;
+            specular += specCo / 4;
         }
     }
 
     vec4 finalColor = (texelColor*((colDiffuse + vec4(specular,1))*vec4(lightDot, 1.0)));
-    finalColor += texelColor*(ambient/10.0);
+    finalColor += colDiffuse*texelColor*(ambient/10.0);
 
     // Gamma correction
     finalColor = pow(finalColor, vec4(1.0/2.2));

@@ -19,6 +19,9 @@
 
 #include "menu.cpp"
 
+// počet vertexů na hlavní části světla
+#define LIGHT_BASE_VERTICES 287
+
 /*
 float Triangular_Modulo(float x, float y) {
     float m = fmod(x, y);
@@ -331,6 +334,9 @@ namespace Game {
             Fuse_Box() : lever_Tick(0.f), lever_Turning(false) {}
             void Reset() { lever_Tick = 0.f; lever_Turning = false; }
         } fuse_Box;
+
+        Shader default_Shader;
+        std::vector<Light> lights;
     } data;
 
     bool Game::Game_Data::Guide_Caption::Update() {
@@ -646,6 +652,7 @@ namespace Game {
         }
 
         data.house = LoadModel(ASSETS_ROOT "models/house.glb");
+        data.default_Shader = data.house.materials[0].shader;
         for(int material = 0; material < data.house.materialCount; material++) {
             SetTextureFilter(data.house.materials[material].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
         }
@@ -847,6 +854,18 @@ namespace Game {
         data.play_Again_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height}, u8"Hrát znovu", font_Size, Menu::data.medium_Font);
         data.menu_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Zpátky do menu", font_Size, Menu::data.medium_Font);
 
+        for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
+            if(data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                BoundingBox bbox = GetMeshBoundingBox(data.house.meshes[mesh]);
+                Vector3 center = Vector3Lerp(bbox.min, bbox.max, 0.5f);
+
+                data.lights.push_back(CreateLight(LIGHT_POINT, center, Vector3Add(center, {0.f, -1.f, 0.f}), WHITE, data.lighting));
+                
+                data.lights.back().enabled = false;
+                UpdateLightValues(data.lighting, data.lights.back());
+            }
+        }
+
         data.skip = LoadTexture(ASSETS_ROOT "textures/skip.png");
 
         Mod_Callback("Init_Game", (void*)&data);
@@ -926,6 +945,8 @@ namespace Game {
         data.camera_Target = {0.f, 0.f, 1.f};
         data.fuse_Box.Reset();
 
+        data.fog_Density = 0.15f;
+
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
@@ -943,8 +964,6 @@ namespace Game {
 
         if(roundf(data.start_Mouse_Position.x) == -1 && roundf(data.start_Mouse_Position.y) == -1)
             data.start_Mouse_Position = GetTouchPosition(touch_Id);
-
-        TraceLog(LOG_INFO, "Distance %f", Vector2Distance(data.old_Mouse_Position, data.start_Mouse_Position));
 
         if(!update_Camera)
             return;
@@ -1174,7 +1193,7 @@ namespace Game {
             }
         }
 
-        Mesh mesh = data.fuse_Box.model.meshes[0];
+        Mesh mesh = data.fuse_Box.model.meshes[1];
         
         BoundingBox bbox = GetMeshBoundingBox(mesh);
         bbox.min = Vector3Add(bbox.min, data.fuse_Box.position);
@@ -1184,6 +1203,32 @@ namespace Game {
 
         if((player_Map_Collision.distance > collision.distance) && collision.hit) {
             data.fuse_Box.lever_Turning = !data.fuse_Box.lever_Turning;
+
+            if(data.fuse_Box.lever_Turning) {
+                data.fog_Density = 0.05f;
+                for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
+                    if(data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                        data.house.materials[data.house.meshMaterial[mesh]].shader = data.default_Shader;
+                    }
+                }
+
+                for(Light &light : data.lights) {
+                    light.enabled = true;
+                    UpdateLightValues(data.lighting, light);
+                }
+            } else {
+                data.fog_Density = 0.15f;
+                for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
+                    if(data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                        data.house.materials[data.house.meshMaterial[mesh]].shader = data.lighting;
+                    }
+                }
+
+                for(Light &light : data.lights) {
+                    light.enabled = false;
+                    UpdateLightValues(data.lighting, light);
+                }
+            }
         }
     }
 

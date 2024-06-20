@@ -28,6 +28,8 @@ extern "C" {
 void Ready() {
     srand(time(NULL));
 
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
+
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
     InitWindow(0, 0, "Výprava za pribináčkem");
 #else
