@@ -1,5 +1,6 @@
 #include <raylib.h>
 #include <time.h>
+#include <iterator>
 #include "scene.cpp"
 #include "mod_loader.cpp"
 
@@ -24,6 +25,27 @@ extern "C" {
 #define Update ios_update
 #define Destroy ios_destroy
 #endif
+
+// Velice kvalitní zabezpečení
+std::vector<unsigned char> Encrypt(std::string string) {
+    std::vector<unsigned char> output {};
+    int index = 0;
+    for(char character : string) {
+        output.push_back(index % 2 == 0 ? (character ^ 'Z') : (character ^ 'W'));
+        index++;
+    }
+    return output;
+}
+
+std::string Decrypt(std::vector<unsigned char> data) {
+    std::string output = "";
+    int index = 0;
+    for(unsigned char byte : data) {
+        output.push_back(index % 2 == 0 ? (byte ^ 'Z') : (byte ^ 'W'));
+        index++;
+    }
+    return output;
+}
 
 void Ready() {
     srand(time(NULL));
@@ -55,6 +77,46 @@ void Ready() {
 
     SetTargetFPS(60);
     EnableCursor();
+
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
+    // TODO: prefs na android & ios
+#else
+    std::fstream data_Stream(ASSETS_ROOT "player.txt", std::ios::in | std::ios::binary);
+    data_Stream.unsetf(std::ios::skipws);
+
+    data_Stream.seekg(0, std::ios::end);
+    std::streampos file_Size = data_Stream.tellg();
+    data_Stream.seekg(0, std::ios::beg);
+
+    std::vector<unsigned char> data;
+    data.reserve(file_Size);
+
+    data.insert(data.begin(),
+               std::istream_iterator<unsigned char>(data_Stream),
+               std::istream_iterator<unsigned char>());
+
+    std::string text = Decrypt(data);
+    std::istringstream iss(text);
+
+    std::string line;
+    while (std::getline(iss, line)) {
+        std::stringstream string_Stream(line);
+            
+        std::vector<std::string> strings = {};
+        std::string string;
+
+        while(string_Stream >> string) {
+            strings.push_back(string);
+        }
+
+        if(strings.size() > 2) {
+            if(strings[0] == "COINS") {
+                Menu::data.coins = std::stoi(strings[2]);
+            }
+        }
+    }
+    data_Stream.close();
+#endif
 }
 
 void Update() {
@@ -70,6 +132,17 @@ void Update() {
 
 void Destroy() {
     CloseWindow();
+
+    std::string string = "COINS = " + std::to_string(Menu::data.coins) + "\n";
+    std::vector<unsigned char> data = Encrypt(string);
+
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
+    // TODO: prefs na android & ios
+#else
+    std::fstream data_Stream(ASSETS_ROOT "player.txt", std::ios::out);    
+    data_Stream.write((char *)&data[0], data.size());
+    data_Stream.close();
+#endif
 }
 
 #ifndef PLATFORM_IOS // Normální main funkce

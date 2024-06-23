@@ -117,6 +117,9 @@ namespace Menu {
             bool debug = false;
             bool show_Fps = false;
         } settings;
+
+        Texture coin;
+        int coins = 0;
     } data;
 
     void DrawTextExC(Font font, const char *text, Vector2 position, float fontSize, float spacing, Color tint) {
@@ -246,19 +249,22 @@ namespace Menu {
         data.mobile_Mode = Menu_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.2f}, u8"Mobilní mód");
 
         data.volume = Menu_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 4.f}, u8"Hlasitost");
-        data.max_Fps = Menu_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.6f}, u8"FPS limiter");
+        data.max_Fps = Menu_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.6f}, u8"FPS limiter", 0.167f);
 
         #if defined(PLATFORM_IOS) || defined(PLATFORM_ANDROID)
         data.mobile_Mode.ticked = true;
         #endif
 
-        Mod_Callback("Init_Menu", (void*)&data);
-        
         data.camera.position = {-2.f, 0.f, 0.f};
         data.camera.target = {0.f, 0.f, 0.f};
         data.camera.up = {0.f, 1.f, 0.f};
         data.camera.fovy = 45.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
+
+        data.coin = LoadTexture(ASSETS_ROOT "textures/coin.png");
+        SetTextureFilter(data.coin, TEXTURE_FILTER_BILINEAR);
+
+        Mod_Callback("Init_Menu", (void*)&data);
     }
 
     void On_Switch() {
@@ -341,6 +347,15 @@ namespace Menu {
             }
         }
 
+        float size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 750.f;
+        float margin = size * 7.5f;
+
+        DrawTextureEx(data.coin, {(float)GetScreenWidth() - data.coin.width * size - margin, margin}, 0.f, size, WHITE);
+
+        const char* text = TextFormat("%d", data.coins);
+        Vector2 text_Size = MeasureTextEx(data.medium_Font, text, data.coin.height * size, 0.f);
+        DrawTextExOutline(data.medium_Font, text, {(float)GetScreenWidth() - text_Size.x / 2.f - data.coin.width * size - margin * 2.f, margin + text_Size.y / 2.f}, data.coin.height * size, 0.f, WHITE);
+
         Mod_Callback("Update_Menu_2D", (void*)&data, true);
 
         if(data.show_Fps.ticked) {
@@ -348,7 +363,7 @@ namespace Menu {
             float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 40.f;
 
             Vector2 size = MeasureTextEx(data.medium_Font, text, font_Size, 0.f);
-            DrawTextExOutline(data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, size.y / 2.f + font_Size}, font_Size, 0.f, WHITE);
+            DrawTextExOutline(data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
         }
     }
 };

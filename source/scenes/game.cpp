@@ -851,8 +851,8 @@ namespace Game {
         float font_Size = GetScreenHeight() / 15.f;
         float button_Height = GetScreenHeight() / 8.f;
 
-        data.play_Again_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height}, u8"Hrát znovu", font_Size, Menu::data.medium_Font);
-        data.menu_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Zpátky do menu", font_Size, Menu::data.medium_Font);
+        data.play_Again_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f + button_Height}, u8"Hrát znovu", font_Size, Menu::data.medium_Font);
+        data.menu_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f}, u8"Zpátky do menu", font_Size, Menu::data.medium_Font);
 
         for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
             if(data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
@@ -2040,12 +2040,23 @@ namespace Game {
                     for(int angle = 0; angle < 360; angle += 20) {
                         Vector2 offset = {cos(angle * DEG2RAD) * 3.f, sin(angle * DEG2RAD) * 3.f};
 
-                        Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, offset), font_Size, 1.f, BLACK);
+                        Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, offset), font_Size, 1.f, BLACK);
                     }
-                    Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
+                    Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, font_Size, 1.f, WHITE);
+                    
+                    int quests_Offset = 0;
+                    for(int index = 0; index < data.guide_Texts.size(); index++) {
+                        if(!data.guide_Texts[index].can_Skip) {
+                            quests_Offset = index;
+                            break;
+                        }
+                    }
+
+                    int coins = data.guide_Index - quests_Offset;
+                    Menu::DrawTextExC(Menu::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
                 
-                    if(data.play_Again_Button.Update()) On_Switch(); // resetuje všechen progress
-                    else if(data.menu_Button.Update()) Switch_To_Scene(MENU);
+                    if(data.play_Again_Button.Update()) { On_Switch(); Menu::data.coins += data.guide_Index - quests_Offset; } // resetuje všechen progress
+                    else if(data.menu_Button.Update()) { Switch_To_Scene(MENU); Menu::data.coins += data.guide_Index - quests_Offset; }
 
                     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), ColorTint(color, BLACK));
                 }
@@ -2072,7 +2083,7 @@ namespace Game {
             float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 40.f;
 
             Vector2 size = MeasureTextEx(Menu::data.medium_Font, text, font_Size, 0.f);
-            Menu::DrawTextExOutline(Menu::data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, size.y / 2.f + font_Size}, font_Size, 0.f, WHITE);
+            Menu::DrawTextExOutline(Menu::data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
         }
     }
 };
