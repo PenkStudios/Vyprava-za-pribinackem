@@ -58,6 +58,7 @@ namespace Game {
             float opened_Rotation;
 
             Material* material;
+            int type;
 
             float rotation; // Rotace způsobena hráčem
             float rotation_Father; // Rotace způsobena tátou
@@ -65,10 +66,10 @@ namespace Game {
             // -||-
             bool opening;
             bool opening_Father;
-            Door_Data(Vector3 door_Position, Vector3 door_Scale, float door_Default_Rotation, float door_Opened_Rotation, Material* material) :
+            Door_Data(Vector3 door_Position, Vector3 door_Scale, float door_Default_Rotation, float door_Opened_Rotation, int type, Material* material) :
                 position(door_Position), scale(door_Scale), default_Rotation(door_Default_Rotation),
                 opened_Rotation(door_Opened_Rotation), rotation(door_Default_Rotation),
-                rotation_Father(door_Default_Rotation), material(material), opening(false) {}
+                rotation_Father(door_Default_Rotation), material(material), type(type), opening(false) {}
         };
 
         std::vector<Door_Data> doors = {};
@@ -739,29 +740,33 @@ namespace Game {
         int fuse_Box_Animation_Count = 2 /* 2 animace */ - 1;
         data.fuse_Box.animations = LoadModelAnimations(ASSETS_ROOT "models/fusebox.glb", &fuse_Box_Animation_Count);
 
-        int material_Id;
+        int door_Type;
         Material *material;
 
         while(doors_File >> position_X >> position_Y >> position_Z >>
                             scale_X >> scale_Y >> scale_Z >>
-                            rotation_Start >> rotation_End >> material_Id) {
-            switch(material_Id) {
+                            rotation_Start >> rotation_End >> door_Type) {
+            switch(door_Type) {
                 case 0: {
                     material = &data.house.materials[14];
                     break;
                 }
                 case 1: {
-                    material = &data.house.materials[0];
+                    material = &data.house.materials[14];
                     break;
                 }
                 case 2: {
+                    material = &data.house.materials[0];
+                    break;
+                }
+                case 3: {
                     material = &data.fuse_Box.model.materials[1];
                     break;
                 }
             }
             data.doors.push_back(Game_Data::Door_Data(Vector3 {position_X, position_Y, position_Z},
                                                       Vector3 {scale_X, scale_Y, scale_Z},
-                                                      rotation_Start, rotation_End, material));
+                                                      rotation_Start, rotation_End, door_Type, material));
         }
 
         std::istringstream animation_File(LoadFileText(ASSETS_ROOT "spawn_animation.txt"));
@@ -1466,46 +1471,50 @@ namespace Game {
                     
                     DrawMesh(data.door_Handle, *door_Data.material, matrixDoorHandle);
                     
-                    if(door_Data.default_Rotation < door_Data.opened_Rotation) {
-                        if(door_Data.opening) {
-                            if(door_Data.rotation < door_Data.opened_Rotation) {
-                                door_Data.rotation += 100.f * GetFrameTime();
+                    if(door_Data.type == 0) {
+                        if(door_Data.default_Rotation < door_Data.opened_Rotation) {
+                            if(door_Data.opening) {
+                                if(door_Data.rotation < door_Data.opened_Rotation) {
+                                    door_Data.rotation += 100.f * GetFrameTime();
+                                }
+                            } else {
+                                if(door_Data.rotation > door_Data.default_Rotation) {
+                                    door_Data.rotation -= 100.f * GetFrameTime();
+                                }
                             }
-                        } else {
-                            if(door_Data.rotation > door_Data.default_Rotation) {
-                                door_Data.rotation -= 100.f * GetFrameTime();
-                            }
-                        }
 
-                        if(door_Data.opening_Father) {
-                            if(door_Data.rotation_Father < door_Data.opened_Rotation) {
-                                door_Data.rotation_Father += 100.f * GetFrameTime();
+                            if(door_Data.opening_Father) {
+                                if(door_Data.rotation_Father < door_Data.opened_Rotation) {
+                                    door_Data.rotation_Father += 100.f * GetFrameTime();
+                                }
+                            } else {
+                                if(door_Data.rotation_Father > door_Data.default_Rotation) {
+                                    door_Data.rotation_Father -= 100.f * GetFrameTime();
+                                }
                             }
                         } else {
-                            if(door_Data.rotation_Father > door_Data.default_Rotation) {
-                                door_Data.rotation_Father -= 100.f * GetFrameTime();
+                            if(door_Data.opening) {
+                                if(door_Data.rotation > door_Data.opened_Rotation) {
+                                    door_Data.rotation -= 100.f * GetFrameTime();
+                                }
+                            } else {
+                                if(door_Data.rotation < door_Data.default_Rotation) {
+                                    door_Data.rotation += 100.f * GetFrameTime();
+                                }
+                            }
+
+                            if(door_Data.opening_Father) {
+                                if(door_Data.rotation_Father > door_Data.opened_Rotation) {
+                                    door_Data.rotation_Father -= 100.f * GetFrameTime();
+                                }
+                            } else {
+                                if(door_Data.rotation_Father < door_Data.default_Rotation) {
+                                    door_Data.rotation_Father += 100.f * GetFrameTime();
+                                }
                             }
                         }
                     } else {
-                        if(door_Data.opening) {
-                            if(door_Data.rotation > door_Data.opened_Rotation) {
-                                door_Data.rotation -= 100.f * GetFrameTime();
-                            }
-                        } else {
-                            if(door_Data.rotation < door_Data.default_Rotation) {
-                                door_Data.rotation += 100.f * GetFrameTime();
-                            }
-                        }
-
-                        if(door_Data.opening_Father) {
-                            if(door_Data.rotation_Father > door_Data.opened_Rotation) {
-                                door_Data.rotation_Father -= 100.f * GetFrameTime();
-                            }
-                        } else {
-                            if(door_Data.rotation_Father < door_Data.default_Rotation) {
-                                door_Data.rotation_Father += 100.f * GetFrameTime();
-                            }
-                        }
+                        
                     }
                 }
             }

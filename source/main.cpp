@@ -14,6 +14,10 @@
 #include "scenes/menu.cpp"
 #include "scenes/game.cpp"
 
+#if defined(PLATFORM_ANDROID)
+#include "raymob.h"
+#endif
+
 #ifdef PLATFORM_IOS // IOS struktura
 extern "C" {
     void ios_ready();
@@ -79,9 +83,12 @@ void Ready() {
     EnableCursor();
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
-    // TODO: prefs na android & ios
+    std::string root = std::string(GetAndroidApp()->activity->internalDataPath) + "/";
 #else
-    std::fstream data_Stream(ASSETS_ROOT "player.txt", std::ios::in | std::ios::binary);
+    std::string root = ASSETS_ROOT;
+#endif
+
+    std::fstream data_Stream(root + "player.txt", std::ios::in | std::ios::binary);
     data_Stream.unsetf(std::ios::skipws);
 
     data_Stream.seekg(0, std::ios::end);
@@ -89,7 +96,7 @@ void Ready() {
     data_Stream.seekg(0, std::ios::beg);
 
     std::vector<unsigned char> data;
-    data.reserve(file_Size);
+    data.reserve(Clamp((int)file_Size, 1, 99999));
 
     data.insert(data.begin(),
                std::istream_iterator<unsigned char>(data_Stream),
@@ -116,7 +123,6 @@ void Ready() {
         }
     }
     data_Stream.close();
-#endif
 }
 
 void Update() {
@@ -130,19 +136,32 @@ void Update() {
     }
 }
 
-void Destroy() {
-    CloseWindow();
-
+void Save_Data() {
     std::string string = "COINS = " + std::to_string(Menu::data.coins) + "\n";
     std::vector<unsigned char> data = Encrypt(string);
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
-    // TODO: prefs na android & ios
+    std::string root = std::string(GetAndroidApp()->activity->internalDataPath) + "/";
 #else
-    std::fstream data_Stream(ASSETS_ROOT "player.txt", std::ios::out);    
+    std::string root = ASSETS_ROOT;
+#endif
+
+    std::fstream data_Stream(root + "player.txt", std::ios::out);
     data_Stream.write((char *)&data[0], data.size());
     data_Stream.close();
+}
+
+#if defined(PLATFORM_ANDROID)
+extern "C" {
+    void Java_com_zahon_pribinacek_NativeLoader_saveData(JNIEnv *env, jobject this_Object) {
+        Save_Data();
+    }
+}
 #endif
+
+void Destroy() {
+    CloseWindow();
+    Save_Data();
 }
 
 #ifndef PLATFORM_IOS // Normální main funkce

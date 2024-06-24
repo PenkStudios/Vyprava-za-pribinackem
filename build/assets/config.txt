@@ -16,9 +16,9 @@ doors.txt
 Zachovává všechny informace o dveřích
 Každá žádka = jedny dveře
 
-Formát řádku: `pozice_x pozice_y pozice_z velikost_x velikost_y velikost_z začáteční_rotace konečná_rotace materiál`
+Formát řádku: `pozice_x pozice_y pozice_z velikost_x velikost_y velikost_z začáteční_rotace konečná_rotace typ`
 
-`materiál` - ID z předvybraných materiálů (id=0 dřevo, id=1 bílý materiál, dveře od lednice, id=2 pojistky)
+`typ` - ID typu dveří (id=0 dřevěné + otevírací; id=1 dřevěné + NEotevírací; id=2 bílý materiál, dveře od lednice + NEotevírácí; id=3 pojistky + NEotevírácí)
 
 spawn_animation.txt
 -------------------
