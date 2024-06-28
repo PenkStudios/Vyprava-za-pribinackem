@@ -13,6 +13,7 @@
 #include "scenes/intro.cpp"
 #include "scenes/menu.cpp"
 #include "scenes/game.cpp"
+#include "scenes/shared.cpp"
 
 #if defined(PLATFORM_ANDROID)
 #include "raymob.h"
@@ -118,7 +119,7 @@ void Ready() {
 
         if(strings.size() > 2) {
             if(strings[0] == "COINS") {
-                Menu::data.coins = std::stoi(strings[2]);
+                Shared::coins = std::stoi(strings[2]);
             }
         }
     }
@@ -137,7 +138,7 @@ void Update() {
 }
 
 void Save_Data() {
-    std::string string = "COINS = " + std::to_string(Menu::data.coins) + "\n";
+    std::string string = "COINS = " + std::to_string(Shared::coins) + "\n";
     std::vector<unsigned char> data = Encrypt(string);
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)

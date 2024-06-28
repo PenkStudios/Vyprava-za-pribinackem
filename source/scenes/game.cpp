@@ -10,14 +10,12 @@
 #include <sstream>
 #include <vector>
 
-#define RLIGHTS_IMPLEMENTATION
-#include "../rlights.h"
 #include "../reasings.c"
 
 #include "../scene.cpp"
 #include "../mod_loader.cpp"
 
-#include "menu.cpp"
+#include "shared.cpp"
 
 // počet vertexů na hlavní části světla
 #define LIGHT_BASE_VERTICES 287
@@ -87,14 +85,10 @@ namespace Game {
             Father_Point(Vector3 position, std::vector<bool> door_States) : position(position), door_States(door_States) {}
         };
 
-        Shader lighting;
-
-        Model house;
         std::vector<BoundingBox> house_BBoxes;
         
         Model father;
         Camera3D camera;
-        Light flashlight;
         Model door;
         ModelAnimation *animations;
         Mesh door_Handle;
@@ -314,8 +308,8 @@ namespace Game {
         bool death_Animation_Playing;
 
         // death obrazovka
-        Menu::Menu_Data::Button play_Again_Button;
-        Menu::Menu_Data::Button menu_Button;
+        Shared::Button play_Again_Button;
+        Shared::Button menu_Button;
 
         Texture skip;
 
@@ -358,20 +352,20 @@ namespace Game {
         DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
         DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, border_Size, Color {0, 0, 0, 255});
 
-        Vector2 text_Size = MeasureTextEx(Menu::data.medium_Font, text.c_str(), caption_Font_Size, 0.f);
-        DrawTextEx(Menu::data.medium_Font, text.c_str(), {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, caption_Font_Size, 0.f, WHITE);
+        Vector2 text_Size = MeasureTextEx(Shared::medium_Font, text.c_str(), caption_Font_Size, 0.f);
+        DrawTextEx(Shared::medium_Font, text.c_str(), {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, caption_Font_Size, 0.f, WHITE);
 
         float skip_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 45.f;
-        Vector2 skip_Text_Size = MeasureTextEx(Menu::data.bold_Font, u8"Zmáčkněte E pro přeskočení", skip_Font_Size, 0.f);
+        Vector2 skip_Text_Size = MeasureTextEx(Shared::bold_Font, u8"Zmáčkněte E pro přeskočení", skip_Font_Size, 0.f);
 
         float button_Size = skip_Font_Size / 17.7f;
 
-        DrawTextEx(Menu::data.bold_Font, u8"Zmáčkněte E pro přeskočení", {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size) / 2.f - skip_Text_Size.x / 2.f, (float)GetScreenHeight() - (data.skip.height * button_Size) * 1.75f - skip_Text_Size.y / 2.f}, skip_Font_Size, 0.f, WHITE);
+        DrawTextEx(Shared::bold_Font, u8"Zmáčkněte E pro přeskočení", {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size) / 2.f - skip_Text_Size.x / 2.f, (float)GetScreenHeight() - (data.skip.height * button_Size) * 1.75f - skip_Text_Size.y / 2.f}, skip_Font_Size, 0.f, WHITE);
         DrawTextureEx(data.skip, {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size), (float)GetScreenHeight() - (data.skip.width * button_Size) * 1.5f}, 0.f, button_Size, WHITE);
 
         bool skip;
 
-        if(Menu::data.mobile_Mode.ticked) {
+        if(Shared::mobile_Mode.ticked) {
             skip = can_Skip && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
         } else {
             skip = can_Skip && IsKeyPressed(KEY_SPACE);
@@ -388,7 +382,7 @@ namespace Game {
         pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 0.1f;
         spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 0.1f;
         fetch_Finish = MAX(pribinacek_Fetch, spoon_Fetch) + walk_Finish;
-        open_Finish = fetch_Finish + Menu::data.animations[0].frameCount - 1;
+        open_Finish = fetch_Finish + Shared::animations[0].frameCount - 1;
         eat_Finish = open_Finish + GetFPS() * 4.166f;
 
         from_Rotation = data.camera_Rotation;
@@ -431,8 +425,8 @@ namespace Game {
                 from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
             }
         } else if(tick < open_Finish) {
-            Menu::data.animation_Frame_Counter++;
-            UpdateModelAnimation(Menu::data.pribinacek, Menu::data.animations[0], Menu::data.animation_Frame_Counter);
+            Shared::animation_Frame_Counter++;
+            UpdateModelAnimation(Shared::pribinacek, Shared::animations[0], Shared::animation_Frame_Counter);
         } else if(tick < eat_Finish) {
             float stage_Tick = Clamp((float)(tick - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
             float next_Stage_Tick = Clamp((float)(tick + 1 - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
@@ -499,13 +493,13 @@ namespace Game {
     RayCollision Get_Collision_Ray(Ray ray, Game_Data::Item_Data *item = nullptr) {
         RayCollision collision = { 0 };
         collision.distance = 1000000.f;
-        for (int m = 0; m < data.house.meshCount; m++)
+        for (int m = 0; m < Shared::house.meshCount; m++)
         {
             // NOTE: We consider the model.transform for the collision check but 
             // it can be checked against any transform Matrix, used when checking against same
             // model drawn multiple times with multiple transforms
             RayCollision houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
-            if(Menu::data.settings.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
+            if(Shared::settings.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
 
             /*
             Vector3 size = Vector3Subtract(data.house_BBoxes[m].max, data.house_BBoxes[m].min);
@@ -635,7 +629,7 @@ namespace Game {
         data.camera.fovy = 90.f;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
-        if(Menu::data.mobile_Mode.ticked) {
+        if(Shared::mobile_Mode.ticked) {
             data.joystick_Base = LoadTexture(ASSETS_ROOT "textures/joystick_base.png");
             SetTextureFilter(data.joystick_Base, TEXTURE_FILTER_BILINEAR);
 
@@ -652,14 +646,10 @@ namespace Game {
             SetTextureFilter(data.un_Crouch, TEXTURE_FILTER_BILINEAR);
         }
 
-        data.house = LoadModel(ASSETS_ROOT "models/house.glb");
-        data.default_Shader = data.house.materials[0].shader;
-        for(int material = 0; material < data.house.materialCount; material++) {
-            SetTextureFilter(data.house.materials[material].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
-        }
+        data.default_Shader = LoadMaterialDefault().shader;
 
-        for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
-            data.house_BBoxes.push_back(GetMeshBoundingBox(data.house.meshes[mesh]));
+        for(int mesh = 0; mesh < Shared::house.meshCount; mesh++) {
+            data.house_BBoxes.push_back(GetMeshBoundingBox(Shared::house.meshes[mesh]));
         }
 
         data.father = LoadModel(ASSETS_ROOT "models/human.iqm");
@@ -670,24 +660,11 @@ namespace Game {
         int animation_Count = 0; // (1)
         data.animations = LoadModelAnimations(ASSETS_ROOT "models/human.iqm", &animation_Count);
 
-#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
-        data.lighting = LoadShader(ASSETS_ROOT "shaders/vertex100.glsl", ASSETS_ROOT "shaders/fragment100.glsl");
-#else
-        data.lighting = LoadShader(ASSETS_ROOT "shaders/vertex330.glsl", ASSETS_ROOT "shaders/fragment330.glsl");
-#endif
-
-        data.lighting.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(data.lighting, "matModel");
-        data.lighting.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(data.lighting, "viewPos");
-
-        int ambientLoc = GetShaderLocation(data.lighting, "ambient");
-        float ambient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
-        SetShaderValue(data.lighting, ambientLoc, ambient, SHADER_UNIFORM_VEC4);
-
         for(int material = 0; material < data.father.materialCount; material++)
-            data.father.materials[material].shader = data.lighting;
+            data.father.materials[material].shader = Shared::lighting;
 
-        for(int material = 0; material < data.house.materialCount; material++)
-            data.house.materials[material].shader = data.lighting;
+        for(int material = 0; material < Shared::house.materialCount; material++)
+            Shared::house.materials[material].shader = Shared::lighting;
 
         data.door_Handle = GenMeshSphere(0.5f, 15, 15);
         
@@ -699,8 +676,6 @@ namespace Game {
             data.door_Handle.texcoords[i + 1] = vector.y;
         }
         UpdateMeshBuffer(data.door_Handle, 1, data.door_Handle.texcoords, tex_Coords_size * sizeof(float), 0);
-
-        data.flashlight = CreateLight(LIGHT_POINT, data.camera.position, {0.f, 0.f, 0.f}, WHITE, data.lighting);
 
         std::istringstream ai_File(LoadFileText(ASSETS_ROOT "ai.txt"));
 
@@ -732,7 +707,7 @@ namespace Game {
 
         data.fuse_Box.model = LoadModel(ASSETS_ROOT "models/fusebox.glb");
         for(int material = 0; material < data.fuse_Box.model.materialCount; material++)
-            data.fuse_Box.model.materials[material].shader = data.lighting;
+            data.fuse_Box.model.materials[material].shader = Shared::lighting;
 
         SetTextureFilter(data.fuse_Box.model.materials[1].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
         SetTextureFilter(data.fuse_Box.model.materials[2].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
@@ -748,15 +723,15 @@ namespace Game {
                             rotation_Start >> rotation_End >> door_Type) {
             switch(door_Type) {
                 case 0: {
-                    material = &data.house.materials[14];
+                    material = &Shared::house.materials[14];
                     break;
                 }
                 case 1: {
-                    material = &data.house.materials[14];
+                    material = &Shared::house.materials[14];
                     break;
                 }
                 case 2: {
-                    material = &data.house.materials[0];
+                    material = &Shared::house.materials[0];
                     break;
                 }
                 case 3: {
@@ -799,23 +774,23 @@ namespace Game {
 
         data.door = LoadModel(ASSETS_ROOT "models/door.glb");
         for(int material = 0; material < data.door.materialCount; material++)
-            data.door.materials[material].shader = data.lighting;
+            data.door.materials[material].shader = Shared::lighting;
 
         data.spoon = LoadModel(ASSETS_ROOT "models/spoon.glb");
         for(int material = 0; material < data.spoon.materialCount; material++)
-            data.spoon.materials[material].shader = data.lighting;
+            data.spoon.materials[material].shader = Shared::lighting;
 
         data.key = LoadModel(ASSETS_ROOT "models/key.glb");
         for(int material = 0; material < data.key.materialCount; material++)
-            data.key.materials[material].shader = data.lighting;
+            data.key.materials[material].shader = Shared::lighting;
 
         data.drawer = LoadModel(ASSETS_ROOT "models/drawer.glb");
         for(int material = 0; material < data.drawer.materialCount; material++)
-            data.drawer.materials[material].shader = data.lighting;
+            data.drawer.materials[material].shader = Shared::lighting;
         
         data.lock = LoadModel(ASSETS_ROOT "models/lock.glb");
         for(int material = 0; material < data.lock.materialCount; material++)
-            data.lock.materials[material].shader = data.lighting;
+            data.lock.materials[material].shader = Shared::lighting;
 
         data.drawer_BBox = GetModelBoundingBox(data.drawer);
 
@@ -856,18 +831,18 @@ namespace Game {
         float font_Size = GetScreenHeight() / 15.f;
         float button_Height = GetScreenHeight() / 8.f;
 
-        data.play_Again_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f + button_Height}, u8"Hrát znovu", font_Size, Menu::data.medium_Font);
-        data.menu_Button = Menu::Menu_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f}, u8"Zpátky do menu", font_Size, Menu::data.medium_Font);
+        data.play_Again_Button = Shared::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f + button_Height}, u8"Hrát znovu", font_Size, Shared::medium_Font);
+        data.menu_Button = Shared::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f}, u8"Zpátky do menu", font_Size, Shared::medium_Font);
 
-        for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
-            if(data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
-                BoundingBox bbox = GetMeshBoundingBox(data.house.meshes[mesh]);
+        for(int mesh = 0; mesh < Shared::house.meshCount; mesh++) {
+            if(Shared::house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                BoundingBox bbox = GetMeshBoundingBox(Shared::house.meshes[mesh]);
                 Vector3 center = Vector3Lerp(bbox.min, bbox.max, 0.5f);
 
-                data.lights.push_back(CreateLight(LIGHT_POINT, center, Vector3Add(center, {0.f, -1.f, 0.f}), WHITE, data.lighting));
+                data.lights.push_back(CreateLight(LIGHT_POINT, center, Vector3Add(center, {0.f, -1.f, 0.f}), WHITE, Shared::lighting));
                 
                 data.lights.back().enabled = false;
-                UpdateLightValues(data.lighting, data.lights.back());
+                UpdateLightValues(Shared::lighting, data.lights.back());
             }
         }
 
@@ -882,7 +857,7 @@ namespace Game {
             return true;
         }
 
-        if(Menu::data.settings.debug) {
+        if(Shared::settings.debug) {
             DrawLine3D(Vector3Add(data.camera.position, {0.f, -0.75f, 0.f}), collision.point, Color {255, 0, 0, 32});
             DrawSphere(collision.point, 0.5f, Color {0, 0, 255, 32});
         }
@@ -910,9 +885,6 @@ namespace Game {
 
     void On_Switch() {
         DisableCursor();
-
-        for(int material = 0; material < Menu::data.pribinacek.materialCount; material++)
-            Menu::data.pribinacek.materials[material].shader = data.lighting;
 
         int spoon_Position_Index = rand() % data.key_Spawns.size();
         data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[spoon_Position_Index].position, data.key_Spawns[spoon_Position_Index].rotation);
@@ -961,7 +933,7 @@ namespace Game {
         Vector2 delta = Vector2Subtract(data.old_Mouse_Position, GetTouchPosition(touch_Id));
         data.old_Mouse_Position = GetTouchPosition(touch_Id);
 
-        if(Menu::data.settings.debug) {
+        if(Shared::settings.debug) {
             DrawLineEx(data.start_Mouse_Position, data.old_Mouse_Position, 5.f, BLUE);
             DrawCircleV(data.start_Mouse_Position, 25.f, RED);
             DrawCircleV(data.old_Mouse_Position, 25.f, RED);
@@ -1045,7 +1017,7 @@ namespace Game {
 
     // Získat kolizi cylindru (ze předu delší) s mapou
     bool Get_Collision_Cylinder(Vector3 position, float radius) {
-        for (int m = 0; m < data.house.meshCount; m++) {
+        for (int m = 0; m < Shared::house.meshCount; m++) {
             bool collide = CheckCollisionBoxSphere(data.house_BBoxes[m], position, radius);
             if(collide) return true;
         }
@@ -1211,27 +1183,27 @@ namespace Game {
 
             if(data.fuse_Box.lever_Turning) {
                 data.fog_Density = 0.05f;
-                for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
-                    if(data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
-                        data.house.materials[data.house.meshMaterial[mesh]].shader = data.default_Shader;
+                for(int mesh = 0; mesh < Shared::house.meshCount; mesh++) {
+                    if(Shared::house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                        Shared::house.materials[Shared::house.meshMaterial[mesh]].shader = data.default_Shader;
                     }
                 }
 
                 for(Light &light : data.lights) {
                     light.enabled = true;
-                    UpdateLightValues(data.lighting, light);
+                    UpdateLightValues(Shared::lighting, light);
                 }
             } else {
                 data.fog_Density = 0.15f;
-                for(int mesh = 0; mesh < data.house.meshCount; mesh++) {
-                    if(data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
-                        data.house.materials[data.house.meshMaterial[mesh]].shader = data.lighting;
+                for(int mesh = 0; mesh < Shared::house.meshCount; mesh++) {
+                    if(Shared::house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                        Shared::house.materials[Shared::house.meshMaterial[mesh]].shader = Shared::lighting;
                     }
                 }
 
                 for(Light &light : data.lights) {
                     light.enabled = false;
-                    UpdateLightValues(data.lighting, light);
+                    UpdateLightValues(Shared::lighting, light);
                 }
             }
         }
@@ -1239,14 +1211,14 @@ namespace Game {
 
     void Update() {
         ClearBackground(BLACK);
-        SetShaderValue(data.lighting, data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
+        SetShaderValue(Shared::lighting, Shared::lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
 
-        data.flashlight.position = data.camera.position;
-        UpdateLightValues(data.lighting, data.flashlight);
+        Shared::flashlight.position = data.camera.position;
+        UpdateLightValues(Shared::lighting, Shared::flashlight);
 
         Vector3 old_Position = data.camera.position;
-        int fogDensityLoc = GetShaderLocation(data.lighting, "fogDensity");
-        SetShaderValue(data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+        int fogDensityLoc = GetShaderLocation(Shared::lighting, "fogDensity");
+        SetShaderValue(Shared::lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         data.action_Used = false; // If any action was used this frame (preventing click-through)
 
@@ -1263,7 +1235,7 @@ namespace Game {
                 data.animation_Frame_Count = 0;
 
             /* WAKE ANIMATION */ {
-                if(Menu::data.settings.debug) {
+                if(Shared::settings.debug) {
                     for(int index = 0; index < data.wake_Animation.size(); index++) {
                         DrawCube(data.wake_Animation[index].position, 1.f, 1.f, 1.f, RED);
                         DrawLine3D(data.wake_Animation[index].position, Vector3Add(data.wake_Animation[index].position, data.wake_Animation[index].target), WHITE);
@@ -1471,7 +1443,7 @@ namespace Game {
                     
                     DrawMesh(data.door_Handle, *door_Data.material, matrixDoorHandle);
                     
-                    if(door_Data.type == 0) {
+                    if(/* door_Data.type != 0 */ true) {
                         if(door_Data.default_Rotation < door_Data.opened_Rotation) {
                             if(door_Data.opening) {
                                 if(door_Data.rotation < door_Data.opened_Rotation) {
@@ -1514,12 +1486,46 @@ namespace Game {
                             }
                         }
                     } else {
-                        
+                        /*
+                        Ray raycast = {data.camera.position, {data.camera_Target.x, 0.f, data.camera_Target.z}};
+                        if(Vector3Distance(door_Data.position, data.camera.position) < 5.f) {
+                            Matrix matrix = MatrixIdentity();
+                            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
+                            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
+                            float rotation_Player = door_Data.rotation;
+                            float rotation_Father = door_Data.rotation_Father;
+                            float rotation = 0.f;
+                            if(door_Data.default_Rotation < door_Data.opened_Rotation) {
+                                rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
+                            } else {
+                                rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
+                            }
+                            matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
+                            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+                            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+
+                            RayCollision collision = GetRayCollisionMesh(raycast, data.door.meshes[0], matrix);
+
+                            if(collision.hit) {
+                                if(Vector3Distance(collision.point, data.camera.position) < 1.f) {
+                                    Vector3 diff = Vector3Subtract(collision.point, Vector3Add(collision.point, collision.normal));
+                                    float angle = fmod((atan2(diff.x, diff.z) * RAD2DEG) + 180.f, 360.f);
+                                    Vector2 distances = {fabs(rotation - angle), fabs(rotation - fmod(angle + 180.f, 360.f))};
+                                    
+                                    if(distances.x < distances.y) {
+                                        door_Data.rotation -= 100.f * GetFrameTime();
+                                    } else {
+                                        door_Data.rotation += 100.f * GetFrameTime();
+                                    }
+                                }
+                            }
+                        }
+                        */
                     }
                 }
             }
 
-            DrawModel(data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
+            DrawModel(Shared::house, {0.f, 0.f, 0.f}, 1.f, WHITE);
 
             // ------------------
 
@@ -1529,10 +1535,10 @@ namespace Game {
                 for(int index = 0; index < data.item_Data.size(); index++) {
                     switch(index) {
                         case Game_Data::PRIBINACEK: {
-                            Menu::data.pribinacek.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
+                            Shared::pribinacek.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
                                                                                                                 data.item_Data[index].rotation.y * DEG2RAD,
                                                                                                                 data.item_Data[index].rotation.z * DEG2RAD}));
-                            DrawModel(Menu::data.pribinacek, data.item_Data[index].position, 1.f, WHITE);
+                            DrawModel(Shared::pribinacek, data.item_Data[index].position, 1.f, WHITE);
                             break;
                         }
 
@@ -1568,7 +1574,7 @@ namespace Game {
 
                             if(data.item_Data[index].falling) {
                                 // data.item_Data[index].position.y -= 1.f * GetFrameTime();
-                                if(Menu::data.settings.debug) DrawLine3D(data.item_Data[index].position, data.item_Data[index].collision.point, RED);
+                                if(Shared::settings.debug) DrawLine3D(data.item_Data[index].position, data.item_Data[index].collision.point, RED);
                                 data.item_Data[index].position.y -= data.item_Data[index].fall_Acceleration * 50.f * GetFrameTime();
                                 data.item_Data[index].fall_Acceleration += 1.f * GetFrameTime();
                             }
@@ -1580,7 +1586,7 @@ namespace Game {
                         bbox.min = Vector3Add(bbox.min, data.item_Data[index].position);
                         bbox.max = Vector3Add(bbox.max, data.item_Data[index].position);
                         
-                        if(Menu::data.settings.debug) DrawBoundingBox(bbox, RED);
+                        if(Shared::settings.debug) DrawBoundingBox(bbox, RED);
                     }
                 }
             }
@@ -1634,7 +1640,7 @@ namespace Game {
 
             // ----------------------
 
-            if(Menu::data.settings.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
+            if(Shared::settings.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
 
             if(CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::PRIBINACEK].position, 0.1f) &&
@@ -1674,7 +1680,7 @@ namespace Game {
                     }
                 } */
 
-                if(Menu::data.settings.debug) {
+                if(Shared::settings.debug) {
                     Vector3 previous_Point = {0.f, 0.f, 0.f};
                     int index = 0;
                     for(Game_Data::Father_Point point : data.father_Points) {
@@ -1813,7 +1819,7 @@ namespace Game {
         DrawLineEx({GetScreenWidth() / 2.f - crosshair_size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + crosshair_size, GetScreenHeight() / 2.f}, 2.f, Fade(WHITE, 0.2f));
         DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - crosshair_size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + crosshair_size}, 2.f, Fade(WHITE, 0.2f));
 
-        if(Menu::data.mobile_Mode.ticked) {
+        if(Shared::mobile_Mode.ticked) {
             data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
             data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
@@ -1908,12 +1914,12 @@ namespace Game {
             if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
                 data.camera.position.z = old_Position.z;
 
-            // (pokud Menu::data.settings.debug) nechceme aby se koule renderovali dvakrát
-            bool is_Debug = Menu::data.settings.debug;
-            Menu::data.settings.debug = true;
+            // (pokud Shared::settings.debug) nechceme aby se koule renderovali dvakrát
+            bool is_Debug = Shared::settings.debug;
+            Shared::settings.debug = true;
             if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
                 data.camera.position.x = old_Position.x;
-            Menu::data.settings.debug = is_Debug;
+            Shared::settings.debug = is_Debug;
 
             RayCollision collision_Legs = {0};
             if(data.wake_Animation_Finished && !data.death_Animation_Playing) {
@@ -1937,7 +1943,7 @@ namespace Game {
                     data.camera.position = old_Position;
             }
 
-            if(Menu::data.settings.debug) {
+            if(Shared::settings.debug) {
                 DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
                                                                                                     collision_Legs.normal.y < 0.99f || collision_Legs.normal.y > 1.01), 5, 5, 15, WHITE);
                 
@@ -1961,9 +1967,9 @@ namespace Game {
                     data.guide_Finished = true;
                 }
             }
-            if(Menu::data.mobile_Mode.ticked) {
+            if(Shared::mobile_Mode.ticked) {
                 float skip_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 45.f;
-                Vector2 skip_Text_Size = MeasureTextEx(Menu::data.bold_Font, u8"Zmáčkněte E pro přeskočení", skip_Font_Size, 0.f);
+                Vector2 skip_Text_Size = MeasureTextEx(Shared::bold_Font, u8"Zmáčkněte E pro přeskočení", skip_Font_Size, 0.f);
                 float button_Size = skip_Font_Size / 17.7f;
 
                 Rectangle rectangle = {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size), (float)GetScreenHeight() - (data.skip.width * button_Size) * 1.5f, data.skip.width * button_Size, data.skip.height * button_Size};
@@ -2004,30 +2010,30 @@ namespace Game {
             float border_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 120.f;
 
             float margin = GetScreenWidth() / 50.f;
-            Vector2 rectangle_Size = MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), font_Size, 0.f);
+            Vector2 rectangle_Size = MeasureTextEx(Shared::medium_Font, data.guide_Texts[4].target_Text.c_str(), font_Size, 0.f);
             for(int i = 4 + 1; i < data.guide_Texts.size(); i++) {
-                rectangle_Size.y += MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[i].target_Text.c_str(), font_Size, 0.f).y;
+                rectangle_Size.y += MeasureTextEx(Shared::medium_Font, data.guide_Texts[i].target_Text.c_str(), font_Size, 0.f).y;
             }
 
             Rectangle rectangle = {margin, margin, rectangle_Size.x, rectangle_Size.y};
             DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
             DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, border_Size, BLACK);
 
-            Vector2 text_Box_Size = MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), font_Size_Smaller, 0.f);
+            Vector2 text_Box_Size = MeasureTextEx(Shared::medium_Font, data.guide_Texts[4].target_Text.c_str(), font_Size_Smaller, 0.f);
             for(int i = 4 + 1; i < data.guide_Texts.size(); i++) {
-                text_Box_Size.y += MeasureTextEx(Menu::data.medium_Font, data.guide_Texts[i].target_Text.c_str(), font_Size_Smaller, 0.f).y;
+                text_Box_Size.y += MeasureTextEx(Shared::medium_Font, data.guide_Texts[i].target_Text.c_str(), font_Size_Smaller, 0.f).y;
             }
 
             int y = 0;
             for(int i = 0; i < 4; i++) {
                 const char* text = data.guide_Texts[4 + i].target_Text.c_str();
-                Vector2 line = MeasureTextEx(Menu::data.medium_Font, text, font_Size_Smaller, 0.f);
-                DrawTextEx(Menu::data.medium_Font, text, {rectangle.x + rectangle.width / 2.f - text_Box_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Box_Size.y / 2.f + y}, font_Size_Smaller, 0.f, (4 + i < data.guide_Index) ? GREEN : WHITE);
+                Vector2 line = MeasureTextEx(Shared::medium_Font, text, font_Size_Smaller, 0.f);
+                DrawTextEx(Shared::medium_Font, text, {rectangle.x + rectangle.width / 2.f - text_Box_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Box_Size.y / 2.f + y}, font_Size_Smaller, 0.f, (4 + i < data.guide_Index) ? GREEN : WHITE);
                 y += line.y;
             }
         }
 
-        if(IsKeyPressed(KEY_TAB)) Menu::data.settings.debug = !Menu::data.settings.debug;
+        if(IsKeyPressed(KEY_TAB)) Shared::settings.debug = !Shared::settings.debug;
 
         if(data.death_Animation_Playing) {
             if(data.death_Animation_Tick < 2.f) {
@@ -2049,9 +2055,9 @@ namespace Game {
                     for(int angle = 0; angle < 360; angle += 20) {
                         Vector2 offset = {cos(angle * DEG2RAD) * 3.f, sin(angle * DEG2RAD) * 3.f};
 
-                        Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, offset), font_Size, 1.f, BLACK);
+                        Shared::DrawTextExC(Shared::bold_Font, u8"Prohrál jsi", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, offset), font_Size, 1.f, BLACK);
                     }
-                    Menu::DrawTextExC(Menu::data.bold_Font, u8"Prohrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, font_Size, 1.f, WHITE);
+                    Shared::DrawTextExC(Shared::bold_Font, u8"Prohrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, font_Size, 1.f, WHITE);
                     
                     int quests_Offset = 0;
                     for(int index = 0; index < data.guide_Texts.size(); index++) {
@@ -2062,10 +2068,10 @@ namespace Game {
                     }
 
                     int coins = data.guide_Index - quests_Offset;
-                    Menu::DrawTextExC(Menu::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
+                    Shared::DrawTextExC(Shared::bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
                 
-                    if(data.play_Again_Button.Update()) { On_Switch(); Menu::data.coins += data.guide_Index - quests_Offset; } // resetuje všechen progress
-                    else if(data.menu_Button.Update()) { Switch_To_Scene(MENU); Menu::data.coins += data.guide_Index - quests_Offset; }
+                    if(data.play_Again_Button.Update()) { On_Switch(); Shared::coins += data.guide_Index - quests_Offset; } // resetuje všechen progress
+                    else if(data.menu_Button.Update()) { Switch_To_Scene(MENU); Shared::coins += data.guide_Index - quests_Offset; }
 
                     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), ColorTint(color, BLACK));
                 }
@@ -2087,12 +2093,12 @@ namespace Game {
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
 
-        if(Menu::data.show_Fps.ticked) {
+        if(Shared::show_Fps.ticked) {
             const char* text = TextFormat("FPS: %d", GetFPS());
             float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 40.f;
 
-            Vector2 size = MeasureTextEx(Menu::data.medium_Font, text, font_Size, 0.f);
-            Menu::DrawTextExOutline(Menu::data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
+            Vector2 size = MeasureTextEx(Shared::medium_Font, text, font_Size, 0.f);
+            Shared::DrawTextExOutline(Shared::medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
         }
     }
 };
