@@ -141,6 +141,7 @@ namespace Menu {
 
         const char* text = TextFormat("%d", Shared::coins);
         Vector2 text_Size = MeasureTextEx(Shared::medium_Font, text, data.coin.height * size, 0.f);
+        if(!Shared::settings.custom_Font) text_Size.y += 12.f;
         Shared::DrawTextExOutline(Shared::medium_Font, text, {(float)GetScreenWidth() - text_Size.x / 2.f - data.coin.width * size - margin * 2.f, margin + text_Size.y / 2.f}, data.coin.height * size, 0.f, WHITE);
 
         Mod_Callback("Update_Menu_2D", (void*)&data, true);
@@ -152,6 +153,13 @@ namespace Menu {
             Vector2 size = MeasureTextEx(Shared::medium_Font, text, font_Size, 0.f);
             Shared::DrawTextExOutline(Shared::medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
         }
+
+        /*
+        const char *test_Text = "TEXT text y";
+        Vector2 test_Size = MeasureTextEx(Shared::medium_Font, test_Text, 35.f, 0.f);
+        DrawTextEx(Shared::medium_Font, test_Text, {0.f, 0.f}, 35.f, 0.f, WHITE);
+        DrawRectangleLines(0, 0, (int)(test_Size.x), (int)(test_Size.y), RED);
+        */
     }
 };
 

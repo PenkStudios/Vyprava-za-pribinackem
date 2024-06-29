@@ -52,22 +52,19 @@ namespace Game {
         public:
             Vector3 position;
             Vector3 scale;
-            float default_Rotation;
-            float opened_Rotation;
+            float start_Rotation_Range;
+            float end_Rotation_Range;
 
             Material* material;
             int type;
 
-            float rotation; // Rotace způsobena hráčem
-            float rotation_Father; // Rotace způsobena tátou
+            float rotation;
 
-            // -||-
             bool opening;
-            bool opening_Father;
-            Door_Data(Vector3 door_Position, Vector3 door_Scale, float door_Default_Rotation, float door_Opened_Rotation, int type, Material* material) :
-                position(door_Position), scale(door_Scale), default_Rotation(door_Default_Rotation),
-                opened_Rotation(door_Opened_Rotation), rotation(door_Default_Rotation),
-                rotation_Father(door_Default_Rotation), material(material), type(type), opening(false) {}
+            Door_Data(Vector3 door_Position, Vector3 door_Scale, float start_Rotation_Range, float end_Rotation_Range, int type, Material* material) :
+                position(door_Position), scale(door_Scale), start_Rotation_Range(start_Rotation_Range),
+                end_Rotation_Range(end_Rotation_Range), rotation(start_Rotation_Range /* (start_Rotation_Range + end_Rotation_Range) / 2.f */),
+                material(material), type(type), opening(false) {}
         };
 
         std::vector<Door_Data> doors = {};
@@ -249,7 +246,7 @@ namespace Game {
         const BoundingBox players_Room_Table = PLAYERS_ROOM_TABLE;
         
         Model drawer;
-        BoundingBox drawer_BBox;
+        std::vector<BoundingBox> drawer_BBoxes;
 
         class Drawer_Data {
         public:
@@ -524,16 +521,7 @@ namespace Game {
             
             matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
 
-            float rotation_Player = door_Data.rotation;
-            float rotation_Father = door_Data.rotation_Father;
-
-            float rotation = 0.f;
-            if(door_Data.default_Rotation < door_Data.opened_Rotation) {
-                rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
-            } else {
-                rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
-            }
-            matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
+            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
             
             matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
@@ -551,18 +539,20 @@ namespace Game {
         bool sticked = false;
 
         for(Game_Data::Drawer_Data &drawer_Data : data.drawers) {
-            Matrix matrix = MatrixIdentity();
-            matrix = MatrixMultiply(matrix, MatrixTranslate(drawer_Data.position.x, drawer_Data.position.y, drawer_Data.position.z));
-
-            RayCollision doorCollision = GetRayCollisionMesh(ray, data.drawer.meshes[0], matrix);
-            if (doorCollision.hit)
-            {
-                if(doorCollision.distance < collision.distance) {
-                    if(item != nullptr) {
-                        drawer_Data.childs[item->item_Id] = item;
-                        sticked = true;
+            for(BoundingBox bbox : data.drawer_BBoxes) {
+                BoundingBox bbox_New = bbox;
+                bbox_New.min = Vector3Add(bbox_New.min, drawer_Data.position);
+                bbox_New.max = Vector3Add(bbox_New.max, drawer_Data.position);
+                RayCollision doorCollision = GetRayCollisionBox(ray, bbox_New);
+                if (doorCollision.hit)
+                {
+                    if(doorCollision.distance < collision.distance) {
+                        if(item != nullptr) {
+                            drawer_Data.childs[item->item_Id] = item;
+                            sticked = true;
+                        }
+                        collision = doorCollision;
                     }
-                    collision = doorCollision;
                 }
             }
         }
@@ -792,7 +782,9 @@ namespace Game {
         for(int material = 0; material < data.lock.materialCount; material++)
             data.lock.materials[material].shader = Shared::lighting;
 
-        data.drawer_BBox = GetModelBoundingBox(data.drawer);
+        for(int mesh = 0; mesh < data.drawer.meshCount; mesh++) {
+            data.drawer_BBoxes.push_back(GetMeshBoundingBox(data.drawer.meshes[mesh]));
+        }
 
         std::istringstream config_File(LoadFileText(ASSETS_ROOT "config.txt"));
 
@@ -817,6 +809,14 @@ namespace Game {
                     }
                 } else if(strings[0] == "FUSE_BOX" && strings.size() - 2 == 3) {
                     data.fuse_Box.position = {std::stof(strings[2]), std::stof(strings[3]), std::stof(strings[4])};
+                } else if(strings[0] == "CUSTOM_FONT" && strings.size() == 3) {
+                    if(strings[2] == "TRUE") {
+                        Shared::settings.custom_Font = true;
+                    } else if(strings[2] == "FALSE") {
+                        Shared::settings.custom_Font = false;
+                    }
+
+                    // TraceLog(LOG_INFO, "Custom font: %d", Shared::settings.custom_Font);
                 } else {
                     TraceLog(LOG_WARNING, "Unknown variable or bad value %s", strings[0].c_str());
                 }
@@ -1027,18 +1027,8 @@ namespace Game {
             Matrix matrix = MatrixIdentity();
             matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
             matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-
-            float rotation_Player = door_Data.rotation;
-            float rotation_Father = door_Data.rotation_Father;
-
-            float rotation = 0.f;
-            if(door_Data.default_Rotation < door_Data.opened_Rotation) {
-                rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
-            } else {
-                rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
-            }
             
-            matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
+            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
             matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
             matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
 
@@ -1064,21 +1054,11 @@ namespace Game {
             // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
             // DrawLine3D(data.camera.position, door_Data.position, RED);
 
-            float rotation_Player = door_Data.rotation;
-            float rotation_Father = door_Data.rotation_Father;
-
-            float rotation = 0.f;
-            if(door_Data.default_Rotation < door_Data.opened_Rotation) {
-                rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
-            } else {
-                rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
-            }
-
             Matrix matrix = MatrixIdentity();
             matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
 
             matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-            matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
+            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
             matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
             matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
@@ -1091,7 +1071,7 @@ namespace Game {
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(size, size, size));
 
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
-            matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(rotation * DEG2RAD));
+            matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(door_Data.rotation * DEG2RAD));
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
@@ -1110,6 +1090,9 @@ namespace Game {
         Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
         RayCollision player_Map_Collision = Get_Collision_Ray(player_Ray);
 
+        float nearest_Item_Hit = 10000.f;
+        int nearest_Item_Id = -1;
+
         for(int index = 0; index < data.item_Data.size(); index++) {
             if((Game_Data::Item)index != Game_Data::NONE && (Game_Data::Item)index != Game_Data::_LAST) {
                 BoundingBox bbox = {{-1.f, -1.f, -1.f}, {1.f, 1.f, 1.f}};
@@ -1118,7 +1101,15 @@ namespace Game {
                 
                 RayCollision player_Item_Collision = GetRayCollisionBox(player_Ray, bbox);
                 bool item_Visible = player_Item_Collision.hit && player_Item_Collision.distance < 5.f;
+
+                if(item_Visible && data.holding_Item != (Game_Data::Item)index) {
+                    if(nearest_Item_Hit > player_Item_Collision.distance) {
+                        nearest_Item_Hit = player_Item_Collision.distance;
+                        nearest_Item_Id = index;
+                    }
+                }
                 
+                /*
                 if(data.holding_Item == (Game_Data::Item)index && !data.action_Used && !data.win.playing) {
                     data.item_Data[index].fall_Acceleration = 0.1f;
                     data.item_Data[index].Calculate_Collision();
@@ -1136,6 +1127,7 @@ namespace Game {
                     if((Game_Data::Item)index == Game_Data::SPOON && data.guide_Index == 5)
                         data.guide_Index++;
                 }
+                */
             }
         }
 
@@ -1145,29 +1137,54 @@ namespace Game {
         int index = 0;
         for(Game_Data::Drawer_Data &drawer : data.drawers) {
             Ray ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
-            BoundingBox bbox = data.drawer_BBox;
-            bbox.min = Vector3Add(bbox.min, drawer.position);
-            bbox.max = Vector3Add(bbox.max, drawer.position);
-            RayCollision collision = GetRayCollisionBox(ray, bbox);
-
-            if(nearest_Hit > collision.distance && collision.hit) {
-                nearest_Hit = collision.distance;
-                nearest_Hit_Id = index;
+            for(int mesh = 0; mesh < data.drawer.meshCount; mesh++) {
+                BoundingBox bbox = data.drawer_BBoxes[mesh];
+                bbox.min = Vector3Add(bbox.min, drawer.position);
+                bbox.max = Vector3Add(bbox.max, drawer.position);
+                RayCollision collision = GetRayCollisionBox(ray, bbox);
+                if(nearest_Hit > collision.distance && collision.hit) {
+                    nearest_Hit = collision.distance;
+                    nearest_Hit_Id = index;
+                }
             }
 
             index++;
         }
 
-        if(nearest_Hit < 5.f && nearest_Hit_Id != -1 && !data.action_Used) {
-            if(data.drawers[nearest_Hit_Id].has_Lock) {
-                if(data.holding_Item == Game_Data::KEY) {
+        bool action_Item = (nearest_Item_Id != -1) && ((nearest_Hit > nearest_Item_Hit) && (player_Map_Collision.distance > nearest_Item_Hit));
+        bool action_Drawer = (nearest_Hit_Id != -1) && ((nearest_Item_Hit > nearest_Hit) && FloatEquals(player_Map_Collision.distance, nearest_Hit));
+        if(action_Drawer) {
+            if(nearest_Hit < 5.f && nearest_Hit_Id != -1 && !data.action_Used) {
+                if(data.drawers[nearest_Hit_Id].has_Lock) {
+                    if(data.holding_Item == Game_Data::KEY) {
+                        data.action_Used = true;
+                        data.drawers[nearest_Hit_Id].opening = !data.drawers[nearest_Hit_Id].opening;
+                    }
+                } else {
                     data.action_Used = true;
                     data.drawers[nearest_Hit_Id].opening = !data.drawers[nearest_Hit_Id].opening;
                 }
-            } else {
-                data.action_Used = true;
-                data.drawers[nearest_Hit_Id].opening = !data.drawers[nearest_Hit_Id].opening;
             }
+        } else if(action_Item) {
+            if(!data.action_Used && data.holding_Item == Game_Data::NONE && !data.win.playing) {
+                data.holding_Item = (Game_Data::Item)nearest_Item_Id;
+                data.action_Used = true;
+
+                if((Game_Data::Item)nearest_Item_Id == Game_Data::PRIBINACEK && data.guide_Index == 4)
+                    data.guide_Index++;
+
+                if((Game_Data::Item)index == Game_Data::SPOON && data.guide_Index == 5)
+                    data.guide_Index++;
+            }
+        }
+
+
+        if(data.holding_Item != Game_Data::NONE && !data.action_Used && !data.win.playing) {
+            data.item_Data[data.holding_Item].fall_Acceleration = 0.1f;
+            data.item_Data[data.holding_Item].Calculate_Collision();
+            data.item_Data[data.holding_Item].falling = true;
+            data.holding_Item = Game_Data::NONE;
+            data.action_Used = true;
         }
 
         Mesh mesh = data.fuse_Box.model.meshes[1];
@@ -1408,21 +1425,11 @@ namespace Game {
                     // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
                     // DrawLine3D(data.camera.position, door_Data.position, RED);
 
-                    float rotation_Player = door_Data.rotation;
-                    float rotation_Father = door_Data.rotation_Father;
-
-                    float rotation = 0.f;
-                    if(door_Data.default_Rotation < door_Data.opened_Rotation) {
-                        rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
-                    } else {
-                        rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
-                    }
-
                     Matrix matrix = MatrixIdentity();
                     matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
 
                     matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-                    matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
+                    matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
                     matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
                     matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
@@ -1436,91 +1443,105 @@ namespace Game {
                     matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(size, size, size));
 
                     matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
-                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(rotation * DEG2RAD));
+                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(door_Data.rotation * DEG2RAD));
                     matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
                     matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
                     
                     DrawMesh(data.door_Handle, *door_Data.material, matrixDoorHandle);
                     
-                    if(/* door_Data.type != 0 */ true) {
-                        if(door_Data.default_Rotation < door_Data.opened_Rotation) {
+                    if(door_Data.type != 0) {
+                        if(door_Data.start_Rotation_Range < door_Data.end_Rotation_Range) {
                             if(door_Data.opening) {
-                                if(door_Data.rotation < door_Data.opened_Rotation) {
+                                if(door_Data.rotation < door_Data.end_Rotation_Range) {
                                     door_Data.rotation += 100.f * GetFrameTime();
                                 }
                             } else {
-                                if(door_Data.rotation > door_Data.default_Rotation) {
+                                if(door_Data.rotation > door_Data.start_Rotation_Range) {
                                     door_Data.rotation -= 100.f * GetFrameTime();
-                                }
-                            }
-
-                            if(door_Data.opening_Father) {
-                                if(door_Data.rotation_Father < door_Data.opened_Rotation) {
-                                    door_Data.rotation_Father += 100.f * GetFrameTime();
-                                }
-                            } else {
-                                if(door_Data.rotation_Father > door_Data.default_Rotation) {
-                                    door_Data.rotation_Father -= 100.f * GetFrameTime();
                                 }
                             }
                         } else {
                             if(door_Data.opening) {
-                                if(door_Data.rotation > door_Data.opened_Rotation) {
+                                if(door_Data.rotation > door_Data.end_Rotation_Range) {
                                     door_Data.rotation -= 100.f * GetFrameTime();
                                 }
                             } else {
-                                if(door_Data.rotation < door_Data.default_Rotation) {
+                                if(door_Data.rotation < door_Data.start_Rotation_Range) {
                                     door_Data.rotation += 100.f * GetFrameTime();
-                                }
-                            }
-
-                            if(door_Data.opening_Father) {
-                                if(door_Data.rotation_Father > door_Data.opened_Rotation) {
-                                    door_Data.rotation_Father -= 100.f * GetFrameTime();
-                                }
-                            } else {
-                                if(door_Data.rotation_Father < door_Data.default_Rotation) {
-                                    door_Data.rotation_Father += 100.f * GetFrameTime();
                                 }
                             }
                         }
                     } else {
-                        /*
-                        Ray raycast = {data.camera.position, {data.camera_Target.x, 0.f, data.camera_Target.z}};
+                        bool door_Updated = false;
                         if(Vector3Distance(door_Data.position, data.camera.position) < 5.f) {
                             Matrix matrix = MatrixIdentity();
                             matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
                             matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-                            float rotation_Player = door_Data.rotation;
-                            float rotation_Father = door_Data.rotation_Father;
-                            float rotation = 0.f;
-                            if(door_Data.default_Rotation < door_Data.opened_Rotation) {
-                                rotation = rotation_Player > rotation_Father ? rotation_Player : rotation_Father;
-                            } else {
-                                rotation = rotation_Player < rotation_Father ? rotation_Player : rotation_Father;
-                            }
-                            matrix = MatrixMultiply(matrix, MatrixRotateY(rotation * DEG2RAD));
+                            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
                             matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
                             matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+
+                            Vector3 target = Vector3Transform({0.f, 0.f, 0.f}, matrix);
+                            Ray raycast = {data.camera.position, Vector3Divide(Vector3Subtract(target, data.camera.position), {10.f, 10.f, 10.f})};
 
                             RayCollision collision = GetRayCollisionMesh(raycast, data.door.meshes[0], matrix);
 
                             if(collision.hit) {
-                                if(Vector3Distance(collision.point, data.camera.position) < 1.f) {
-                                    Vector3 diff = Vector3Subtract(collision.point, Vector3Add(collision.point, collision.normal));
-                                    float angle = fmod((atan2(diff.x, diff.z) * RAD2DEG) + 180.f, 360.f);
-                                    Vector2 distances = {fabs(rotation - angle), fabs(rotation - fmod(angle + 180.f, 360.f))};
-                                    
-                                    if(distances.x < distances.y) {
-                                        door_Data.rotation -= 100.f * GetFrameTime();
-                                    } else {
-                                        door_Data.rotation += 100.f * GetFrameTime();
-                                    }
+                                Vector3 diff = Vector3Subtract(collision.point, Vector3Add(collision.point, collision.normal));
+                                float angle = fmod((atan2(diff.x, diff.z) * RAD2DEG) + 180.f, 360.f);
+                                float normalized_Rotation = Wrap(door_Data.rotation, 0.f, 360.f);
+                                Vector2 distances = {fabs(normalized_Rotation - angle), fabs(normalized_Rotation - fmod(angle + 180.f, 360.f))};
+                                
+                                if(distances.x < distances.y) {
+                                    door_Data.rotation += (IsKeyDown(KEY_LEFT_SHIFT) ? 150.f : 100.f) * GetFrameTime();
+                                } else {
+                                    door_Data.rotation -= (IsKeyDown(KEY_LEFT_SHIFT) ? 150.f : 100.f) * GetFrameTime();
                                 }
+
+                                door_Updated = true;
                             }
                         }
-                        */
+
+                        Vector3 father_Position = Vector3Add(data.father_Position, {0.f, 6.5f, 0.f});
+                        if(Vector3Distance(door_Data.position, father_Position) < 5.f) {
+                            Matrix matrix = MatrixIdentity();
+                            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
+                            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
+                            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
+                            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+                            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+
+                            Vector3 target = Vector3Transform({0.f, 0.f, 0.f}, matrix);
+                            Ray raycast = {father_Position, Vector3Divide(Vector3Subtract(target, father_Position), {10.f, 10.f, 10.f})};
+
+                            RayCollision collision = GetRayCollisionMesh(raycast, data.door.meshes[0], matrix);
+
+                            if(collision.hit) {
+                                Vector3 diff = Vector3Subtract(collision.point, Vector3Add(collision.point, collision.normal));
+                                float angle = fmod((atan2(diff.x, diff.z) * RAD2DEG) + 180.f, 360.f);
+                                float normalized_Rotation = Wrap(door_Data.rotation, 0.f, 360.f);
+                                Vector2 distances = {fabs(normalized_Rotation - angle), fabs(normalized_Rotation - fmod(angle + 180.f, 360.f))};
+                                
+                                if(distances.x < distances.y) {
+                                    door_Data.rotation += 100.f * GetFrameTime();
+                                } else {
+                                    door_Data.rotation -= 100.f * GetFrameTime();
+                                }
+
+                                door_Updated = true;
+                            }
+                        }
+
+                        if(!door_Updated) {
+                            door_Data.rotation = ((door_Data.rotation * 1.95f) +
+                                                    ((door_Data.start_Rotation_Range + door_Data.end_Rotation_Range) / 2.f) * 0.05f) / 2.f;
+                        }
+
+                        if(door_Data.start_Rotation_Range < door_Data.end_Rotation_Range)
+                            door_Data.rotation = Clamp(door_Data.rotation, door_Data.start_Rotation_Range, door_Data.end_Rotation_Range);
+                        else
+                            door_Data.rotation = Clamp(door_Data.rotation, door_Data.end_Rotation_Range, door_Data.start_Rotation_Range);
                     }
                 }
             }
@@ -1622,17 +1643,6 @@ namespace Game {
                             if(child != nullptr)
                                 child->position.x += 10.f * GetFrameTime();
                     }
-                }
-
-                Ray ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
-                BoundingBox bbox = data.drawer_BBox;
-                bbox.min = Vector3Add(bbox.min, drawer.position);
-                bbox.max = Vector3Add(bbox.max, drawer.position);
-                RayCollision collision = GetRayCollisionBox(ray, bbox);
-
-                if(nearest_Hit > collision.distance && collision.hit) {
-                    nearest_Hit = collision.distance;
-                    nearest_Hit_Id = index;
                 }
 
                 index++;
@@ -1757,15 +1767,6 @@ namespace Game {
                         case Game_Data::NORMAL_AI: {
                             Vector3 source = data.father_Points[data.keyframe].position;
                             Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
-
-                            int index = 0;
-                            bool changing_Door_State = false;
-                            for(bool state : data.father_Points[(data.keyframe + 1) % data.father_Points.size()].door_States) {
-                                if(data.doors[index].opening_Father != state)
-                                    changing_Door_State = true;
-                                data.doors[index].opening_Father = state;
-                                index++;
-                            }
 
                             float max = Vector3Distance(source, target) / 4.f;
                             data.keyframe_Tick += 1.f * GetFrameTime();

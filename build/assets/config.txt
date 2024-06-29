@@ -54,8 +54,12 @@ Formát řádku: `pozice_kamera_x pozice_kamera_y pozice_kamera_z
 DRAWERS = -27.42 4 -10.1 1 -27.42 4 -12.8 1
 
 // Kde se spawnuje klíč (pozice_x1 pozice_y1 pozice_z1 rotace_y1 pozice_x2 pozice_y2 pozice_z2 rotace_y2 ...)
+// Na začátku hry se vybere náhodná pozice
 // NOTE: DRAWERS musí být definovány před KEY_SPAWNS, pokud se klíč spawnuje v šuplíku
 KEY_SPAWNS = 12 20 27.5 0 -10.5 15.5 27.5 0 0 10 37 45 
 
 // Kde se spawnují pojistky. Prozatím nelze spawnovat náhodně na jiných místech jako u klíče
 FUSE_BOX = 1.3 8.3 25.8
+
+// Jestli hra používá vlastní font
+CUSTOM_FONT = FALSE

@@ -32,6 +32,8 @@ namespace Shared {
 
         bool debug = false;
         bool show_Fps = false;
+
+        bool custom_Font = false;
     } settings;
 
     class Button {
@@ -62,7 +64,9 @@ namespace Shared {
             DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, 0.3f, 10, border_Width, Fade(BLACK, (float)alpha / 255.f));
             DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
         
-            DrawTextEx(font, text, Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), font_Size, 0.f, BLACK);
+            float offset = 0.f;
+            if(!settings.custom_Font) offset = 4.f;
+            DrawTextEx(font, text, Vector2Add(Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), {0.f, offset}), font_Size, 0.f, BLACK);
 
             return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle);
         }
