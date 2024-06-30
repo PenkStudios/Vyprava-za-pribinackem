@@ -392,7 +392,7 @@ namespace Game {
         playing = true;
     }
 
-    Vector3 LerpVector3XYZ(Vector3 source, Vector3 target, float amount) {
+    Vector3 Lerp_Rotation(Vector3 source, Vector3 target, float amount) {
         Vector3 addition = {(float)(((((int)target.x - (int)source.x) % 360) + 540) % 360) - 180,
                             (float)(((((int)target.y - (int)source.y) % 360) + 540) % 360) - 180,
                             (float)(((((int)target.z - (int)source.z) % 360) + 540) % 360) - 180};
@@ -434,7 +434,7 @@ namespace Game {
                 target.y += 2.5f;
                 target.z += 0.8f;
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, stage_Tick / 0.2f);
-                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {-75.f, 0.f, 0.f}, stage_Tick / 0.2f);
+                data.item_Data[Game_Data::SPOON].rotation = Lerp_Rotation(from_Spoon_Rotation, {-75.f, 0.f, 0.f}, stage_Tick / 0.2f);
                 if(next_Stage_Tick < 0.2f != true) {
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                 }
@@ -465,7 +465,7 @@ namespace Game {
                 target.x += 0.2f;
                 target.y += 2.f;
                 target.z += 0.1f;
-                data.item_Data[Game_Data::SPOON].rotation = LerpVector3XYZ(from_Spoon_Rotation, {0.f, 90.f, 0.f}, (stage_Tick - 0.6f) / 0.2f);
+                data.item_Data[Game_Data::SPOON].rotation = Lerp_Rotation(from_Spoon_Rotation, {0.f, 90.f, 0.f}, (stage_Tick - 0.6f) / 0.2f);
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.6f) / 0.2f);
                 if(next_Stage_Tick < 0.8f != true) {
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
@@ -1396,7 +1396,7 @@ namespace Game {
 
                         float source_Father_Rotation = data.death_Animation[(int)(data.death_Animation_Tick - 2.f)].father_Rotation;
                         float target_Father_Rotation = data.death_Animation[(int)(data.death_Animation_Tick - 2.f) + 1].father_Rotation;
-                        float current_Father_Rotation = LerpVector3XYZ({0.f, source_Father_Rotation, 0.f}, {0.f, target_Father_Rotation, 0.f}, data.death_Animation_Tick - (int)data.death_Animation_Tick).y;
+                        float current_Father_Rotation = Lerp_Rotation({0.f, source_Father_Rotation, 0.f}, {0.f, target_Father_Rotation, 0.f}, data.death_Animation_Tick - (int)data.death_Animation_Tick).y;
 
                         if(data.death_Animation_Tick - 2.f && data.guide_Index < 1) can_Update = false;
                         if((int)(data.death_Animation_Tick - 2.f) == 3 && !data.guide_Finished) can_Update = false;
@@ -1436,19 +1436,19 @@ namespace Game {
 
                     DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
                     
-                    Matrix matrixDoorHandle = MatrixIdentity();
+                    Matrix matrix_Door_Handle = MatrixIdentity();
 
                     // matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
                     float size = Remap(door_Data.scale.y, 0.f, 5.f, 0.35f, 0.75f);
-                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(size, size, size));
+                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixScale(size, size, size));
 
-                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
-                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixRotateY(door_Data.rotation * DEG2RAD));
-                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
+                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixRotateY(door_Data.rotation * DEG2RAD));
+                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
-                    matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
                     
-                    DrawMesh(data.door_Handle, *door_Data.material, matrixDoorHandle);
+                    DrawMesh(data.door_Handle, *door_Data.material, matrix_Door_Handle);
                     
                     if(door_Data.type != 0) {
                         if(door_Data.start_Rotation_Range < door_Data.end_Rotation_Range) {
@@ -1697,7 +1697,8 @@ namespace Game {
                         if(index > 0) {
                             DrawLine3D(previous_Point, point.position, RED);
                         }
-                        DrawSphere(point.position, .5f, BLUE);
+                        bool invalid = Get_Collision_Cylinder(point.position, 1.5f);
+                        DrawSphere(point.position, .5f, invalid ? RED : BLUE);
                         previous_Point = point.position;
                         index++;
                     }

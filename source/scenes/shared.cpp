@@ -243,21 +243,6 @@ namespace Shared {
         bold_Font = LoadFontEx(ASSETS_ROOT "fonts/bold.ttf", 96, nullptr, 0x5ff);
         SetTextureFilter(bold_Font.texture, TEXTURE_FILTER_BILINEAR);
 
-        float font_Size = GetScreenHeight() / 15.f;
-        float button_Height = GetScreenHeight() / 8.f;
-
-        settings_Button = Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 0.f}, "Nastavení", font_Size, medium_Font);
-        play_Button = Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Hrát", font_Size, medium_Font);
-        
-        back_Button = Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.2f}, "Zpět", font_Size, medium_Font);
-
-        show_Fps = TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 4.f}, u8"Ukázat FPS");
-        test_Mode = TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 2.2f}, u8"Testový mód");
-        mobile_Mode = TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.2f}, u8"Mobilní mód");
-
-        volume = Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 4.f}, u8"Hlasitost");
-        max_Fps = Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.6f}, u8"FPS limiter", 0.167f);
-
         house = LoadModel(ASSETS_ROOT "models/house.glb");
 
         for(int material = 0; material < house.materialCount; material++) {

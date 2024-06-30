@@ -125,16 +125,10 @@ void Ready() {
     }
     data_Stream.close();
 }
-
 void Update() {
     BeginDrawing(); {
         Update_Scene();
     } EndDrawing();
-
-    if(IsWindowResized()) {
-        // TODO: opravit memory leaky po resizování okna
-        Init_Scenes();
-    }
 }
 
 void Save_Data() {

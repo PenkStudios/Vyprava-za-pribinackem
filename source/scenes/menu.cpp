@@ -29,6 +29,23 @@ namespace Menu {
         Texture coin;
     } data;
 
+    void Init_UI() {
+        float font_Size = GetScreenHeight() / 15.f;
+        float button_Height = GetScreenHeight() / 8.f;
+
+        Shared::settings_Button = Shared::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 0.f}, "Nastavení", font_Size, Shared::medium_Font);
+        Shared::play_Button = Shared::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Hrát", font_Size, Shared::medium_Font);
+        
+        Shared::back_Button = Shared::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.2f}, "Zpět", font_Size, Shared::medium_Font);
+
+        Shared::show_Fps = Shared::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 4.f}, u8"Ukázat FPS");
+        Shared::test_Mode = Shared::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 2.2f}, u8"Testový mód");
+        Shared::mobile_Mode = Shared::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.2f}, u8"Mobilní mód");
+
+        Shared::volume = Shared::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 4.f}, u8"Hlasitost");
+        Shared::max_Fps = Shared::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.6f}, u8"FPS limiter", 0.167f);
+    }
+
     void Init() {
         Shared::Init();
 
@@ -49,6 +66,10 @@ namespace Menu {
         //    data.house.materials[material].shader = 
         //}
 
+        float font_Size = GetScreenHeight() / 15.f;
+        float button_Height = GetScreenHeight() / 8.f;
+
+        Init_UI();
         Mod_Callback("Init_Menu", (void*)&data);
     }
 
@@ -160,6 +181,10 @@ namespace Menu {
         DrawTextEx(Shared::medium_Font, test_Text, {0.f, 0.f}, 35.f, 0.f, WHITE);
         DrawRectangleLines(0, 0, (int)(test_Size.x), (int)(test_Size.y), RED);
         */
+
+        if(IsWindowResized()) {
+            Init_UI();
+        }
     }
 };
 
