@@ -78,7 +78,7 @@ void Ready() {
     Switch_To_Scene(MENU);
 
     Mod_Load_Directory(ASSETS_ROOT "mods/");
-    Mod_Callback("Init", nullptr);
+    Mod_Callback("Init", (void*)&Shared::data);
 
     SetTargetFPS(60);
     EnableCursor();
@@ -119,7 +119,7 @@ void Ready() {
 
         if(strings.size() > 2) {
             if(strings[0] == "COINS") {
-                Shared::coins = std::stoi(strings[2]);
+                Shared::data.coins = std::stoi(strings[2]);
             }
         }
     }
@@ -132,7 +132,7 @@ void Update() {
 }
 
 void Save_Data() {
-    std::string string = "COINS = " + std::to_string(Shared::coins) + "\n";
+    std::string string = "COINS = " + std::to_string(Shared::data.coins) + "\n";
     std::vector<unsigned char> data = Encrypt(string);
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)

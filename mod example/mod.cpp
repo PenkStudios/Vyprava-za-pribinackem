@@ -14,7 +14,7 @@
 extern "C" {
 
 /*
-MOD_API void Init(void*) {}
+MOD_API void Init(Intro::Intro_Data* context) {}
 
 MOD_API void Init_Intro(Intro::Intro_Data* context) {}
 MOD_API void Update_Intro(Intro::Intro_Data* context, bool in_Front) {}
@@ -24,7 +24,7 @@ MOD_API void Update_Menu(Menu::Menu_Data* context, bool in_Front) {}
 
 MOD_API void Init_Game(Game::Game_Data* context) {}
 MOD_API void Update_Game(Game::Game_Data* context) {}
-MOD_API void Update_Game_UI(Game::Game_Data* context, bool in_Front) {}
+MOD_API void Update_Game_2D(Game::Game_Data* context, bool in_Front) {}
 */
 
 }

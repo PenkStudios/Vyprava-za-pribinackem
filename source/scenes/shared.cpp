@@ -23,105 +23,121 @@ namespace Shared {
         DrawTextExC(font, text, position, fontSize, spacing, Fade(WHITE, (float)alpha / 255.f));
     }
 
-    Font medium_Font;
-    Font bold_Font;
-
-    class Settings {
+    class Shared_Data {
     public:
-        Settings() {}
+        Font medium_Font;
+        Font bold_Font;
 
-        bool debug = false;
-        bool show_Fps = false;
+        class Settings {
+        public:
+            Settings() {}
 
-        bool custom_Font = false;
-    } settings;
+            bool debug = false;
+            bool show_Fps = false;
 
-    class Button {
-    private:
-        Vector2 size;
-        Rectangle rectangle;
-        Font font;
+            bool custom_Font = false;
+        } settings;
 
-    public:
-        Vector2 position;
+        class Button {
+        private:
+            Vector2 size;
+            Rectangle rectangle;
+            Font font;
 
-        const char* text;
-        float font_Size;
+        public:
+            Vector2 position;
 
-        Button() {}
-        
-        Button(Vector2 position, const char* text, float font_Size, Font font) : position(position), text(text), font_Size(font_Size), font(font) {
-            size = MeasureTextEx(font, text, font_Size, 0.f);
-            rectangle = {position.x - size.x * 1.5f / 2.f, position.y - size.y * 1.5f / 2.f, size.x * 1.5f, size.y * 1.5f};
-        }
+            const char* text;
+            float font_Size;
 
-        bool Update(unsigned char alpha = 255) {
-            float spacing = GetScreenHeight() / 240.f;
-            float border_Width = GetScreenHeight() / 120.f;
+            Button() {}
+            
+            Button(Vector2 position, const char* text, float font_Size, Font font) : position(position), text(text), font_Size(font_Size), font(font) {
+                size = MeasureTextEx(font, text, font_Size, 0.f);
+                rectangle = {position.x - size.x * 1.5f / 2.f, position.y - size.y * 1.5f / 2.f, size.x * 1.5f, size.y * 1.5f};
+            }
 
-            DrawRectangleRounded(rectangle, 0.3f, 10, Fade(WHITE, (float)alpha / 255.f));
-            DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, 0.3f, 10, border_Width, Fade(GRAY, (float)alpha / 255.f));
-            DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, 0.3f, 10, border_Width, Fade(BLACK, (float)alpha / 255.f));
-            DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
-        
-            float offset = 0.f;
-            if(!settings.custom_Font) offset = 4.f;
-            DrawTextEx(font, text, Vector2Add(Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), {0.f, offset}), font_Size, 0.f, BLACK);
+            bool Update(unsigned char alpha = 255);
+        };
 
-            return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle);
-        }
-    };
+        class TickBox {
+        public:
+            Vector2 position;
+            const char* caption;
+            bool ticked = false;
 
-    class TickBox {
-    public:
-        Vector2 position;
-        const char* caption;
-        bool ticked = false;
+            TickBox() {}
 
-        TickBox() {}
+            TickBox(Vector2 position, const char* caption) : position(position), caption(caption) {}
+            TickBox(Vector2 position, const char* caption, bool ticked) : position(position), caption(caption), ticked(ticked) {}
 
-        TickBox(Vector2 position, const char* caption) : position(position), caption(caption) {}
-        TickBox(Vector2 position, const char* caption, bool ticked) : position(position), caption(caption), ticked(ticked) {}
+            void Update(unsigned char alpha = 255);
+        };
 
-        void Update(unsigned char alpha = 255);
-    };
+        class Slider {
+        public:
+            Vector2 position;
+            const char* caption;
 
-    class Slider {
-    public:
-        Vector2 position;
-        const char* caption;
+            float progress = 0;
+            bool holding = false;
 
-        float progress = 0;
-        bool holding = false;
+            Slider() {}
 
-        Slider() {}
+            Slider(Vector2 position, const char* caption) : position(position), caption(caption) {}
+            Slider(Vector2 position, const char* caption, float default_Progress) : position(position), caption(caption), progress(default_Progress) {}
 
-        Slider(Vector2 position, const char* caption) : position(position), caption(caption) {}
-        Slider(Vector2 position, const char* caption, float default_Progress) : position(position), caption(caption), progress(default_Progress) {}
+            bool Update(unsigned char alpha = 255);
+        };
 
-        bool Update(unsigned char alpha = 255);
-    };
+        Button settings_Button {};
+        Button play_Button {};
 
-    Button settings_Button {};
-    Button play_Button {};
+        // nastavení
+        Button back_Button {};
+        TickBox show_Fps {};
+        TickBox test_Mode {};
+        TickBox mobile_Mode {};
 
-    // nastavení
-    Button back_Button {};
-    TickBox show_Fps {};
-    TickBox test_Mode {};
-    TickBox mobile_Mode {};
+        Slider volume {};
+        Slider max_Fps {};
 
-    Slider volume {};
-    Slider max_Fps {};
+        Model pribinacek;
+        ModelAnimation *animations;
+        int animation_Frame_Counter = 0;
 
-    bool Slider::Update(unsigned char alpha) {
+        int coins = 0;
+
+        Model house;
+        Shader lighting;
+
+        Light flashlight;
+    } data;
+
+    bool Shared_Data::Button::Update(unsigned char alpha) {
+        float spacing = GetScreenHeight() / 240.f;
+        float border_Width = GetScreenHeight() / 120.f;
+
+        DrawRectangleRounded(rectangle, 0.3f, 10, Fade(WHITE, (float)alpha / 255.f));
+        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, 0.3f, 10, border_Width, Fade(GRAY, (float)alpha / 255.f));
+        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, 0.3f, 10, border_Width, Fade(BLACK, (float)alpha / 255.f));
+        DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
+    
+        float offset = 0.f;
+        if(!data.settings.custom_Font) offset = 4.f;
+        DrawTextEx(font, text, Vector2Add(Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), {0.f, offset}), font_Size, 0.f, BLACK);
+
+        return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle);
+    }
+
+    bool Shared_Data::Slider::Update(unsigned char alpha) {
         float size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
         float spacing = GetScreenHeight() / 240.f;
         float font_Size = size;
         float border_Width = GetScreenHeight() / 120.f;
 
         Rectangle rectangle = {position.x - size * 5.f / 2.f, position.y - size / 5.f / 2.f, size * 5.f, size / 5.f};
-        DrawTextExOutline(medium_Font, caption, {rectangle.x + rectangle.width / 2.f, rectangle.y - size * 1.125f}, font_Size, 0.f, WHITE, alpha);
+        DrawTextExOutline(data.medium_Font, caption, {rectangle.x + rectangle.width / 2.f, rectangle.y - size * 1.125f}, font_Size, 0.f, WHITE, alpha);
 
         DrawRectangleRounded(rectangle, 0.3f, 10, Fade(WHITE, (float)alpha / 255.f));
         // DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, 0.3f, 10, border_Width, Alpha_Modify(GRAY, alpha));
@@ -137,14 +153,14 @@ namespace Shared {
         DrawRectangleRoundedLinesEx(pointer, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
 
         Rectangle hitbox = pointer;
-        if(mobile_Mode.ticked) {
+        if(data.mobile_Mode.ticked) {
             hitbox.x -= size / 2.f;
             hitbox.y -= size / 2.f;
             hitbox.width += size;
             hitbox.height += size;
         }
 
-        if(settings.debug) {
+        if(data.settings.debug) {
             DrawRectangleLinesEx(hitbox, 2.5f, RED);
         }
 
@@ -167,14 +183,14 @@ namespace Shared {
         return to_Return;
     }
 
-    void TickBox::Update(unsigned char alpha) {
+    void Shared_Data::TickBox::Update(unsigned char alpha) {
         float size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
         float spacing = GetScreenHeight() / 240.f;
         float font_Size = size;
         float border_Width = GetScreenHeight() / 120.f;
 
         Rectangle rectangle = {position.x - size / 2.f, position.y - size / 2.f, size, size};
-        DrawTextExOutline(medium_Font, caption, {rectangle.x + rectangle.width / 2.f, rectangle.y - size / 1.7f}, font_Size, 0.f, WHITE, alpha);
+        DrawTextExOutline(data.medium_Font, caption, {rectangle.x + rectangle.width / 2.f, rectangle.y - size / 1.7f}, font_Size, 0.f, WHITE, alpha);
 
         DrawRectangleRounded(rectangle, 0.3f, 10, Fade(WHITE, (float)alpha / 255.f));
         DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, 0.3f, 10, border_Width, Fade(GRAY, (float)alpha / 255.f));
@@ -186,14 +202,14 @@ namespace Shared {
         DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
 
         Rectangle hitbox = rectangle;
-        if(mobile_Mode.ticked) {
+        if(data.mobile_Mode.ticked) {
             hitbox.x -= size / 2.f;
             hitbox.y -= size / 2.f;
             hitbox.width += size;
             hitbox.height += size;
         }
 
-        if(settings.debug) {
+        if(data.settings.debug) {
             DrawRectangleLinesEx(hitbox, 2.5f, RED);
         }
 
@@ -202,51 +218,40 @@ namespace Shared {
         }
     }
 
-    Model pribinacek;
-    ModelAnimation *animations;
-    int animation_Frame_Counter = 0;
-
-    int coins = 0;
-
-    Model house;
-    Shader lighting;
-
-    Light flashlight;
-
     void Init() {
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
-        lighting = LoadShader(ASSETS_ROOT "shaders/vertex100.glsl", ASSETS_ROOT "shaders/fragment100.glsl");
+        data.lighting = LoadShader(ASSETS_ROOT "shaders/vertex100.glsl", ASSETS_ROOT "shaders/fragment100.glsl");
 #else
-        lighting = LoadShader(ASSETS_ROOT "shaders/vertex330.glsl", ASSETS_ROOT "shaders/fragment330.glsl");
+        data.lighting = LoadShader(ASSETS_ROOT "shaders/vertex330.glsl", ASSETS_ROOT "shaders/fragment330.glsl");
 #endif
 
-        lighting.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(lighting, "matModel");
-        lighting.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(lighting, "viewPos");
+        data.lighting.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(data.lighting, "matModel");
+        data.lighting.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(data.lighting, "viewPos");
 
-        int ambientLoc = GetShaderLocation(lighting, "ambient");
+        int ambientLoc = GetShaderLocation(data.lighting, "ambient");
         float ambient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
-        SetShaderValue(lighting, ambientLoc, ambient, SHADER_UNIFORM_VEC4);
+        SetShaderValue(data.lighting, ambientLoc, ambient, SHADER_UNIFORM_VEC4);
 
-        Shared::flashlight = CreateLight(LIGHT_POINT, {0.f, 0.f, 0.f}, {0.f, 0.f, 0.f}, WHITE, Shared::lighting);
+        data.flashlight = CreateLight(LIGHT_POINT, {0.f, 0.f, 0.f}, {0.f, 0.f, 0.f}, WHITE, data.lighting);
 
-        pribinacek = LoadModel(ASSETS_ROOT "models/pribinacek.glb");
+        data.pribinacek = LoadModel(ASSETS_ROOT "models/pribinacek.glb");
 
-        for(int material = 0; material < pribinacek.materialCount; material++)
-            pribinacek.materials[material].shader = lighting;
+        for(int material = 0; material < data.pribinacek.materialCount; material++)
+            data.pribinacek.materials[material].shader = data.lighting;
 
         int animation_Count = 0;
-        animations = LoadModelAnimations(ASSETS_ROOT "models/pribinacek.glb", &animation_Count);
+        data.animations = LoadModelAnimations(ASSETS_ROOT "models/pribinacek.glb", &animation_Count);
 
-        medium_Font = LoadFontEx(ASSETS_ROOT "fonts/medium.ttf", 96, nullptr, 0x5ff);
-        SetTextureFilter(medium_Font.texture, TEXTURE_FILTER_BILINEAR);
+        data.medium_Font = LoadFontEx(ASSETS_ROOT "fonts/medium.ttf", 96, nullptr, 0x5ff);
+        SetTextureFilter(data.medium_Font.texture, TEXTURE_FILTER_BILINEAR);
 
-        bold_Font = LoadFontEx(ASSETS_ROOT "fonts/bold.ttf", 96, nullptr, 0x5ff);
-        SetTextureFilter(bold_Font.texture, TEXTURE_FILTER_BILINEAR);
+        data.bold_Font = LoadFontEx(ASSETS_ROOT "fonts/bold.ttf", 96, nullptr, 0x5ff);
+        SetTextureFilter(data.bold_Font.texture, TEXTURE_FILTER_BILINEAR);
 
-        house = LoadModel(ASSETS_ROOT "models/house.glb");
+        data.house = LoadModel(ASSETS_ROOT "models/house.glb");
 
-        for(int material = 0; material < house.materialCount; material++) {
-            SetTextureFilter(house.materials[material].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
+        for(int material = 0; material < data.house.materialCount; material++) {
+            SetTextureFilter(data.house.materials[material].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
         }
     }
 };

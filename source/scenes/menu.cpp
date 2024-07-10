@@ -33,24 +33,24 @@ namespace Menu {
         float font_Size = GetScreenHeight() / 15.f;
         float button_Height = GetScreenHeight() / 8.f;
 
-        Shared::settings_Button = Shared::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 0.f}, "Nastavení", font_Size, Shared::medium_Font);
-        Shared::play_Button = Shared::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Hrát", font_Size, Shared::medium_Font);
+        Shared::data.settings_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 0.f}, "Nastavení", font_Size, Shared::data.medium_Font);
+        Shared::data.play_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Hrát", font_Size, Shared::data.medium_Font);
         
-        Shared::back_Button = Shared::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.2f}, "Zpět", font_Size, Shared::medium_Font);
+        Shared::data.back_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.2f}, "Zpět", font_Size, Shared::data.medium_Font);
 
-        Shared::show_Fps = Shared::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 4.f}, u8"Ukázat FPS");
-        Shared::test_Mode = Shared::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 2.2f}, u8"Testový mód");
-        Shared::mobile_Mode = Shared::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.2f}, u8"Mobilní mód");
+        Shared::data.show_Fps = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 4.f}, u8"Ukázat FPS");
+        Shared::data.test_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 2.2f}, u8"Testový mód");
+        Shared::data.mobile_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.2f}, u8"Mobilní mód");
 
-        Shared::volume = Shared::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 4.f}, u8"Hlasitost");
-        Shared::max_Fps = Shared::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.6f}, u8"FPS limiter", 0.167f);
+        Shared::data.volume = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 4.f}, u8"Hlasitost");
+        Shared::data.max_Fps = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.6f}, u8"FPS limiter", 0.167f);
     }
 
     void Init() {
         Shared::Init();
 
         #if defined(PLATFORM_IOS) || defined(PLATFORM_ANDROID)
-        data.mobile_Mode.ticked = true;
+        Shared::data.mobile_Mode.ticked = true;
         #endif
 
         data.camera.position = data.scene_Perspectives[Menu_Data::MAIN];
@@ -75,7 +75,7 @@ namespace Menu {
 
     void On_Switch() {
         EnableCursor();
-        UpdateModelAnimation(Shared::pribinacek, Shared::animations[0], 0);
+        UpdateModelAnimation(Shared::data.pribinacek, Shared::data.animations[0], 0);
 
         Mod_Callback("Switch_Menu", (void*)&data);
     }
@@ -110,14 +110,14 @@ namespace Menu {
         ClearBackground(BLACK);
 
         BeginMode3D(data.camera); {
-            DrawModel(Shared::house, {-26.5f, -7.5f, -41.f}, 1.f, WHITE);
-            DrawModel(Shared::pribinacek, {0.f, -0.5f, 0.f}, 1.f, WHITE);
+            DrawModel(Shared::data.house, {-26.5f, -7.5f, -41.f}, 1.f, WHITE);
+            DrawModel(Shared::data.pribinacek, {0.f, -0.5f, 0.f}, 1.f, WHITE);
         } EndMode3D();
 
-        SetShaderValue(Shared::lighting, Shared::lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
+        SetShaderValue(Shared::data.lighting, Shared::data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
 
-        Shared::flashlight.position = data.camera.position;
-        UpdateLightValues(Shared::lighting, Shared::flashlight);
+        Shared::data.flashlight.position = data.camera.position;
+        UpdateLightValues(Shared::data.lighting, Shared::data.flashlight);
 
         Mod_Callback("Update_Menu_2D", (void*)&data, false);
 
@@ -130,27 +130,27 @@ namespace Menu {
         switch(data.scene) {
             case Menu::Menu_Data::Menu_Scene::MAIN: {
                 float font_Size = GetScreenHeight() / 15.f;
-                Shared::DrawTextExOutline(Shared::bold_Font, "Výprava za pribináčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE, alpha);
+                Shared::DrawTextExOutline(Shared::data.bold_Font, "Výprava za pribináčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE, alpha);
 
-                if(Shared::settings_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS);
-                if(Shared::play_Button.Update(alpha)) Switch_To_Scene(GAME);
+                if(Shared::data.settings_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS);
+                if(Shared::data.play_Button.Update(alpha)) Switch_To_Scene(GAME);
                 break;
             }
             case Menu::Menu_Data::Menu_Scene::SETTINGS: {
-                Shared::show_Fps.Update(alpha);
+                Shared::data.show_Fps.Update(alpha);
                 
-                Shared::test_Mode.Update(alpha);
-                Shared::settings.debug = Shared::test_Mode.ticked;
+                Shared::data.test_Mode.Update(alpha);
+                Shared::data.settings.debug = Shared::data.test_Mode.ticked;
 
-                if(Shared::volume.Update(alpha)) SetMasterVolume(Shared::volume.progress);
-                Shared::mobile_Mode.Update(alpha);
+                if(Shared::data.volume.Update(alpha)) SetMasterVolume(Shared::data.volume.progress);
+                Shared::data.mobile_Mode.Update(alpha);
 
-                int fps = Shared::max_Fps.progress * 360;
-                if(Shared::max_Fps.progress > 0.8f) fps = 0;
+                int fps = Shared::data.max_Fps.progress * 360;
+                if(Shared::data.max_Fps.progress > 0.8f) fps = 0;
 
-                if(Shared::max_Fps.Update(alpha)) SetTargetFPS(fps);
+                if(Shared::data.max_Fps.Update(alpha)) SetTargetFPS(fps);
 
-                if(Shared::back_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::MAIN);
+                if(Shared::data.back_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::MAIN);
                 break;
             }
         }
@@ -160,25 +160,25 @@ namespace Menu {
 
         DrawTextureEx(data.coin, {(float)GetScreenWidth() - data.coin.width * size - margin, margin}, 0.f, size, WHITE);
 
-        const char* text = TextFormat("%d", Shared::coins);
-        Vector2 text_Size = MeasureTextEx(Shared::medium_Font, text, data.coin.height * size, 0.f);
-        if(!Shared::settings.custom_Font) text_Size.y += 12.f;
-        Shared::DrawTextExOutline(Shared::medium_Font, text, {(float)GetScreenWidth() - text_Size.x / 2.f - data.coin.width * size - margin * 2.f, margin + text_Size.y / 2.f}, data.coin.height * size, 0.f, WHITE);
+        const char* text = TextFormat("%d", Shared::data.coins);
+        Vector2 text_Size = MeasureTextEx(Shared::data.medium_Font, text, data.coin.height * size, 0.f);
+        if(!Shared::data.settings.custom_Font) text_Size.y += 12.f;
+        Shared::DrawTextExOutline(Shared::data.medium_Font, text, {(float)GetScreenWidth() - text_Size.x / 2.f - data.coin.width * size - margin * 2.f, margin + text_Size.y / 2.f}, data.coin.height * size, 0.f, WHITE);
 
         Mod_Callback("Update_Menu_2D", (void*)&data, true);
 
-        if(Shared::show_Fps.ticked) {
+        if(Shared::data.show_Fps.ticked) {
             const char* text = TextFormat("FPS: %d", GetFPS());
             float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 40.f;
 
-            Vector2 size = MeasureTextEx(Shared::medium_Font, text, font_Size, 0.f);
-            Shared::DrawTextExOutline(Shared::medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
+            Vector2 size = MeasureTextEx(Shared::data.medium_Font, text, font_Size, 0.f);
+            Shared::DrawTextExOutline(Shared::data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
         }
 
         /*
         const char *test_Text = "TEXT text y";
-        Vector2 test_Size = MeasureTextEx(Shared::medium_Font, test_Text, 35.f, 0.f);
-        DrawTextEx(Shared::medium_Font, test_Text, {0.f, 0.f}, 35.f, 0.f, WHITE);
+        Vector2 test_Size = MeasureTextEx(Shared::data.medium_Font, test_Text, 35.f, 0.f);
+        DrawTextEx(Shared::data.medium_Font, test_Text, {0.f, 0.f}, 35.f, 0.f, WHITE);
         DrawRectangleLines(0, 0, (int)(test_Size.x), (int)(test_Size.y), RED);
         */
 

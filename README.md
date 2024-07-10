@@ -1,9 +1,8 @@
-# Výprava za pribináčkem verze 0.9.4
+# Výprava za pribináčkem verze 0.9.45
 Velice vtipná hra o cestě pro pribináčka
 
 ## Přídáno
-- Opraveny některé bugy s tátou
-- Resizování nyní negeneruje memory leaky
+- Timer mod
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
