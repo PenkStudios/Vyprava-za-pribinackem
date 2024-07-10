@@ -38,12 +38,12 @@ namespace Menu {
         
         Shared::data.back_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.2f}, "Zpět", font_Size, Shared::data.medium_Font);
 
-        Shared::data.show_Fps = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 4.f}, u8"Ukázat FPS");
-        Shared::data.test_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 2.2f}, u8"Testový mód");
-        Shared::data.mobile_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.2f}, u8"Mobilní mód");
+        Shared::data.show_Fps = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 4.f}, u8"Ukázat FPS", Shared::data.show_Fps.ticked);
+        Shared::data.test_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 2.2f}, u8"Testový mód", Shared::data.test_Mode.ticked);
+        Shared::data.mobile_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.2f}, u8"Mobilní mód", Shared::data.mobile_Mode.ticked);
 
-        Shared::data.volume = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 4.f}, u8"Hlasitost");
-        Shared::data.max_Fps = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.6f}, u8"FPS limiter", 0.167f);
+        Shared::data.volume = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 4.f}, u8"Hlasitost", Shared::data.volume.progress);
+        Shared::data.max_Fps = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.6f}, u8"FPS limiter", FloatEquals(Shared::data.max_Fps.progress, 0.f) ? 0.167f : Shared::data.max_Fps.progress);
     }
 
     void Init() {
@@ -181,10 +181,6 @@ namespace Menu {
         DrawTextEx(Shared::data.medium_Font, test_Text, {0.f, 0.f}, 35.f, 0.f, WHITE);
         DrawRectangleLines(0, 0, (int)(test_Size.x), (int)(test_Size.y), RED);
         */
-
-        if(IsWindowResized()) {
-            Init_UI();
-        }
     }
 };
 

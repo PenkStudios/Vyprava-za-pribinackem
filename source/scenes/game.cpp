@@ -45,6 +45,9 @@ float Triangular_Modulo(float x, float y) {
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+#include <filesystem>
+namespace fs = std::filesystem;
+
 namespace Game {
     class Game_Data {
     public:
@@ -65,6 +68,39 @@ namespace Game {
                 position(door_Position), scale(door_Scale), start_Rotation_Range(start_Rotation_Range),
                 end_Rotation_Range(end_Rotation_Range), rotation(start_Rotation_Range /* (start_Rotation_Range + end_Rotation_Range) / 2.f */),
                 material(material), type(type), opening(false) {}
+        };
+
+        class Variable_Sound {
+        public:
+            std::vector<Sound> sounds = {};
+            int old_Sound_Index = -1;
+
+            Variable_Sound(const char* folder_Path) {
+                for (const auto& entry : fs::directory_iterator(folder_Path))
+                    sounds.push_back(LoadSound(entry.path().string().c_str()));
+            }
+
+            Variable_Sound() {}
+
+            // Pokud jakýkoliv zvuk hraje
+            bool Playing() {
+                for(Sound &sound : sounds) {
+                    if(IsSoundPlaying(sound)) return true;
+                }
+                return false;
+            }
+
+            void Play(float volume = 1.f) {
+                int sound_Index = rand() % sounds.size();
+                while(sound_Index == old_Sound_Index)
+                    sound_Index = rand() % sounds.size();
+
+                Sound sound = sounds[sound_Index];
+                SetSoundVolume(sound, volume);
+                PlaySound(sound);
+
+                old_Sound_Index = sound_Index;
+            }
         };
 
         std::vector<Door_Data> doors = {};
@@ -329,6 +365,9 @@ namespace Game {
 
         Shader default_Shader;
         std::vector<Light> lights;
+
+        float hear_Cooldown = 0.f;
+        Variable_Sound hear{};
     } data;
 
     bool Game::Game_Data::Guide_Caption::Update() {
@@ -608,8 +647,12 @@ namespace Game {
         data.father_State = Game_Data::INSPECT;
     }
 
-    void Hear_Player() {
+    void Init_UI() {
+        float font_Size = GetScreenHeight() / 15.f;
+        float button_Height = GetScreenHeight() / 8.f;
 
+        data.play_Again_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f + button_Height}, u8"Hrát znovu", font_Size, Shared::data.medium_Font);
+        data.menu_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f}, u8"Zpátky do menu", font_Size, Shared::data.medium_Font);
     }
 
     void Init() {
@@ -828,11 +871,7 @@ namespace Game {
         data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f))); //     SPOON
         data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f})); //              KEY
 
-        float font_Size = GetScreenHeight() / 15.f;
-        float button_Height = GetScreenHeight() / 8.f;
-
-        data.play_Again_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f + button_Height}, u8"Hrát znovu", font_Size, Shared::data.medium_Font);
-        data.menu_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f}, u8"Zpátky do menu", font_Size, Shared::data.medium_Font);
+        Init_UI();
 
         for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
             if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
@@ -847,6 +886,7 @@ namespace Game {
         }
 
         data.skip = LoadTexture(ASSETS_ROOT "textures/skip.png");
+        data.hear = Game_Data::Variable_Sound(ASSETS_ROOT "audio/hear");
 
         Mod_Callback("Init_Game", (void*)&data);
     }
@@ -886,8 +926,14 @@ namespace Game {
     void On_Switch() {
         DisableCursor();
 
-        int spoon_Position_Index = rand() % data.key_Spawns.size();
-        data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[spoon_Position_Index].position, data.key_Spawns[spoon_Position_Index].rotation);
+        data.item_Data.clear();
+        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f})); //              NONE
+        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f))); //      PRIBINACEK
+        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f))); //     SPOON
+        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f})); //              KEY
+
+        int key_Position_Index = rand() % data.key_Spawns.size();
+        data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[key_Position_Index].position, data.key_Spawns[key_Position_Index].rotation);
 
         for(Game_Data::Item_Data &item : data.item_Data) {
             item.fall_Acceleration = 0.1f;
@@ -923,6 +969,19 @@ namespace Game {
         data.fuse_Box.Reset();
 
         data.fog_Density = 0.15f;
+
+        /*
+        data.camera.position = {-10.f, 20.f, 23.5f}; // {0.f, 7.5f, 0.f};
+        data.camera.up = {0.f, 1.f, 0.f};
+        data.camera.target = {0.f, 20.f, 23.5f};
+        */
+
+        data.camera_Rotation = {0.f, 180.f, 0.f};
+        data.old_Mouse_Position = {0.f, 0.f}; // Pozice kurzoru na předchozím framu
+        data.start_Mouse_Position = {0.f, 0.f}; // Pozice kurzoru na začátku draggování
+        data.previous_Rotated = false; // Pokud byl rotate "event" předchozí frame
+
+        data.hear_Cooldown = 0.f;
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -1040,11 +1099,16 @@ namespace Game {
     }
 
     bool Player_Visible() {
-        Ray father_Ray = {Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), Vector3Divide(Vector3Normalize(Vector3Subtract(data.camera.position, data.father_Position)), {10.f, 10.f, 10.f})};
-        float player_Distance = Vector3Distance(data.father_Position, data.camera.position) * 10.f;
+        Vector3 father_Position = Vector3Add(data.father_Position, {0.f, 6.5f, 0.f});
+        Ray father_Ray = {father_Position, Vector3Normalize(Vector3Subtract(data.camera.position, father_Position))};
+
+        RayCollision father_Camera_Collision = GetRayCollisionSphere(father_Ray, data.camera.position, 0.2f);
         RayCollision scene_Collision = Get_Collision_Ray(father_Ray);
 
-        bool player_Visible = player_Distance < scene_Collision.distance;
+        float player_Distance = Vector3Distance(father_Camera_Collision.point, father_Position);
+        float scene_Distance = Vector3Distance(scene_Collision.point, father_Position);
+
+        bool player_Visible = player_Distance < scene_Distance;
         return player_Visible;
     }
 
@@ -1732,7 +1796,7 @@ namespace Game {
                                 for(Game_Data::Father_Point &keyframe : data.father_Points) {
                                     float distance = Vector3Distance(data.father_Position, keyframe.position);
 
-                                    if(distance < nearest_Keyframe_Distance && fabs(data.father_Position.y + 6.5f - keyframe.position.y) < 3.f) {
+                                    if(distance < nearest_Keyframe_Distance && fabs(data.father_Position.y + 3.5f - keyframe.position.y) < 3.f) {
                                         data.target_Keyframe = index;
                                         nearest_Keyframe_Distance = distance;
                                     }
@@ -1810,6 +1874,10 @@ namespace Game {
                 data.father_Position.y = y;
 
                 DrawModelEx(data.father, data.father_Position, {0.f, 1.f, 0.f}, data.father_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
+            }
+
+            if(Player_Visible()) {
+                See_Player();
             }
         } EndMode3D();
 
@@ -1958,10 +2026,6 @@ namespace Game {
             }
         }
 
-        if(Player_Visible()) {
-            See_Player();
-        }
-
         if(!data.guide_Finished) {
             if(data.guide_Texts[data.guide_Index].Update()) {
                 data.guide_Index++;
@@ -2090,8 +2154,18 @@ namespace Game {
             UpdateModelAnimation(data.father, data.animations[0], 16);
         }
 
-        if(IsKeyPressed(KEY_F)) {
-            data.win.Play();
+        if(data.hear_Cooldown <= 0.f) {
+            data.hear_Cooldown = rand() % 10 + 15;
+
+            bool death_Screen = data.death_Animation_Tick - 2.f > (float)data.death_Animation.size() - 1.f;
+
+            if(!data.hear.Playing() && !death_Screen & !data.win.playing) {
+                float volume = Remap(Vector3Distance(data.camera.position, data.father_Position), 0.f, 50.f, 1.f, 0.f);
+                volume = Clamp(volume, 0.f, 1.f);
+                data.hear.Play(volume);
+            }
+        } else {
+            data.hear_Cooldown -= GetFrameTime();
         }
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);

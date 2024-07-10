@@ -129,6 +129,11 @@ void Update() {
     BeginDrawing(); {
         Update_Scene();
     } EndDrawing();
+
+    if(IsWindowResized()) {
+        Game::Init_UI();
+        Menu::Init_UI();
+    }
 }
 
 void Save_Data() {
