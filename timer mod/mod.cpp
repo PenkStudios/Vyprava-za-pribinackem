@@ -118,7 +118,7 @@ MOD_API void Update_Game_2D(Game::Game_Data* context, bool in_Front) {
 			if(!Splits_Contain("Klíč")) {
 				Splits_Append("Klíč");
 			}
-		} else if(context->guide_Index >= 7) {
+		} else if(context->guide_Texts[7].done) {
 			if(!Splits_Contain("Konec")) {
 				Splits_Append("Konec");
 				timer_Playing = false;

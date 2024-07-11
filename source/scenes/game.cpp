@@ -238,6 +238,7 @@ namespace Game {
         public:
             std::string target_Text;
             bool can_Skip; // zmáčkněte mezerník pro skipnutí (pro příběh)
+            bool done = false;
 
             std::string text; // pomalu napsaný
             float frame = 1;
@@ -300,7 +301,7 @@ namespace Game {
         class Win_Animation {
         public:
             bool playing = false;
-            int tick = 0;
+            float tick = 0.f;
 
             int walk_Finish;
             int fetch_Finish; // "sbírání" pribináčka + lžíci
@@ -368,6 +369,8 @@ namespace Game {
 
         float hear_Cooldown = 0.f;
         Variable_Sound hear{};
+
+        bool debug = false;
     } data;
 
     bool Game::Game_Data::Guide_Caption::Update() {
@@ -383,10 +386,8 @@ namespace Game {
         Rectangle rectangle = {margin, margin, GetScreenWidth() - margin * 2.f, height};
 
         float caption_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 30.f;
-        float border_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 120.f;
 
-        DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
-        DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, border_Size, Color {0, 0, 0, 255});
+        DrawRectangleRounded(rectangle, 0.1f, 20, {20, 20, 20, 255});
 
         Vector2 text_Size = MeasureTextEx(Shared::data.medium_Font, text.c_str(), caption_Font_Size, 0.f);
         DrawTextEx(Shared::data.medium_Font, text.c_str(), {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, caption_Font_Size, 0.f, WHITE);
@@ -412,14 +413,14 @@ namespace Game {
 
     void Game_Data::Win_Animation::Play() {
         // Potom co se hráč dostal do místnosti s pribináčkem a lžicí na stole
-        tick = 0;
+        tick = 0.f;
 
         walk_Finish = Vector3Distance(data.camera.position, CHAIR_POSITION) * 10;
-        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 0.1f;
-        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 0.1f;
+        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 5.f;
+        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 5.f;
         fetch_Finish = MAX(pribinacek_Fetch, spoon_Fetch) + walk_Finish;
         open_Finish = fetch_Finish + Shared::data.animations[0].frameCount - 1;
-        eat_Finish = open_Finish + GetFPS() * 4.166f;
+        eat_Finish = open_Finish + GetFPS() * (0.4166f / 2.f);
 
         from_Rotation = data.camera_Rotation;
         from_Position = data.camera.position;
@@ -440,7 +441,7 @@ namespace Game {
 
     void Game_Data::Win_Animation::Update() {
         if(!playing) return;
-        tick++;
+        tick += GetFrameTime() * 50.f;
 
         // std::cout << data.item_Data[Game_Data::SPOON].rotation.x << " " << data.item_Data[Game_Data::SPOON].rotation.y << " " << data.item_Data[Game_Data::SPOON].rotation.z << std::endl;
         // 0 -90 0 začátek
@@ -452,26 +453,27 @@ namespace Game {
             data.camera_Rotation = Vector3Lerp(from_Rotation, {0.f, from_Rotation.y + addition, 0.f}, (float)tick / (float)walk_Finish);
             data.camera.position = Vector3Lerp(from_Position, CHAIR_POSITION, (float)tick / (float)walk_Finish);
         } else if(tick < fetch_Finish) {
-            data.item_Data[Game_Data::PRIBINACEK].position = Vector3Lerp(from_Pribinacek_Position, PRIBINACEK_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)pribinacek_Fetch, 0.f, 1.f));
-            data.item_Data[Game_Data::SPOON].rotation = Vector3Lerp(from_Spoon_Rotation, {0.f, -90.f, 0.f}, Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f));
-            data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, SPOON_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f));
+            float spoon_Fetch_Tick = Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f);
+            float pribinacek_Fetch_Tick = Clamp((float)(tick - walk_Finish) / (float)pribinacek_Fetch, 0.f, 1.f);
+            data.item_Data[Game_Data::PRIBINACEK].position = Vector3Lerp(from_Pribinacek_Position, PRIBINACEK_WIN_ANIMATION, pribinacek_Fetch_Tick);
+            data.item_Data[Game_Data::SPOON].rotation = Vector3Lerp(from_Spoon_Rotation, {0.f, -90.f, 0.f}, spoon_Fetch_Tick);
+            data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, SPOON_WIN_ANIMATION, spoon_Fetch_Tick);
             // data.item_Data[Game_Data::SPOON].rotation = Vector3Lerp(from_Spoon_Rotation, SPOON_ROTATION_WIN_ANIMATION, Clamp((float)(tick - walk_Finish) / (float)spoon_Fetch, 0.f, 1.f));
             if(tick + 1 >= fetch_Finish) {
                 from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                 from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
             }
         } else if(tick < open_Finish) {
-            Shared::data.animation_Frame_Counter++;
-            UpdateModelAnimation(Shared::data.pribinacek, Shared::data.animations[0], Shared::data.animation_Frame_Counter);
+            UpdateModelAnimation(Shared::data.pribinacek, Shared::data.animations[0], ((float)(tick - fetch_Finish) / (float)(open_Finish - fetch_Finish)) * Shared::data.animations[0].frameCount);
         } else if(tick < eat_Finish) {
             float stage_Tick = Clamp((float)(tick - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
             float next_Stage_Tick = Clamp((float)(tick + 1 - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
             if(stage_Tick < 0.2f) {
                 // 0 - 0.2
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
-                target.x += 0.2f;
+                //target.x -= 0.2f;
                 target.y += 2.5f;
-                target.z += 0.8f;
+                target.z += 0.6f;
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, stage_Tick / 0.2f);
                 data.item_Data[Game_Data::SPOON].rotation = Lerp_Rotation(from_Spoon_Rotation, {-75.f, 0.f, 0.f}, stage_Tick / 0.2f);
                 if(next_Stage_Tick < 0.2f != true) {
@@ -480,9 +482,9 @@ namespace Game {
             } else if(stage_Tick < 0.4f) {
                 // 0.2 - 0.4
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
-                target.x += 0.2f;
+                // target.x -= 0.2f;
                 target.y += 1.f;
-                target.z += 0.6f; // 0.8
+                target.z += 0.4f; // 0.8
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.2f) / 0.2f);
                 if(next_Stage_Tick < 0.4f != true) {
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
@@ -490,9 +492,9 @@ namespace Game {
             } else if(stage_Tick < 0.6f) {
                 // 0.4 - 0.6
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
-                target.x += 0.2f;
+                // target.x -= 0.2f;
                 target.y += 2.f;
-                target.z += 0.8f;
+                target.z += 0.6f;
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.4f) / 0.2f);
                 if(next_Stage_Tick < 0.6f != true) {
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
@@ -501,7 +503,7 @@ namespace Game {
             } else if(stage_Tick < 0.8f) {
                 // 0.6 - 0.8
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
-                target.x += 0.2f;
+                // target.x -= 0.2f;
                 target.y += 2.f;
                 target.z += 0.1f;
                 data.item_Data[Game_Data::SPOON].rotation = Lerp_Rotation(from_Spoon_Rotation, {0.f, 90.f, 0.f}, (stage_Tick - 0.6f) / 0.2f);
@@ -535,7 +537,7 @@ namespace Game {
             // it can be checked against any transform Matrix, used when checking against same
             // model drawn multiple times with multiple transforms
             RayCollision houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
-            if(Shared::data.settings.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
+            if(data.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
 
             /*
             Vector3 size = Vector3Subtract(data.house_BBoxes[m].max, data.house_BBoxes[m].min);
@@ -888,6 +890,9 @@ namespace Game {
         data.skip = LoadTexture(ASSETS_ROOT "textures/skip.png");
         data.hear = Game_Data::Variable_Sound(ASSETS_ROOT "audio/hear");
 
+        int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
+        SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+
         Mod_Callback("Init_Game", (void*)&data);
     }
 
@@ -897,7 +902,7 @@ namespace Game {
             return true;
         }
 
-        if(Shared::data.settings.debug) {
+        if(data.debug) {
             DrawLine3D(Vector3Add(data.camera.position, {0.f, -0.75f, 0.f}), collision.point, Color {255, 0, 0, 32});
             DrawSphere(collision.point, 0.5f, Color {0, 0, 255, 32});
         }
@@ -946,10 +951,10 @@ namespace Game {
         data.guide_Texts.push_back(Game_Data::Guide_Caption("Tvým cílem je jít pro pribináčka a sníst si ho tady v pokoji"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("Jo a táta vždycky na noc vypíná pojistky, aby jsem nemohl být na mobilu"));
         data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribináček", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("2. najdi lžičku", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. vem pribináček a\nlžíci do pokoje\nna stůl", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribináček a\n    vem ho do pokoje", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("2. najdi klíč", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. odemkni šuplík s\n     lžičkou a vem\n     ji do pokoje", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček\n     v pokoji", false));
 
         data.guide_Finished = false;
         data.guide_Index = 0;
@@ -982,6 +987,15 @@ namespace Game {
         data.previous_Rotated = false; // Pokud byl rotate "event" předchozí frame
 
         data.hear_Cooldown = 0.f;
+        data.crouching = false;
+
+        for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
+            if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
+            }
+        }
+
+        data.debug = false;
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -992,7 +1006,7 @@ namespace Game {
         Vector2 delta = Vector2Subtract(data.old_Mouse_Position, GetTouchPosition(touch_Id));
         data.old_Mouse_Position = GetTouchPosition(touch_Id);
 
-        if(Shared::data.settings.debug) {
+        if(data.debug) {
             DrawLineEx(data.start_Mouse_Position, data.old_Mouse_Position, 5.f, BLUE);
             DrawCircleV(data.start_Mouse_Position, 25.f, RED);
             DrawCircleV(data.old_Mouse_Position, 25.f, RED);
@@ -1234,11 +1248,8 @@ namespace Game {
                 data.holding_Item = (Game_Data::Item)nearest_Item_Id;
                 data.action_Used = true;
 
-                if((Game_Data::Item)nearest_Item_Id == Game_Data::PRIBINACEK && data.guide_Index == 4)
-                    data.guide_Index++;
-
-                if((Game_Data::Item)index == Game_Data::SPOON && data.guide_Index == 5)
-                    data.guide_Index++;
+                if((Game_Data::Item)nearest_Item_Id == Game_Data::KEY)
+                    data.guide_Texts[5].done = true;
             }
         }
 
@@ -1316,7 +1327,7 @@ namespace Game {
                 data.animation_Frame_Count = 0;
 
             /* WAKE ANIMATION */ {
-                if(Shared::data.settings.debug) {
+                if(data.debug) {
                     for(int index = 0; index < data.wake_Animation.size(); index++) {
                         DrawCube(data.wake_Animation[index].position, 1.f, 1.f, 1.f, RED);
                         DrawLine3D(data.wake_Animation[index].position, Vector3Add(data.wake_Animation[index].position, data.wake_Animation[index].target), WHITE);
@@ -1659,7 +1670,7 @@ namespace Game {
 
                             if(data.item_Data[index].falling) {
                                 // data.item_Data[index].position.y -= 1.f * GetFrameTime();
-                                if(Shared::data.settings.debug) DrawLine3D(data.item_Data[index].position, data.item_Data[index].collision.point, RED);
+                                if(data.debug) DrawLine3D(data.item_Data[index].position, data.item_Data[index].collision.point, RED);
                                 data.item_Data[index].position.y -= data.item_Data[index].fall_Acceleration * 50.f * GetFrameTime();
                                 data.item_Data[index].fall_Acceleration += 1.f * GetFrameTime();
                             }
@@ -1671,7 +1682,7 @@ namespace Game {
                         bbox.min = Vector3Add(bbox.min, data.item_Data[index].position);
                         bbox.max = Vector3Add(bbox.max, data.item_Data[index].position);
                         
-                        if(Shared::data.settings.debug) DrawBoundingBox(bbox, RED);
+                        if(data.debug) DrawBoundingBox(bbox, RED);
                     }
                 }
             }
@@ -1714,13 +1725,19 @@ namespace Game {
 
             // ----------------------
 
-            if(Shared::data.settings.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
+            if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
 
+            if(CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::PRIBINACEK].position, 0.1f))
+                data.guide_Texts[4].done = true;
+
+            if(CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::SPOON].position, 0.1f))
+                data.guide_Texts[6].done = true;
+
             if(CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::PRIBINACEK].position, 0.1f) &&
-            CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::SPOON].position, 0.1f) && data.guide_Index == 6 &&
-            data.holding_Item != Game_Data::PRIBINACEK && data.holding_Item != Game_Data::SPOON) {
-                data.guide_Index++;
+               CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::SPOON].position, 0.1f) && !data.win.playing &&
+               data.holding_Item != Game_Data::PRIBINACEK && data.holding_Item != Game_Data::SPOON) {
+                data.guide_Texts[7].done = true;
                 data.win.Play();
             }
 
@@ -1754,7 +1771,7 @@ namespace Game {
                     }
                 } */
 
-                if(Shared::data.settings.debug) {
+                if(data.debug) {
                     Vector3 previous_Point = {0.f, 0.f, 0.f};
                     int index = 0;
                     for(Game_Data::Father_Point point : data.father_Points) {
@@ -1984,12 +2001,12 @@ namespace Game {
             if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
                 data.camera.position.z = old_Position.z;
 
-            // (pokud Shared::data.settings.debug) nechceme aby se koule renderovali dvakrát
-            bool is_Debug = Shared::data.settings.debug;
-            Shared::data.settings.debug = true;
+            // (pokud data.debug) nechceme aby se koule renderovali dvakrát
+            bool is_Debug = data.debug;
+            data.debug = true;
             if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
                 data.camera.position.x = old_Position.x;
-            Shared::data.settings.debug = is_Debug;
+            data.debug = is_Debug;
 
             RayCollision collision_Legs = {0};
             if(data.wake_Animation_Finished && !data.death_Animation_Playing) {
@@ -2013,7 +2030,7 @@ namespace Game {
                     data.camera.position = old_Position;
             }
 
-            if(Shared::data.settings.debug) {
+            if(data.debug) {
                 DrawText(TextFormat("Legs raycast position: {%f, %f, %f}, angled surface: %d, %f", collision_Legs.point.x, collision_Legs.point.y, collision_Legs.point.z,
                                                                                                     collision_Legs.normal.y < 0.99f || collision_Legs.normal.y > 1.01), 5, 5, 15, WHITE);
                 
@@ -2073,7 +2090,6 @@ namespace Game {
         if(data.guide_Finished) {
             float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 30.f;
             float font_Size_Smaller = (GetScreenWidth() + GetScreenHeight()) / 2.f / 35.f;
-            float border_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 120.f;
 
             float margin = GetScreenWidth() / 50.f;
             Vector2 rectangle_Size = MeasureTextEx(Shared::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), font_Size, 0.f);
@@ -2082,9 +2098,9 @@ namespace Game {
             }
 
             Rectangle rectangle = {margin, margin, rectangle_Size.x, rectangle_Size.y};
-
-            DrawRectangleRounded(rectangle, 0.1f, 20, Color {0, 0, 0, 180});
-            DrawRectangleRoundedLinesEx(rectangle, 0.1f, 20, border_Size, BLACK);
+            rectangle.width += margin / 2.f;
+            DrawRectangleRounded(rectangle, 0.1f, 20, Color {20, 20, 20, 255});
+            rectangle.width -= margin / 2.f;
 
             Vector2 text_Box_Size = MeasureTextEx(Shared::data.medium_Font, data.guide_Texts[4].target_Text.c_str(), font_Size_Smaller, 0.f);
             for(int i = 4 + 1; i < data.guide_Texts.size(); i++) {
@@ -2095,12 +2111,12 @@ namespace Game {
             for(int i = 0; i < 4; i++) {
                 const char* text = data.guide_Texts[4 + i].target_Text.c_str();
                 Vector2 line = MeasureTextEx(Shared::data.medium_Font, text, font_Size_Smaller, 0.f);
-                DrawTextEx(Shared::data.medium_Font, text, {rectangle.x + rectangle.width / 2.f - text_Box_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Box_Size.y / 2.f + y}, font_Size_Smaller, 0.f, (4 + i < data.guide_Index) ? GREEN : WHITE);
+                DrawTextEx(Shared::data.medium_Font, text, {rectangle.x + rectangle.width / 2.f - text_Box_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Box_Size.y / 2.f + y}, font_Size_Smaller, 0.f, data.guide_Texts[4 + i].done ? GREEN : WHITE);
                 y += line.y;
             }
         }
 
-        if(IsKeyPressed(KEY_TAB)) Shared::data.settings.debug = !Shared::data.settings.debug;
+        if(IsKeyPressed(KEY_TAB) && Shared::data.settings.debug) data.debug = !data.debug;
 
         if(data.death_Animation_Playing) {
             if(data.death_Animation_Tick < 2.f) {
@@ -2167,6 +2183,13 @@ namespace Game {
         } else {
             data.hear_Cooldown -= GetFrameTime();
         }
+
+        /*
+        if(IsKeyPressed(KEY_P)) {
+            data.item_Data[Game_Data::Item::SPOON].position = Vector3Add(data.players_Room_Table.min, {0.f, 1.f, 0.f});
+            data.item_Data[Game_Data::Item::PRIBINACEK].position = Vector3Add(data.players_Room_Table.min, {0.f, 1.f, 0.f});
+        }
+        */
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
 
