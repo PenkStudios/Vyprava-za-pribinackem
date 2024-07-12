@@ -15,9 +15,7 @@
 #include "scenes/game.cpp"
 #include "scenes/shared.cpp"
 
-#if defined(PLATFORM_ANDROID)
-#include "raymob.h"
-#endif
+#include "ad.cpp"
 
 #ifdef PLATFORM_IOS // IOS struktura
 extern "C" {
@@ -30,6 +28,8 @@ extern "C" {
 #define Update ios_update
 #define Destroy ios_destroy
 #endif
+
+Texture cursor;
 
 // Velice kvalitní zabezpečení
 std::vector<unsigned char> Encrypt(std::string string) {
@@ -51,6 +51,11 @@ std::string Decrypt(std::vector<unsigned char> data) {
     }
     return output;
 }
+
+#ifdef PLATFORM_ANDROID
+#include <android_native_app_glue.h>
+extern "C" android_app* GetAndroidApp();
+#endif
 
 void Ready() {
     srand(time(NULL));
@@ -120,14 +125,36 @@ void Ready() {
         if(strings.size() > 2) {
             if(strings[0] == "COINS") {
                 Shared::data.coins = std::stoi(strings[2]);
+            } else if(strings[0] == "SHOW_FPS") {
+                Shared::data.show_Fps.ticked = (bool)std::stoi(strings[2]);
+            } else if(strings[0] == "TEST_MODE") {
+                Shared::data.test_Mode.ticked = (bool)std::stoi(strings[2]);
+            } else if(strings[0] == "MOBILE_MODE") {
+                Shared::data.mobile_Mode.ticked = (bool)std::stoi(strings[2]);
+            } else if(strings[0] == "VOLUME") {
+                Shared::data.volume.progress = std::stof(strings[2]);
+            } else if(strings[0] == "FPS_LIMIT") {
+                Shared::data.max_Fps.progress = std::stof(strings[2]);
             }
         }
     }
     data_Stream.close();
+
+    cursor = LoadTexture(ASSETS_ROOT "textures/cursor.png");
+    HideCursor();
 }
+
 void Update() {
     BeginDrawing(); {
         Update_Scene();
+
+        bool show_Cursor = true;
+        if(scene == Scene::GAME) show_Cursor = false;
+        if(scene == Scene::GAME && Game::data.death_Animation_Tick - 2.f > (float)Game::data.death_Animation.size() - 1.f) show_Cursor = true;
+
+        if(IsCursorOnScreen() && show_Cursor)
+            DrawTextureEx(cursor, Vector2Add(GetMousePosition(), {-10.f, 0.f}), 0.f, 0.5f, WHITE);
+
     } EndDrawing();
 
     if(IsWindowResized()) {
@@ -138,9 +165,14 @@ void Update() {
 
 void Save_Data() {
     std::string string = "COINS = " + std::to_string(Shared::data.coins) + "\n";
+    string += "SHOW_FPS = " + std::to_string(Shared::data.show_Fps.ticked) + "\n";
+    string += "TEST_MODE = " + std::to_string(Shared::data.test_Mode.ticked) + "\n";
+    string += "MOBILE_MODE = " + std::to_string(Shared::data.mobile_Mode.ticked) + "\n";
+    string += "VOLUME = " + std::to_string(Shared::data.volume.progress) + "\n";
+    string += "FPS_LIMIT = " + std::to_string(Shared::data.max_Fps.progress) + "\n";
     std::vector<unsigned char> data = Encrypt(string);
 
-#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
+#if defined(PLATFORM_ANDROID)
     std::string root = std::string(GetAndroidApp()->activity->internalDataPath) + "/";
 #else
     std::string root = ASSETS_ROOT;
@@ -161,7 +193,11 @@ extern "C" {
 
 void Destroy() {
     CloseWindow();
+
     Save_Data();
+#if defined(PLATFORM_ANDROID)
+    Release_Native_Loader();
+#endif
 }
 
 #ifndef PLATFORM_IOS // Normální main funkce

@@ -74,9 +74,7 @@ namespace Menu {
     }
 
     void On_Switch() {
-        EnableCursor();
         UpdateModelAnimation(Shared::data.pribinacek, Shared::data.animations[0], 0);
-
         Mod_Callback("Switch_Menu", (void*)&data);
     }
 
@@ -140,7 +138,6 @@ namespace Menu {
                 Shared::data.show_Fps.Update(alpha);
                 
                 Shared::data.test_Mode.Update(alpha);
-                Shared::data.settings.debug = Shared::data.test_Mode.ticked;
 
                 if(Shared::data.volume.Update(alpha)) SetMasterVolume(Shared::data.volume.progress);
                 Shared::data.mobile_Mode.Update(alpha);
@@ -162,7 +159,7 @@ namespace Menu {
 
         const char* text = TextFormat("%d", Shared::data.coins);
         Vector2 text_Size = MeasureTextEx(Shared::data.medium_Font, text, data.coin.height * size, 0.f);
-        if(!Shared::data.settings.custom_Font) text_Size.y += 12.f;
+        if(!Shared::data.custom_Font) text_Size.y += 12.f;
         Shared::DrawTextExOutline(Shared::data.medium_Font, text, {(float)GetScreenWidth() - text_Size.x / 2.f - data.coin.width * size - margin * 2.f, margin + text_Size.y / 2.f}, data.coin.height * size, 0.f, WHITE);
 
         Mod_Callback("Update_Menu_2D", (void*)&data, true);

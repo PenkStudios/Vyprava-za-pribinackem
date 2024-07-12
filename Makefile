@@ -3,9 +3,10 @@ WINDOWS-CXX=/bin/x86_64-w64-mingw32-g++
 
 LINK=-std=c++17 -g
 
-all: linux windows finish
+all: release
 
 release:
+	cp player.txt build/assets/player.txt
 	make linux
 	make windows
 	make finish

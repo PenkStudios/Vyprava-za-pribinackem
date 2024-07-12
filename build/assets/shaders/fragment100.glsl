@@ -63,7 +63,7 @@ void main()
 
             float specCo = 0.0;
             if (NdotL > 0.0) specCo = pow(max(0.0, dot(viewD, reflect(-(light), normal))), 16.0); // Shine: 16.0
-            specular += specCo / 4;
+            specular += specCo / 4.0;
         }
     }
 

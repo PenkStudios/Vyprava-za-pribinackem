@@ -28,15 +28,7 @@ namespace Shared {
         Font medium_Font;
         Font bold_Font;
 
-        class Settings {
-        public:
-            Settings() {}
-
-            bool debug = false;
-            bool show_Fps = false;
-
-            bool custom_Font = false;
-        } settings;
+        bool custom_Font = false;
 
         class Button {
         private:
@@ -124,7 +116,7 @@ namespace Shared {
         DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
     
         float offset = 0.f;
-        if(!data.settings.custom_Font) offset = 4.f;
+        if(!data.custom_Font) offset = 4.f;
         DrawTextEx(font, text, Vector2Add(Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), {0.f, offset}), font_Size, 0.f, BLACK);
 
         return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle);
@@ -160,7 +152,7 @@ namespace Shared {
             hitbox.height += size;
         }
 
-        if(data.settings.debug) {
+        if(data.test_Mode.ticked) {
             DrawRectangleLinesEx(hitbox, 2.5f, RED);
         }
 
@@ -209,7 +201,7 @@ namespace Shared {
             hitbox.height += size;
         }
 
-        if(data.settings.debug) {
+        if(data.test_Mode.ticked) {
             DrawRectangleLinesEx(hitbox, 2.5f, RED);
         }
 

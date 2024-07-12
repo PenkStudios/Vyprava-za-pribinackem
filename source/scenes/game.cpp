@@ -15,6 +15,8 @@
 #include "../scene.cpp"
 #include "../mod_loader.cpp"
 
+#include "../ad.cpp"
+
 #include "shared.cpp"
 
 // počet vertexů na hlavní části světla
@@ -45,9 +47,6 @@ float Triangular_Modulo(float x, float y) {
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-#include <filesystem>
-namespace fs = std::filesystem;
-
 namespace Game {
     class Game_Data {
     public:
@@ -76,8 +75,16 @@ namespace Game {
             int old_Sound_Index = -1;
 
             Variable_Sound(const char* folder_Path) {
-                for (const auto& entry : fs::directory_iterator(folder_Path))
-                    sounds.push_back(LoadSound(entry.path().string().c_str()));
+                // FilePathList file_List = LoadDirectoryFiles(folder_Path);
+                // ^ nefunguje na androidu .___________.
+                // + std::filesystem taky .____________.
+                for (int index = 0; index < 100; index++) {
+                    sounds.push_back(LoadSound(TextFormat("%s/%d.wav", folder_Path, index)));
+                    if(!IsSoundReady(sounds.back())) {
+                        sounds.pop_back();
+                        break;
+                    }
+                }
             }
 
             Variable_Sound() {}
@@ -856,12 +863,12 @@ namespace Game {
                     data.fuse_Box.position = {std::stof(strings[2]), std::stof(strings[3]), std::stof(strings[4])};
                 } else if(strings[0] == "CUSTOM_FONT" && strings.size() == 3) {
                     if(strings[2] == "TRUE") {
-                        Shared::data.settings.custom_Font = true;
+                        Shared::data.custom_Font = true;
                     } else if(strings[2] == "FALSE") {
-                        Shared::data.settings.custom_Font = false;
+                        Shared::data.custom_Font = false;
                     }
 
-                    // TraceLog(LOG_INFO, "Custom font: %d", Shared::data.settings.custom_Font);
+                    // TraceLog(LOG_INFO, "Custom font: %d", Shared::data.custom_Font);
                 } else {
                     TraceLog(LOG_WARNING, "Unknown variable or bad value %s", strings[0].c_str());
                 }
@@ -2116,7 +2123,7 @@ namespace Game {
             }
         }
 
-        if(IsKeyPressed(KEY_TAB) && Shared::data.settings.debug) data.debug = !data.debug;
+        if(IsKeyPressed(KEY_TAB) && Shared::data.test_Mode.ticked) data.debug = !data.debug;
 
         if(data.death_Animation_Playing) {
             if(data.death_Animation_Tick < 2.f) {
@@ -2150,13 +2157,21 @@ namespace Game {
                         }
                     }
 
-                    int coins = data.guide_Index - quests_Offset;
+                    int coins = 0;
+                    for(int index = 4; index < data.guide_Texts.size(); index++) {
+                        coins += data.guide_Texts[index].done;
+                    }
                     Shared::DrawTextExC(Shared::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
                 
-                    if(data.play_Again_Button.Update()) { On_Switch(); Shared::data.coins += data.guide_Index - quests_Offset; } // resetuje všechen progress
-                    else if(data.menu_Button.Update()) { Switch_To_Scene(MENU); Shared::data.coins += data.guide_Index - quests_Offset; }
+                    if(data.play_Again_Button.Update()) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
+                    else if(data.menu_Button.Update()) { Switch_To_Scene(MENU); Shared::data.coins += coins; }
 
                     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), ColorTint(color, BLACK));
+                } else if((data.death_Animation_Tick + 1.f * GetFrameTime()) - 2.f > (float)data.death_Animation.size() - 1.f) {
+                    EnableCursor();
+                    HideCursor();
+
+                    Show_Interstitial_Ad();
                 }
             }
         }
@@ -2164,7 +2179,6 @@ namespace Game {
         if(Vector3Distance(Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), data.camera.position) < 2.5f) {
             data.death_Animation_Playing = true;
             data.holding_Item = Game_Data::Item::NONE;
-            EnableCursor();
             data.camera_Start_Position = data.camera.position;
             data.camera_Start_Target = data.camera_Target;
             UpdateModelAnimation(data.father, data.animations[0], 16);
