@@ -108,7 +108,7 @@ namespace Menu {
         ClearBackground(BLACK);
 
         BeginMode3D(data.camera); {
-            DrawModel(Shared::data.house, {-26.5f, -7.5f, -41.f}, 1.f, WHITE);
+            DrawModel(Shared::data.house, {-26.5f, -7.05f, -41.f}, 1.f, WHITE);
             DrawModel(Shared::data.pribinacek, {0.f, -0.5f, 0.f}, 1.f, WHITE);
         } EndMode3D();
 
@@ -148,6 +148,9 @@ namespace Menu {
                 if(Shared::data.max_Fps.Update(alpha)) SetTargetFPS(fps);
 
                 if(Shared::data.back_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::MAIN);
+
+                float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 40.f;
+                Shared::DrawTextExOutline(Shared::data.medium_Font, "*Hra potřebuje restart po\nmodifikování mobilního módu", {(float)GetScreenWidth() - font_Size * 7.25f, (float)GetScreenHeight() - font_Size}, font_Size, 0.f, WHITE, alpha);
                 break;
             }
         }

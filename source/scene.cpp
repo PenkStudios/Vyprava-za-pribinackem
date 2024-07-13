@@ -31,7 +31,6 @@ void Update_Scene() {
     scenes[scene].update();
 }
 
-
 void Switch_To_Scene(Scene next_Scene) {
     scene = next_Scene;
     scenes[scene].on_Switch();

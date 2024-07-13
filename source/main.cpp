@@ -5,6 +5,7 @@
 #include "mod_loader.cpp"
 
 #ifdef PLATFORM_ANDROID
+#include "ad.cpp"
 #define ASSETS_ROOT ""
 #else
 #define ASSETS_ROOT "assets/"
@@ -14,8 +15,6 @@
 #include "scenes/menu.cpp"
 #include "scenes/game.cpp"
 #include "scenes/shared.cpp"
-
-#include "ad.cpp"
 
 #ifdef PLATFORM_IOS // IOS struktura
 extern "C" {
@@ -79,14 +78,10 @@ void Ready() {
         {GAME,    {Game::Init,    Game::On_Switch,    Game::Update}}
     });
 
-    Init_Scenes();
-    Switch_To_Scene(MENU);
-
-    Mod_Load_Directory(ASSETS_ROOT "mods/");
-    Mod_Callback("Init", (void*)&Shared::data);
-
     SetTargetFPS(60);
     EnableCursor();
+
+    SetExitKey(0);
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
     std::string root = std::string(GetAndroidApp()->activity->internalDataPath) + "/";
@@ -141,19 +136,30 @@ void Ready() {
     data_Stream.close();
 
     cursor = LoadTexture(ASSETS_ROOT "textures/cursor.png");
+    SetTextureFilter(cursor, TEXTURE_FILTER_BILINEAR);
+
     HideCursor();
+    
+    Mod_Load_Directory(ASSETS_ROOT "mods/");
+    Mod_Callback("Init", (void*)&Shared::data);
+
+    Init_Scenes();
+    Switch_To_Scene(MENU);
 }
 
 void Update() {
     BeginDrawing(); {
         Update_Scene();
 
+#if !defined(PLATFORM_ANDROID) && !defined(PLATFORM_IOS)
         bool show_Cursor = true;
         if(scene == Scene::GAME) show_Cursor = false;
+        if(scene == Scene::GAME && Game::data.game_Paused) show_Cursor = true;
         if(scene == Scene::GAME && Game::data.death_Animation_Tick - 2.f > (float)Game::data.death_Animation.size() - 1.f) show_Cursor = true;
 
         if(IsCursorOnScreen() && show_Cursor)
             DrawTextureEx(cursor, Vector2Add(GetMousePosition(), {-10.f, 0.f}), 0.f, 0.5f, WHITE);
+#endif
 
     } EndDrawing();
 

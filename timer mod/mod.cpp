@@ -21,15 +21,30 @@
 #endif
 
 extern "C" {
+
 Font *font;
+Texture timer;
+bool mobile_Mode;
+
+Texture crouch;
 
 MOD_API void Init(Shared::Shared_Data* context) {
 	font = &context->medium_Font;
+	mobile_Mode = context->mobile_Mode.ticked;
+
+	if(mobile_Mode)
+		timer = LoadTexture(ASSETS_ROOT "mods/timer/timer.png");
+}
+
+MOD_API void Init_Game(Game::Game_Data* context) {
+	crouch = context->crouch;
 }
 
 bool timer_Shown = false;
 bool timer_Playing;
 float time_Start;
+
+int holding_Timer = -1;
 
 #define MAX_SPLITS 4 // vzít pribináček, vzít klíč, vzít lžičku, konec
 std::pair<std::string, float> splits[MAX_SPLITS];
@@ -61,7 +76,35 @@ void Splits_Append(std::string string) {
 
 MOD_API void Update_Game_2D(Game::Game_Data* context, bool in_Front) {
 	if(in_Front) {
-		if(IsKeyPressed(KEY_T)) timer_Shown = !timer_Shown;
+		if(mobile_Mode) {
+			float size = GetScreenHeight() / 1300.f;
+    		float margin = GetScreenHeight() / 30.f;
+
+			DrawTextureV(timer, {(float)GetScreenWidth() - timer.width - margin * 2.f - size * crouch.width, margin}, WHITE);
+			
+			Rectangle timer_Rectangle = {(float)GetScreenWidth() - timer.width - margin * 2.f - size * crouch.width, margin, (float)timer.width, (float)timer.height};
+			timer_Rectangle.x -= timer_Rectangle.width / 2.f;
+			timer_Rectangle.y -= timer_Rectangle.height / 2.f;
+			timer_Rectangle.width *= 2.f;
+			timer_Rectangle.height *= 2.f;
+
+			if(holding_Timer >= GetTouchPointCount() || !CheckCollisionPointRec(GetTouchPosition(holding_Timer), timer_Rectangle)) {
+				holding_Timer = -1;
+			}
+
+			for(int index = 0; index < GetTouchPointCount(); index++) {
+                int id = GetTouchPointId(index);
+				if(CheckCollisionPointRec(GetTouchPosition(index), timer_Rectangle)) {
+					if(holding_Timer != id) {
+						timer_Shown = !timer_Shown;
+						holding_Timer = id;
+					}
+				}
+			}
+		} else {
+			if(IsKeyPressed(KEY_T)) timer_Shown = !timer_Shown;
+		}
+
 		if(timer_Shown) {
 			float margin = GetScreenWidth() / 50.f;
 			float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 30.f;

@@ -15,7 +15,9 @@
 #include "../scene.cpp"
 #include "../mod_loader.cpp"
 
+#if defined(PLATFORM_ANDROID)
 #include "../ad.cpp"
+#endif
 
 #include "shared.cpp"
 
@@ -352,6 +354,10 @@ namespace Game {
         Shared::Shared_Data::Button play_Again_Button;
         Shared::Shared_Data::Button menu_Button;
 
+        // pause screen
+        Shared::Shared_Data::Button pause_Continue_Button;
+        Shared::Shared_Data::Button pause_Menu_Button;
+
         Texture skip;
 
         Vector3 camera_Start_Target;
@@ -378,10 +384,18 @@ namespace Game {
         Variable_Sound hear{};
 
         bool debug = false;
+        bool game_Paused = false;
+
+        Texture sprint;
+        Texture walk;
+
+        int holding_Sprint = -1;
+        bool sprinting = false;
     } data;
 
     bool Game::Game_Data::Guide_Caption::Update() {
-        frame += 20.f * GetFrameTime();
+        if(!data.game_Paused)
+            frame += 20.f * GetFrameTime();
         if(frame > target_Text.size()) {
             frame = target_Text.size();
         }
@@ -448,7 +462,8 @@ namespace Game {
 
     void Game_Data::Win_Animation::Update() {
         if(!playing) return;
-        tick += GetFrameTime() * 50.f;
+        if(!data.game_Paused)
+            tick += GetFrameTime() * 50.f;
 
         // std::cout << data.item_Data[Game_Data::SPOON].rotation.x << " " << data.item_Data[Game_Data::SPOON].rotation.y << " " << data.item_Data[Game_Data::SPOON].rotation.z << std::endl;
         // 0 -90 0 začátek
@@ -660,8 +675,11 @@ namespace Game {
         float font_Size = GetScreenHeight() / 15.f;
         float button_Height = GetScreenHeight() / 8.f;
 
-        data.play_Again_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f + button_Height}, u8"Hrát znovu", font_Size, Shared::data.medium_Font);
-        data.menu_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f * 2.f}, u8"Zpátky do menu", font_Size, Shared::data.medium_Font);
+        data.play_Again_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height}, u8"Hrát znovu", font_Size, Shared::data.medium_Font);
+        data.menu_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Zpátky do menu", font_Size, Shared::data.medium_Font);
+
+        data.pause_Continue_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Pokračovat ve hře", font_Size, Shared::data.medium_Font);
+        data.pause_Menu_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height}, u8"Zpátky do menu", font_Size, Shared::data.medium_Font);
     }
 
     void Init() {
@@ -686,6 +704,9 @@ namespace Game {
 
             data.un_Crouch = LoadTexture(ASSETS_ROOT "textures/uncrouch.png");
             SetTextureFilter(data.un_Crouch, TEXTURE_FILTER_BILINEAR);
+
+            data.sprint = LoadTexture(ASSETS_ROOT "textures/sprint.png");
+            data.walk = LoadTexture(ASSETS_ROOT "textures/walk.png");
         }
 
         data.default_Shader = LoadMaterialDefault().shader;
@@ -1003,6 +1024,9 @@ namespace Game {
         }
 
         data.debug = false;
+        data.game_Paused = false;
+
+        data.sprinting = false;
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -1320,6 +1344,8 @@ namespace Game {
         SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         data.action_Used = false; // If any action was used this frame (preventing click-through)
+        if(!Shared::data.mobile_Mode.ticked)
+            data.sprinting = IsKeyDown(KEY_LEFT_SHIFT);
 
         BeginMode3D(data.camera); {
             Mod_Callback("Update_Game_3D", (void*)&data);
@@ -1329,7 +1355,9 @@ namespace Game {
 
             if(!data.death_Animation_Playing) UpdateModelAnimation(data.father, data.animations[0], data.animation_Frame_Count);
 
-            data.animation_Frame_Count += 50.f * GetFrameTime();
+            if(!data.game_Paused)
+                data.animation_Frame_Count += 50.f * GetFrameTime();
+
             if(data.animation_Frame_Count >= data.animations[0].frameCount)
                 data.animation_Frame_Count = 0;
 
@@ -1377,7 +1405,7 @@ namespace Game {
                     if(data.wake_Animation_Tick && data.guide_Index < 1) can_Update = false;
                     if((int)data.wake_Animation_Tick == 3 && !data.guide_Finished) can_Update = false;
 
-                    if(can_Update) {
+                    if(can_Update && !data.game_Paused) {
                         data.wake_Animation_Tick += 1.f * GetFrameTime();
                     }
 
@@ -1496,7 +1524,7 @@ namespace Game {
                     }
                 }
 
-                if(can_Update) {
+                if(can_Update && !data.game_Paused) {
                     data.death_Animation_Tick += 1.f * GetFrameTime();
                 }
             }
@@ -1536,21 +1564,25 @@ namespace Game {
                         if(door_Data.start_Rotation_Range < door_Data.end_Rotation_Range) {
                             if(door_Data.opening) {
                                 if(door_Data.rotation < door_Data.end_Rotation_Range) {
-                                    door_Data.rotation += 100.f * GetFrameTime();
+                                    if(!data.game_Paused)
+                                        door_Data.rotation += 100.f * GetFrameTime();
                                 }
                             } else {
                                 if(door_Data.rotation > door_Data.start_Rotation_Range) {
-                                    door_Data.rotation -= 100.f * GetFrameTime();
+                                    if(!data.game_Paused)
+                                        door_Data.rotation -= 100.f * GetFrameTime();
                                 }
                             }
                         } else {
                             if(door_Data.opening) {
                                 if(door_Data.rotation > door_Data.end_Rotation_Range) {
-                                    door_Data.rotation -= 100.f * GetFrameTime();
+                                    if(!data.game_Paused)
+                                        door_Data.rotation -= 100.f * GetFrameTime();
                                 }
                             } else {
                                 if(door_Data.rotation < door_Data.start_Rotation_Range) {
-                                    door_Data.rotation += 100.f * GetFrameTime();
+                                    if(!data.game_Paused)
+                                        door_Data.rotation += 100.f * GetFrameTime();
                                 }
                             }
                         }
@@ -1576,9 +1608,11 @@ namespace Game {
                                 Vector2 distances = {fabs(normalized_Rotation - angle), fabs(normalized_Rotation - fmod(angle + 180.f, 360.f))};
                                 
                                 if(distances.x < distances.y) {
-                                    door_Data.rotation += (IsKeyDown(KEY_LEFT_SHIFT) ? 150.f : 100.f) * GetFrameTime();
+                                    if(!data.game_Paused)
+                                        door_Data.rotation += (data.sprinting ? 150.f : 100.f) * GetFrameTime();
                                 } else {
-                                    door_Data.rotation -= (IsKeyDown(KEY_LEFT_SHIFT) ? 150.f : 100.f) * GetFrameTime();
+                                    if(!data.game_Paused)
+                                        door_Data.rotation -= (data.sprinting ? 150.f : 100.f) * GetFrameTime();
                                 }
 
                                 door_Updated = true;
@@ -1606,9 +1640,11 @@ namespace Game {
                                 Vector2 distances = {fabs(normalized_Rotation - angle), fabs(normalized_Rotation - fmod(angle + 180.f, 360.f))};
                                 
                                 if(distances.x < distances.y) {
-                                    door_Data.rotation += 100.f * GetFrameTime();
+                                    if(!data.game_Paused)
+                                        door_Data.rotation += 100.f * GetFrameTime();
                                 } else {
-                                    door_Data.rotation -= 100.f * GetFrameTime();
+                                    if(!data.game_Paused)
+                                        door_Data.rotation -= 100.f * GetFrameTime();
                                 }
 
                                 door_Updated = true;
@@ -1678,7 +1714,10 @@ namespace Game {
                             if(data.item_Data[index].falling) {
                                 // data.item_Data[index].position.y -= 1.f * GetFrameTime();
                                 if(data.debug) DrawLine3D(data.item_Data[index].position, data.item_Data[index].collision.point, RED);
-                                data.item_Data[index].position.y -= data.item_Data[index].fall_Acceleration * 50.f * GetFrameTime();
+
+                                if(!data.game_Paused)
+                                    data.item_Data[index].position.y -= data.item_Data[index].fall_Acceleration * 50.f * GetFrameTime();
+                                
                                 data.item_Data[index].fall_Acceleration += 1.f * GetFrameTime();
                             }
                         }
@@ -1702,28 +1741,36 @@ namespace Game {
                 DrawModel(data.drawer, drawer.position, 1.f, WHITE);
                 if(drawer.has_Lock) DrawModel(data.lock, Vector3Add(drawer.position, {1.95f, 1.f, 0.f}), 1.f, WHITE);
                 if(drawer.opening) {
-                    drawer.position.x += 10.f * GetFrameTime();
+                    if(!data.game_Paused)
+                        drawer.position.x += 10.f * GetFrameTime();
+                        
                     for(Game_Data::Item_Data* child : drawer.childs)
                         if(child != nullptr)
-                            child->position.x += 10.f * GetFrameTime();
+                            if(!data.game_Paused)
+                                child->position.x += 10.f * GetFrameTime();
+
                     if(drawer.position.x > drawer.original_Position.x + 2.f) {
                         drawer.position.x -= 10.f * GetFrameTime();
                         for(Game_Data::Item_Data* child : drawer.childs)
                             if(child != nullptr)
-                                child->position.x -= 10.f * GetFrameTime();
+                                if(!data.game_Paused)
+                                    child->position.x -= 10.f * GetFrameTime();
                     }
                 } else {
                     drawer.position.x -= 10.f * GetFrameTime();
                     for(Game_Data::Item_Data* child : drawer.childs)
-                        if(child != nullptr) {
-                            child->position.x -= 10.f * GetFrameTime();
-                        }
+                        if(child != nullptr)
+                            if(!data.game_Paused)
+                                child->position.x -= 10.f * GetFrameTime();
             
                     if(drawer.position.x < drawer.original_Position.x) {
-                        drawer.position.x += 10.f * GetFrameTime();
+                        if(!data.game_Paused)
+                            drawer.position.x += 10.f * GetFrameTime();
                         for(Game_Data::Item_Data* child : drawer.childs)
                             if(child != nullptr)
-                                child->position.x += 10.f * GetFrameTime();
+                                if(!data.game_Paused)
+                                    child->position.x += 10.f * GetFrameTime();
+                        
                     }
                 }
 
@@ -1752,9 +1799,11 @@ namespace Game {
             DrawModel(data.fuse_Box.model, data.fuse_Box.position, 1.f, WHITE);
 
             if(data.fuse_Box.lever_Turning) {
-                data.fuse_Box.lever_Tick += GetFrameTime() * 80.f;
+                if(!data.game_Paused)
+                    data.fuse_Box.lever_Tick += GetFrameTime() * 80.f;
             } else {
-                data.fuse_Box.lever_Tick -= GetFrameTime() * 80.f;
+                if(!data.game_Paused)
+                    data.fuse_Box.lever_Tick -= GetFrameTime() * 80.f;
             }
 
             data.fuse_Box.lever_Tick = Clamp(data.fuse_Box.lever_Tick, 0.f, data.fuse_Box.animations[0].frameCount - 1.f);
@@ -1796,7 +1845,9 @@ namespace Game {
                     switch(data.father_State) {
                         case Game_Data::INSPECT: {
                             Vector3 old_Position = data.father_Position;
-                            data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
+
+                            if(!data.game_Paused)
+                                data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
 
                             bool collide_X = Get_Collision_Cylinder({data.father_Position.x, data.father_Position.y + 6.5f, old_Position.z}, 1.5f);
                             if(collide_X) data.father_Position.x = old_Position.x;
@@ -1808,7 +1859,9 @@ namespace Game {
                             float angle = -atan2(diff.z, diff.x) * RAD2DEG;
 
                             float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
-                            data.father_Rotation += addition / 20.f;
+
+                            if(!data.game_Paused)
+                                data.father_Rotation += addition / 20.f;
 
                             if(collide_X || collide_Z) {
                                 data.father_State = Game_Data::RETURN;
@@ -1839,9 +1892,12 @@ namespace Game {
                             float angle = -atan2(diff.z, diff.x) * RAD2DEG;
 
                             float addition = (((((int)angle - (int)data.father_Rotation) % 360) + 540) % 360) - 180;
-                            data.father_Rotation += addition / 20.f;
+                            if(!data.game_Paused)
+                                data.father_Rotation += addition / 20.f;
 
-                            data.return_Tick += 1.f * GetFrameTime();
+                            if(!data.game_Paused)
+                                data.return_Tick += 1.f * GetFrameTime();
+                            
                             if(data.return_Tick > 1.f) {
                                 data.father_State = Game_Data::NORMAL_AI;
                                 data.keyframe = data.target_Keyframe;
@@ -1858,7 +1914,9 @@ namespace Game {
                             Vector3 target = data.father_Points[(data.keyframe + 1) % data.father_Points.size()].position;
 
                             float max = Vector3Distance(source, target) / 4.f;
-                            data.keyframe_Tick += 1.f * GetFrameTime();
+
+                            if(!data.game_Paused)
+                                data.keyframe_Tick += 1.f * GetFrameTime();
 
                             data.father_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
                                                     Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
@@ -1940,6 +1998,19 @@ namespace Game {
                     data.holding_Crouch = -1;
                 }
 
+                Texture texture_Sprint = data.sprinting ? data.walk : data.sprint;
+                DrawTextureEx(texture_Sprint, {(float)GetScreenWidth() - texture_Sprint.width * size - margin, margin * 2.f + texture.height * size}, 0.f, size, WHITE);
+                Rectangle sprint_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin * 2.f + texture.height * size, texture.width * size, texture.height * size};
+
+                sprint_Rectangle.x -= sprint_Rectangle.width / 2.f;
+                sprint_Rectangle.y -= sprint_Rectangle.height / 2.f;
+                sprint_Rectangle.width *= 2.f;
+                sprint_Rectangle.height *= 2.f;
+
+                if(data.holding_Sprint >= GetTouchPointCount() || !CheckCollisionPointRec(GetTouchPosition(data.holding_Sprint), sprint_Rectangle)) {
+                    data.holding_Sprint = -1;
+                }
+
                 bool camera_Rotated = false;
                 for(int index = 0; index < GetTouchPointCount(); index++) {
                     int id = GetTouchPointId(index);
@@ -1952,10 +2023,15 @@ namespace Game {
                             data.crouching = !data.crouching;
                             data.holding_Crouch = id;
                         }
+                    } else if(CheckCollisionPointRec(GetTouchPosition(index), sprint_Rectangle)) {
+                        if(data.holding_Sprint != id) {
+                            data.sprinting = !data.sprinting;
+                            data.holding_Sprint = id;
+                        }
                     } else {
                         if (can_Update) {
                             rotation_Updated = true;
-                            if (data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
+                            if (data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing && !data.game_Paused) {
                                 Update_Camera_Android(id, data.previous_Rotated);
                                 camera_Rotated = true;
                             }
@@ -1963,7 +2039,7 @@ namespace Game {
                             if (joystick.moving && data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
                                 float speed = 1.f;
                                 if (data.crouching) speed /= 1.5f;
-                                if (!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
+                                if (!data.crouching && data.sprinting) speed *= 1.5f;
 
                                 float camera_Angle = atan2(data.camera_Target.z, data.camera_Target.x) +
                                                     90.f * DEG2RAD;
@@ -1995,10 +2071,10 @@ namespace Game {
             data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
             data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
-            if(data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
+            if(data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing && !data.game_Paused) {
                 float speed = 1.f;
                 if(data.crouching) speed /= 1.5f;
-                if(!data.crouching && IsKeyDown(KEY_LEFT_SHIFT)) speed *= 1.5f;
+                if(!data.crouching && data.sprinting) speed *= 1.5f;
 
                 Update_Camera_Desktop(speed);
             }
@@ -2030,7 +2106,9 @@ namespace Game {
                         // Nedělat nic tady
                         data.fall_Acceleration = 0.1f;
                     } else {
-                        data.camera.position.y -= data.fall_Acceleration * 50.f * GetFrameTime();
+                        if(!data.game_Paused)
+                            data.camera.position.y -= data.fall_Acceleration * 50.f * GetFrameTime();
+                        
                         data.fall_Acceleration += 1.f * GetFrameTime();
                     }
                 } else
@@ -2142,12 +2220,7 @@ namespace Game {
                     Color color = Fade(WHITE, alpha);
 
                     float font_Size = GetScreenHeight() / 15.f;
-                    for(int angle = 0; angle < 360; angle += 20) {
-                        Vector2 offset = {cos(angle * DEG2RAD) * 3.f, sin(angle * DEG2RAD) * 3.f};
-
-                        Shared::DrawTextExC(Shared::data.bold_Font, u8"Prohrál jsi", Vector2Add({GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, offset), font_Size, 1.f, BLACK);
-                    }
-                    Shared::DrawTextExC(Shared::data.bold_Font, u8"Prohrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, font_Size, 1.f, WHITE);
+                    Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Prohrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, font_Size, 1.f, WHITE);
                     
                     int quests_Offset = 0;
                     for(int index = 0; index < data.guide_Texts.size(); index++) {
@@ -2171,7 +2244,10 @@ namespace Game {
                     EnableCursor();
                     HideCursor();
 
-                    Show_Interstitial_Ad();
+#if defined(PLATFORM_ANDROID)
+                    if(rand() % 3 == 0)
+                        Show_Interstitial_Ad();
+#endif
                 }
             }
         }
@@ -2204,6 +2280,30 @@ namespace Game {
             data.item_Data[Game_Data::Item::PRIBINACEK].position = Vector3Add(data.players_Room_Table.min, {0.f, 1.f, 0.f});
         }
         */
+
+        if(IsKeyPressed(KEY_ESCAPE)) {
+            data.game_Paused = !data.game_Paused;
+            if(data.game_Paused) {
+                EnableCursor();
+                HideCursor();
+            } else {
+                DisableCursor();
+            }
+        }
+
+        if(data.game_Paused) {
+            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color {0, 0, 0, 200});
+
+            Vector2 size = {GetScreenWidth() / 2.2f, GetScreenHeight() / 2.f};
+            Rectangle rectangle = {GetScreenWidth() / 2.f - size.x / 2.f, GetScreenHeight() / 2.f - size.y / 2.f, size.x, size.y};
+            Shared::Draw_Pack(rectangle);
+
+            float font_Size = GetScreenHeight() / 15.f;
+            Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Hra pozastavena", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
+
+            if(data.pause_Menu_Button.Update()) Switch_To_Scene(MENU);
+            if(data.pause_Continue_Button.Update()) data.game_Paused = false;
+        }
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
 

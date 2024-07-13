@@ -1,8 +1,9 @@
-# Výprava za pribináčkem verze 0.9.7
+# Výprava za pribináčkem verze 0.9.75
 Velice vtipná hra o cestě pro pribináčka
 
 ## Přídáno
-- Reklamy na androidu (wip)
+- Přidán sprint na mobil
+- Opraven mobilní mód
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
