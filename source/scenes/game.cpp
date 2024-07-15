@@ -49,6 +49,49 @@ float Triangular_Modulo(float x, float y) {
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+#include <algorithm>
+
+double t_Previous;
+std::map<std::string, double> t_Breakpoints;
+
+void t_Init() {
+    t_Previous = GetTime();
+}
+
+void t_Breakpoint(std::string name) {
+    double time = GetTime() - t_Previous;
+    if(t_Breakpoints.count(name)) {
+        t_Breakpoints[name] = (t_Breakpoints[name] + time) / 2.f;
+    } else {
+        t_Breakpoints[name] = time;
+    }
+    t_Previous = GetTime();
+}
+
+void t_Summary() {
+    std::vector<std::pair<std::string, double>> pairs;
+    for (auto iterator = t_Breakpoints.begin(); iterator != t_Breakpoints.end(); ++iterator)
+        pairs.push_back(*iterator);
+
+    std::sort(pairs.begin(), pairs.end(), [=](std::pair<std::string, double>& a, std::pair<std::string, double>& b)
+    {
+        return a.second > b.second;
+    }
+    );
+
+    TraceLog(LOG_INFO, "Time breakpoint summary");
+
+    int place = 1;
+    double sum = 0.f;
+    for(std::pair<std::string, double> pair : pairs) {
+        TraceLog(LOG_INFO, "%d. %s (%f seconds)", place, pair.first.c_str(), pair.second);
+        sum += pair.second;
+        place++;
+    }
+
+    TraceLog(LOG_INFO, "Performance sum: %f, fps: %f", sum, 1000.f / sum);
+}
+
 namespace Game {
     class Game_Data {
     public:
@@ -559,7 +602,6 @@ namespace Game {
             // it can be checked against any transform Matrix, used when checking against same
             // model drawn multiple times with multiple transforms
             RayCollision houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
-            if(data.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
 
             /*
             Vector3 size = Vector3Subtract(data.house_BBoxes[m].max, data.house_BBoxes[m].min);
@@ -938,13 +980,75 @@ namespace Game {
         return false;
     }
 
+    // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
+    BoundingBox Get_Model_BBox_Matrix(Model model, Matrix transform) {
+        Mesh mesh = model.meshes[0];
+        BoundingBox bb = {Vector3Zero(), Vector3Zero()};
+
+        float x = model.meshes[0].vertices[0];
+        float y = model.meshes[0].vertices[1];
+        float z = model.meshes[0].vertices[2];
+
+        Vector3 v = {x, y, z};
+        v = Vector3Transform(v, transform);
+
+        bb.min = v;
+        bb.max = v;
+
+        for(int i = 0; i < model.meshes[0].vertexCount * 3.f; i += 3) {
+            x = model.meshes[0].vertices[i];
+            y = model.meshes[0].vertices[i+1];
+            z = model.meshes[0].vertices[i+2];
+
+            v = {x, y, z};
+            v = Vector3Transform(v, transform);
+
+            if(v.x < bb.min.x) {
+                bb.min.x = v.x;
+            }
+            if(v.y < bb.min.y) {
+                bb.min.y = v.y;
+            }
+            if(v.z < bb.min.z) {
+                bb.min.z = v.z;
+            }
+            if(v.x > bb.max.x) {
+                bb.max.x = v.x;
+            }
+            if(v.y > bb.max.y) {
+                bb.max.y = v.y;
+            }
+            if(v.z > bb.max.z) {
+                bb.max.z = v.z;
+            }
+
+        }
+
+        return bb;
+    }
+
+    bool Get_Collision_Sphere(Vector3 center, float radius) {
+        for(int m = 0; m < Shared::data.house.meshCount; m++) {
+            bool houseCollision = CheckCollisionBoxSphere(data.house_BBoxes[m], center, radius);
+            if(data.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
+
+            if(houseCollision) return true;
+        }
+
+        return false;
+    }
+
     bool Ray_Sides_Collision(Vector3 camera_Position, Vector3 old_Position) {
+        bool collision = Get_Collision_Sphere(camera_Position, 0.5f);
+
+        /*
         bool collision_1 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.f, 0.f, 0.1f}}, old_Position);
         bool collision_2 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.f, 0.f, -0.1f}}, old_Position);
         bool collision_3 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {0.1f, 0.f, 0.f}}, old_Position);
         bool collision_4 = Ray_Side_Collision({Vector3Add(camera_Position, {0.f, -0.75f, 0.f}), {-0.1f, 0.f, 0.f}}, old_Position);
+        */
 
-        return collision_1 || collision_2 || collision_3 || collision_4;
+        return collision;
     }
 
     std::vector<bool> Get_Door_States() {
@@ -1027,6 +1131,7 @@ namespace Game {
         data.game_Paused = false;
 
         data.sprinting = false;
+        data.camera.fovy = Shared::data.fov.progress * 179.f;
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -1049,7 +1154,7 @@ namespace Game {
         if(!update_Camera)
             return;
 
-        data.camera_Rotation = Vector3Add(data.camera_Rotation, {-delta.y * GetFrameTime() * 10.f, delta.x * GetFrameTime() * 10.f, 0.f});
+        data.camera_Rotation = Vector3Add(data.camera_Rotation, {-delta.y * (GetScreenHeight() / 600.f), delta.x * (GetScreenWidth() / 1000.f), 0.f});
         data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -85.f, 85.f);
     }
 
@@ -1068,55 +1173,11 @@ namespace Game {
             0.f);
 
         Vector2 delta = GetMouseDelta();
-        data.camera_Rotation = Vector3Add(data.camera_Rotation, {delta.y * GetFrameTime() * 5.f, -delta.x * GetFrameTime() * 5.f, 0.f});
+        delta.x *= ((Shared::data.sensitivity.progress * 30.f) / 100.f);
+        delta.y *= ((Shared::data.sensitivity.progress * 30.f) / 100.f);
+
+        data.camera_Rotation = Vector3Add(data.camera_Rotation, {delta.y, -delta.x, 0.f});
         data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -85.f, 85.f);
-    }
-
-    // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
-    BoundingBox Get_Model_BBox_Matrix(Model model, Matrix transform) {
-        Mesh mesh = model.meshes[0];
-        BoundingBox bb = {Vector3Zero(), Vector3Zero()};
-
-        float x = model.meshes[0].vertices[0];
-        float y = model.meshes[0].vertices[1];
-        float z = model.meshes[0].vertices[2];
-
-        Vector3 v = {x, y, z};
-        v = Vector3Transform(v, transform);
-
-        bb.min = v;
-        bb.max = v;
-
-        for(int i = 0; i < model.meshes[0].vertexCount * 3.f; i += 3) {
-            x = model.meshes[0].vertices[i];
-            y = model.meshes[0].vertices[i+1];
-            z = model.meshes[0].vertices[i+2];
-
-            v = {x, y, z};
-            v = Vector3Transform(v, transform);
-
-            if(v.x < bb.min.x) {
-                bb.min.x = v.x;
-            }
-            if(v.y < bb.min.y) {
-                bb.min.y = v.y;
-            }
-            if(v.z < bb.min.z) {
-                bb.min.z = v.z;
-            }
-            if(v.x > bb.max.x) {
-                bb.max.x = v.x;
-            }
-            if(v.y > bb.max.y) {
-                bb.max.y = v.y;
-            }
-            if(v.z > bb.max.z) {
-                bb.max.z = v.z;
-            }
-
-        }
-
-        return bb;
     }
 
     // Získat kolizi cylindru (ze předu delší) s mapou
@@ -1333,6 +1394,8 @@ namespace Game {
     }
 
     void Update() {
+        t_Init();
+
         ClearBackground(BLACK);
         SetShaderValue(Shared::data.lighting, Shared::data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
 
@@ -1342,6 +1405,8 @@ namespace Game {
         Vector3 old_Position = data.camera.position;
         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
         SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+
+        t_Breakpoint("Lightning stuff");
 
         data.action_Used = false; // If any action was used this frame (preventing click-through)
         if(!Shared::data.mobile_Mode.ticked)
@@ -1417,6 +1482,8 @@ namespace Game {
                     data.camera_Target = current_Target;
                 }
             }
+
+            t_Breakpoint("Wake animation");
 
             /* DEATH ANIMATION */ if(data.death_Animation_Playing) {
                 /*
@@ -1528,6 +1595,8 @@ namespace Game {
                     data.death_Animation_Tick += 1.f * GetFrameTime();
                 }
             }
+
+            t_Breakpoint("Death animation");
 
             /* DOORS */ {
                 bool door_Opened = false;
@@ -1664,13 +1733,15 @@ namespace Game {
                 }
             }
 
+            t_Breakpoint("Doors");
+
             DrawModel(Shared::data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
+
+            t_Breakpoint("House render");
 
             // ------------------
 
             /* ITEMS */ {
-                Ray player_Ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
-                
                 for(int index = 0; index < data.item_Data.size(); index++) {
                     switch(index) {
                         case Game_Data::PRIBINACEK: {
@@ -1733,6 +1804,8 @@ namespace Game {
                 }
             }
 
+            t_Breakpoint("Items");
+
             float nearest_Hit = 10000.f;
             int nearest_Hit_Id = -1;
 
@@ -1777,6 +1850,8 @@ namespace Game {
                 index++;
             }
 
+            t_Breakpoint("Drawers");
+
             // ----------------------
 
             if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
@@ -1808,6 +1883,7 @@ namespace Game {
 
             data.fuse_Box.lever_Tick = Clamp(data.fuse_Box.lever_Tick, 0.f, data.fuse_Box.animations[0].frameCount - 1.f);
             
+            t_Breakpoint("Input & stuff");
 
             /* FATHER */ {
                 /* {
@@ -1950,6 +2026,8 @@ namespace Game {
                     }
                 }
 
+                t_Breakpoint("Father");
+
                 Ray ray = {{data.father_Position.x, data.father_Position.y + 3.5f, data.father_Position.z}, {0.f, -0.1f, 0.f}};
                 float y = Get_Collision_Ray(ray).point.y;
 
@@ -1957,6 +2035,8 @@ namespace Game {
 
                 DrawModelEx(data.father, data.father_Position, {0.f, 1.f, 0.f}, data.father_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
             }
+
+            Get_Collision_Sphere(data.camera.position, 0.1f);
 
             if(Player_Visible()) {
                 See_Player();
@@ -2080,6 +2160,8 @@ namespace Game {
             }
         }
 
+        t_Breakpoint("Platform-depended updation & drawing");
+
         /* COLLISIONS */ {
             if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
                 data.camera.position.z = old_Position.z;
@@ -2127,6 +2209,8 @@ namespace Game {
                 DrawText(TextFormat("Basic data: camera position {%f, %f, %f}", data.camera.position.x, data.camera.position.y, data.camera.position.z), 5, 5 + 15 * 2, 15, WHITE);
             }
         }
+
+        t_Breakpoint("Collisions");
 
         if(!data.guide_Finished) {
             if(data.guide_Texts[data.guide_Index].Update()) {
@@ -2201,6 +2285,8 @@ namespace Game {
             }
         }
 
+        t_Breakpoint("Guide renderition");
+
         if(IsKeyPressed(KEY_TAB) && Shared::data.test_Mode.ticked) data.debug = !data.debug;
 
         if(data.death_Animation_Playing) {
@@ -2252,6 +2338,10 @@ namespace Game {
             }
         }
 
+        t_Breakpoint("Death animation");
+
+
+        // ------------------------------------------------------------------
         if(Vector3Distance(Vector3Add(data.father_Position, {0.f, 6.5f, 0.f}), data.camera.position) < 2.5f) {
             data.death_Animation_Playing = true;
             data.holding_Item = Game_Data::Item::NONE;
@@ -2302,7 +2392,7 @@ namespace Game {
             Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Hra pozastavena", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
 
             if(data.pause_Menu_Button.Update()) Switch_To_Scene(MENU);
-            if(data.pause_Continue_Button.Update()) data.game_Paused = false;
+            if(data.pause_Continue_Button.Update()) { data.game_Paused = false; DisableCursor(); }
         }
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
@@ -2314,6 +2404,10 @@ namespace Game {
             Vector2 size = MeasureTextEx(Shared::data.medium_Font, text, font_Size, 0.f);
             Shared::DrawTextExOutline(Shared::data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
         }
+
+        t_Breakpoint("End stuff i dont know how to name");
+
+        if(IsKeyPressed(KEY_KP_0)) t_Summary();
     }
 };
 

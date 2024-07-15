@@ -130,6 +130,11 @@ void Ready() {
                 Shared::data.volume.progress = std::stof(strings[2]);
             } else if(strings[0] == "FPS_LIMIT") {
                 Shared::data.max_Fps.progress = std::stof(strings[2]);
+            } else if(strings[0] == "FOV") {
+                Shared::data.fov.progress = std::stof(strings[2]);
+                Menu::data.camera.fovy = std::stof(strings[2]) * 179.f;
+            } else if(strings[0] == "SENSITIVITY") {
+                Shared::data.sensitivity.progress = std::stof(strings[2]);
             }
         }
     }
@@ -176,6 +181,8 @@ void Save_Data() {
     string += "MOBILE_MODE = " + std::to_string(Shared::data.mobile_Mode.ticked) + "\n";
     string += "VOLUME = " + std::to_string(Shared::data.volume.progress) + "\n";
     string += "FPS_LIMIT = " + std::to_string(Shared::data.max_Fps.progress) + "\n";
+    string += "FOV = " + std::to_string(Shared::data.fov.progress) + "\n";
+    string += "SENSITIVITY = " + std::to_string(Shared::data.sensitivity.progress) + "\n";
     std::vector<unsigned char> data = Encrypt(string);
 
 #if defined(PLATFORM_ANDROID)

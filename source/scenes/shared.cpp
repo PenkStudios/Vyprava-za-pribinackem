@@ -70,7 +70,7 @@ namespace Shared {
                 rectangle = {position.x - size_X / 2.f, position.y - size.y * 1.5f / 2.f, size_X, size.y * 1.5f};
             }
 
-            bool Update(unsigned char alpha = 255);
+            bool Update(unsigned char alpha = 255, bool enabled = true);
         };
 
         class TickBox {
@@ -100,7 +100,7 @@ namespace Shared {
             Slider(Vector2 position, const char* caption) : position(position), caption(caption) {}
             Slider(Vector2 position, const char* caption, float default_Progress) : position(position), caption(caption), progress(default_Progress) {}
 
-            bool Update(unsigned char alpha = 255);
+            bool Update(unsigned char alpha = 255, float display_Multiplier = 1.f);
         };
 
         Button settings_Button {};
@@ -115,6 +115,12 @@ namespace Shared {
         Slider volume {};
         Slider max_Fps {};
 
+        Button page_2_Button {};
+        Button page_1_Button {};
+
+        Slider fov {};
+        Slider sensitivity {};
+
         Model pribinacek;
         ModelAnimation *animations;
         int animation_Frame_Counter = 0;
@@ -127,30 +133,32 @@ namespace Shared {
         Light flashlight;
     } data;
 
-    bool Shared_Data::Button::Update(unsigned char alpha) {
+    bool Shared_Data::Button::Update(unsigned char alpha, bool enabled) {
         float spacing = GetScreenHeight() / 240.f;
         float border_Width = GetScreenHeight() / 120.f;
 
         DrawRectangleRounded(rectangle, 0.3f, 10, Fade(WHITE, (float)alpha / 255.f));
         DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, 0.3f, 10, border_Width, Fade(GRAY, (float)alpha / 255.f));
-        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, 0.3f, 10, border_Width, Fade(BLACK, (float)alpha / 255.f));
+        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, 0.3f, 10, border_Width, Fade(enabled ? BLACK : Color {64, 64, 64, 255}, (float)alpha / 255.f));
         DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
     
         float offset = 0.f;
         if(!data.custom_Font) offset = 4.f;
-        DrawTextEx(font, text, Vector2Add(Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), {0.f, offset}), font_Size, 0.f, BLACK);
+        DrawTextEx(font, text, Vector2Add(Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), {0.f, offset}), font_Size, 0.f, enabled ? BLACK : GRAY);
 
-        return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle);
+        if(enabled)
+            return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle);
+        return false;
     }
 
-    bool Shared_Data::Slider::Update(unsigned char alpha) {
+    bool Shared_Data::Slider::Update(unsigned char alpha, float display_Multiplier) {
         float size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
         float spacing = GetScreenHeight() / 240.f;
         float font_Size = size;
         float border_Width = GetScreenHeight() / 120.f;
 
         Rectangle rectangle = {position.x - size * 5.f / 2.f, position.y - size / 5.f / 2.f, size * 5.f, size / 5.f};
-        DrawTextExOutline(data.medium_Font, caption, {rectangle.x + rectangle.width / 2.f, rectangle.y - size * 1.125f}, font_Size, 0.f, WHITE, alpha);
+        DrawTextExOutline(data.medium_Font, TextFormat("%s: %.2f", caption, progress * display_Multiplier), {rectangle.x + rectangle.width / 2.f, rectangle.y - size * 1.125f}, font_Size, 0.f, WHITE, alpha);
 
         DrawRectangleRounded(rectangle, 0.3f, 10, Fade(WHITE, (float)alpha / 255.f));
         // DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, 0.3f, 10, border_Width, Alpha_Modify(GRAY, alpha));

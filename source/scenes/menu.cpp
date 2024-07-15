@@ -12,7 +12,7 @@
 namespace Menu {
     class Menu_Data {
     public:
-        enum Menu_Scene {MAIN, SETTINGS};
+        enum Menu_Scene {MAIN, SETTINGS_PAGE_1, SETTINGS_PAGE_2};
         Menu_Scene scene;
 
         bool changing_Scene = false;
@@ -22,10 +22,11 @@ namespace Menu {
 
         std::map<Menu_Scene, Vector3> scene_Perspectives = {
             {MAIN, {0.f, 0.f, -5.f}},
-            {SETTINGS, {0.f /* raylib nemá rádo perfektní zezhora dolu pohledy ._. */, 2.f, -0.1f}}
+            {SETTINGS_PAGE_1, {0.f /* raylib nemá rádo perfektní top-down pohledy ._. */, 2.f, -0.1f}},
+            {SETTINGS_PAGE_2, {1.5f, 0.f, 0.f}}
         };
 
-        Camera camera;
+        Camera camera {0};
         Texture coin;
     } data;
 
@@ -36,14 +37,20 @@ namespace Menu {
         Shared::data.settings_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 0.f}, "Nastavení", font_Size, Shared::data.medium_Font);
         Shared::data.play_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Hrát", font_Size, Shared::data.medium_Font);
         
-        Shared::data.back_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.2f}, "Zpět", font_Size, Shared::data.medium_Font);
+        Shared::data.back_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.15f}, "Zpět", font_Size, Shared::data.medium_Font);
 
-        Shared::data.show_Fps = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 4.f}, u8"Ukázat FPS", Shared::data.show_Fps.ticked);
-        Shared::data.test_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 2.2f}, u8"Testový mód", Shared::data.test_Mode.ticked);
-        Shared::data.mobile_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.2f}, u8"Mobilní mód", Shared::data.mobile_Mode.ticked);
+        Shared::data.show_Fps = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 3.f}, u8"Ukázat FPS", Shared::data.show_Fps.ticked);
+        Shared::data.test_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 1.9f}, u8"Testový mód", Shared::data.test_Mode.ticked);
+        Shared::data.mobile_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 1.9f}, u8"Mobilní mód", Shared::data.mobile_Mode.ticked);
 
-        Shared::data.volume = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 4.f}, u8"Hlasitost", Shared::data.volume.progress);
-        Shared::data.max_Fps = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.6f}, u8"FPS limiter", FloatEquals(Shared::data.max_Fps.progress, 0.f) ? 0.167f : Shared::data.max_Fps.progress);
+        Shared::data.volume = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 3.f}, u8"Hlasitost", Shared::data.volume.progress);
+        Shared::data.max_Fps = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.4f}, u8"FPS limiter", FloatEquals(Shared::data.max_Fps.progress, 0.f) ? 0.167f : Shared::data.max_Fps.progress);
+
+        Shared::data.page_2_Button = Shared::Shared_Data::Button({GetScreenWidth() - GetScreenWidth() / 8.f, GetScreenHeight() / 2.f}, ">", font_Size, Shared::data.medium_Font);
+        Shared::data.page_1_Button = Shared::Shared_Data::Button({GetScreenWidth() / 8.f, GetScreenHeight() / 2.f}, "<", font_Size, Shared::data.medium_Font);
+
+        Shared::data.sensitivity = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 2.2f}, u8"Senzitivita", FloatEquals(Shared::data.sensitivity.progress, 0.f) ? 0.6666f : Shared::data.sensitivity.progress);
+        Shared::data.fov = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.5f}, u8"FOV", FloatEquals(Shared::data.fov.progress, 0.f) ? 0.5f : Shared::data.fov.progress);
     }
 
     void Init() {
@@ -56,7 +63,7 @@ namespace Menu {
         data.camera.position = data.scene_Perspectives[Menu_Data::MAIN];
         data.camera.target = {0.f, 0.f, 0.f};
         data.camera.up = {0.f, 1.f, 0.f};
-        data.camera.fovy = 45.f;
+        data.camera.fovy = FloatEquals(data.camera.fovy, 0.f) ? 90.f : data.camera.fovy;
         data.camera.projection = CAMERA_PERSPECTIVE;
 
         data.coin = LoadTexture(ASSETS_ROOT "textures/coin.png");
@@ -92,16 +99,18 @@ namespace Menu {
     void Update() {
         if(data.changing_Scene) {
             data.scene_Change_Tick += 1.f * GetFrameTime();
+            
+            if(data.scene_Change_Tick > 1.f) {
+                data.scene_Change_Tick = 1.f;
+                data.changing_Scene = false;
+            }
+
             data.camera.position = Vector3Lerp(data.scene_Perspectives[data.old_Scene],
                                                data.scene_Perspectives[data.next_Scene],
                                                data.scene_Change_Tick);
 
             if(data.scene != data.next_Scene && data.scene_Change_Tick > 0.5f) {
                 data.scene = data.next_Scene;
-            }
-
-            if(data.scene_Change_Tick > 1.f) {
-                data.changing_Scene = false;
             }
         }
 
@@ -130,11 +139,14 @@ namespace Menu {
                 float font_Size = GetScreenHeight() / 15.f;
                 Shared::DrawTextExOutline(Shared::data.bold_Font, "Výprava za pribináčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE, alpha);
 
-                if(Shared::data.settings_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS);
+                if(Shared::data.settings_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
                 if(Shared::data.play_Button.Update(alpha)) Switch_To_Scene(GAME);
                 break;
             }
-            case Menu::Menu_Data::Menu_Scene::SETTINGS: {
+            case Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1: {
+                float text_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
+                Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Hlavní nastavení", {GetScreenWidth() / 2.f, GetScreenHeight() / 8.5f}, text_Font_Size, 0.f, WHITE, alpha);
+
                 Shared::data.show_Fps.Update(alpha);
                 
                 Shared::data.test_Mode.Update(alpha);
@@ -145,12 +157,26 @@ namespace Menu {
                 int fps = Shared::data.max_Fps.progress * 360;
                 if(Shared::data.max_Fps.progress > 0.8f) fps = 0;
 
-                if(Shared::data.max_Fps.Update(alpha)) SetTargetFPS(fps);
+                if(Shared::data.max_Fps.Update(alpha, 360.f)) SetTargetFPS(fps);
 
                 if(Shared::data.back_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::MAIN);
 
                 float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 40.f;
-                Shared::DrawTextExOutline(Shared::data.medium_Font, "*Hra potřebuje restart po\nmodifikování mobilního módu", {(float)GetScreenWidth() - font_Size * 7.25f, (float)GetScreenHeight() - font_Size}, font_Size, 0.f, WHITE, alpha);
+                Shared::DrawTextExOutline(Shared::data.medium_Font, "*Hra potřebuje restart po\nmodifikování mobilního módu", {font_Size * 7.25f, (float)GetScreenHeight() - font_Size}, font_Size, 0.f, WHITE, alpha);
+                
+                Shared::data.page_1_Button.Update(alpha, false);
+                if(Shared::data.page_2_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_2);
+                break;
+            }
+            case Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_2: {
+                float text_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
+                Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Nastavení hry", {GetScreenWidth() / 2.f, GetScreenHeight() / 8.5f}, text_Font_Size, 0.f, WHITE, alpha);
+
+                Shared::data.sensitivity.Update(alpha, 30.f);
+                if(Shared::data.fov.Update(alpha, 180.f)) data.camera.fovy = Shared::data.fov.progress * 179.f;
+
+                if(Shared::data.page_1_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
+                Shared::data.page_2_Button.Update(alpha, false);
                 break;
             }
         }
