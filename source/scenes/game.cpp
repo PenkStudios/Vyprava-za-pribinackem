@@ -433,9 +433,6 @@ namespace Game {
         Shader default_Shader;
         std::vector<Light> lights;
 
-        float hear_Cooldown = 0.f;
-        Variable_Sound hear{};
-
         bool debug = false;
         bool game_Paused = false;
 
@@ -447,6 +444,27 @@ namespace Game {
 
         bool clock_Fell;
         float clock_Fall_Cooldown;
+
+        class Sounds {
+        public:
+            float hear_Cooldown = 0.f;
+            Variable_Sound hear{};
+
+            float see_Cooldown = 0.f;
+            Variable_Sound see{};
+
+            Sound wake;
+            Sound stand;
+
+            Sound walk;
+            Sound run;
+
+            Sound clock_Fall;
+            Variable_Sound lever{};
+        } sounds;
+
+        Texture pause;
+        int holding_Pause = -1;
     } data;
 
     // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
@@ -643,7 +661,7 @@ namespace Game {
         data.start_Mouse_Position = {0.f, 0.f}; // Pozice kurzoru na začátku draggování
         data.previous_Rotated = false; // Pokud byl rotate "event" předchozí frame
 
-        data.hear_Cooldown = 0.f;
+        data.sounds.hear_Cooldown = 0.f;
         data.crouching = false;
 
         for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
@@ -664,7 +682,7 @@ namespace Game {
         data.clock_Fell = false;
         data.clock_Fall_Cooldown = (float)(rand() % 15 + 10) / 10.f;
 
-        data.hear_Cooldown = rand() % 10 + 15;
+        data.sounds.hear_Cooldown = rand() % 10 + 15;
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -917,9 +935,27 @@ namespace Game {
         DrawTextureEx(data.joystick_Base, {center.x - size, center.y - size}, 0.f, size * 2.f / data.joystick_Base.width, WHITE);
     }
 
+    float Get_Distance_Volume() {
+        float distance = Vector3Distance(data.camera.position, data.father_Position);
+        float volume = Remap(distance, 5.f, 40.f, 1.f, 0.f);
+        return Clamp(volume, 0.0f, 1.2f);
+    }
+
     void See_Player() {
         data.father_Start_Position = data.father_Position;
         data.father_Start_Rotation = data.father_Rotation;
+        if(data.sounds.see_Cooldown <= 0.f) {
+            data.sounds.see_Cooldown = rand() % 2 + 5;
+
+            bool death_Screen = data.death_Animation_Tick - 2.f > (float)data.death_Animation.size() - 1.f;
+
+            if(!data.sounds.hear.Playing() && !data.sounds.see.Playing() && !data.death_Animation_Playing & !data.win.playing) {
+                data.sounds.see.Play(Get_Distance_Volume());
+            }
+        } else {
+            if(data.clock_Fell)
+                data.sounds.see_Cooldown -= GetFrameTime();
+        }
         data.father_State = Game_Data::INSPECT;
     }
 
@@ -1169,7 +1205,8 @@ namespace Game {
         }
 
         data.skip = LoadTexture(ASSETS_ROOT "textures/skip.png");
-        data.hear = Game_Data::Variable_Sound(ASSETS_ROOT "audio/hear");
+        data.sounds.hear = Game_Data::Variable_Sound(ASSETS_ROOT "audio/hear");
+        data.sounds.see = Game_Data::Variable_Sound(ASSETS_ROOT "audio/see");
 
         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
         SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
@@ -1177,6 +1214,17 @@ namespace Game {
         data.clock = LoadModel(ASSETS_ROOT "models/clock.glb");
         for(int material = 0; material < data.clock.materialCount; material++)
             data.clock.materials[material].shader = Shared::data.lighting;
+
+        data.sounds.wake = LoadSound(ASSETS_ROOT "audio/wake.wav");
+        data.sounds.stand = LoadSound(ASSETS_ROOT "audio/stand.wav");
+
+        data.sounds.run = LoadSound(ASSETS_ROOT "audio/run.wav");
+        data.sounds.walk = LoadSound(ASSETS_ROOT "audio/walk.wav");
+
+        data.sounds.clock_Fall = LoadSound(ASSETS_ROOT "audio/clock_fall.wav");
+        data.sounds.lever = Game_Data::Variable_Sound(ASSETS_ROOT "audio/lever");
+
+        data.pause = LoadTexture(ASSETS_ROOT "textures/pause.png");
 
         Mod_Callback("Init_Game", (void*)&data);
     }
@@ -1443,6 +1491,25 @@ namespace Game {
         }
     }
 
+    void On_Game_Pause() {
+        data.game_Paused = true;
+        EnableCursor();
+        HideCursor();
+
+        PauseSound(data.sounds.wake);
+        PauseSound(data.sounds.walk);
+        PauseSound(data.sounds.run);
+    }
+
+    void On_Game_Resume() {
+        data.game_Paused = false;
+        DisableCursor();
+
+        ResumeSound(data.sounds.wake);
+        ResumeSound(data.sounds.walk);
+        ResumeSound(data.sounds.run);
+    }
+
     void Update() {
         #ifdef DEBUG_TIMER
         t_Init();
@@ -1465,6 +1532,19 @@ namespace Game {
         data.action_Used = false; // If any action was used this frame (preventing click-through)
         if(!Shared::data.mobile_Mode.ticked)
             data.sprinting = IsKeyDown(KEY_LEFT_SHIFT);
+
+        bool walking = (IsKeyDown(KEY_W) || IsKeyDown(KEY_A) ||
+                       IsKeyDown(KEY_S) || IsKeyDown(KEY_D)) && data.guide_Finished && !data.game_Paused;
+
+        float speed = 1.f;
+        if(data.crouching) speed = 0.8f;
+        else if(data.sprinting) speed = 1.5f;
+        SetSoundPitch(data.sounds.walk, speed);
+
+        if(IsSoundPlaying(data.sounds.walk) && !walking) PauseSound(data.sounds.walk);
+        else if(!IsSoundPlaying(data.sounds.walk) && walking) ResumeSound(data.sounds.walk);
+
+        if(walking && !IsSoundPlaying(data.sounds.walk)) PlaySound(data.sounds.walk);
 
         BeginMode3D(data.camera); {
             Mod_Callback("Update_Game_3D", (void*)&data);
@@ -1526,6 +1606,9 @@ namespace Game {
 
                     if(can_Update && !data.game_Paused) {
                         data.wake_Animation_Tick += 1.f * GetFrameTime();
+
+                        float previous_Tick = data.wake_Animation_Tick - 1.f * GetFrameTime();
+                        if(data.wake_Animation_Tick > 3.1f && previous_Tick < 3.1f) PlaySound(data.sounds.stand);
                     }
 
                     if(data.wake_Animation_Tick >= data.wake_Animation.size() - 1) {
@@ -1539,10 +1622,11 @@ namespace Game {
                     if(!clock_Visible) data.clock_Fall_Cooldown -= GetFrameTime();
                     if(data.clock_Fall_Cooldown < 0.f && !data.clock_Fell) {
                         data.clock_Fell = true;
+                        PlaySound(data.sounds.clock_Fall);
                         data.item_Data[Game_Data::Item::CLOCK].position = {-10.392f, 13.2766f, 25.2803f};
                         data.item_Data[Game_Data::Item::CLOCK].rotation.x = 90.f;
                         data.item_Data[Game_Data::Item::CLOCK].Calculate_Collision();
-                        data.hear.Play(2, 0.25f);
+                        data.sounds.hear.Play(2, 0.25f);
                     }
                 }
             }
@@ -1957,6 +2041,8 @@ namespace Game {
                             light.enabled = true;
                             UpdateLightValues(Shared::data.lighting, light);
                         }
+
+                        data.sounds.lever.Play();
                     }
                 }
             } else {
@@ -1976,6 +2062,8 @@ namespace Game {
                             light.enabled = false;
                             UpdateLightValues(Shared::data.lighting, light);
                         }
+
+                        data.sounds.lever.Play();
                     }
                 }
             }
@@ -2139,14 +2227,17 @@ namespace Game {
 
             if(Player_Visible()) {
                 See_Player();
+            } else {
+                data.sounds.see_Cooldown = 0.f;
             }
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
 
-        const float crosshair_size = 10.f;
-        DrawLineEx({GetScreenWidth() / 2.f - crosshair_size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + crosshair_size, GetScreenHeight() / 2.f}, 2.f, Fade(WHITE, 0.2f));
-        DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - crosshair_size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + crosshair_size}, 2.f, Fade(WHITE, 0.2f));
+        float crosshair_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 80.f;
+        float crosshair_Thinkness = crosshair_Size / 5.f;
+        DrawLineEx({GetScreenWidth() / 2.f - crosshair_Size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + crosshair_Size, GetScreenHeight() / 2.f}, crosshair_Thinkness, Fade(WHITE, 0.2f));
+        DrawLineEx({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f - crosshair_Size}, {GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + crosshair_Size}, crosshair_Thinkness, Fade(WHITE, 0.2f));
 
         if(Shared::data.mobile_Mode.ticked) {
             data.camera.target = Vector3Add(data.camera.position, data.camera_Target);
@@ -2165,11 +2256,23 @@ namespace Game {
                 if(!id_Found)
                     data.movement.dragging = false;
 
-                float size = GetScreenHeight() / 1300.f;
+                float size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 2400.f;
                 float margin = GetScreenHeight() / 30.f;
 
+                DrawTextureEx(data.pause, {(float)GetScreenWidth() - data.pause.width * size - margin, margin}, 0.f, size, WHITE);
+                Rectangle pause_Rectangle = {(float)GetScreenWidth() - data.pause.width * size - margin, margin, data.pause.width * size, data.pause.height * size};
+
+                pause_Rectangle.x -= pause_Rectangle.width / 2.f;
+                pause_Rectangle.y -= pause_Rectangle.height / 2.f;
+                pause_Rectangle.width *= 2.f;
+                pause_Rectangle.height *= 2.f;
+
+                if(data.holding_Pause >= GetTouchPointCount() || !CheckCollisionPointRec(GetTouchPosition(data.holding_Pause), pause_Rectangle)) {
+                    data.holding_Pause = -1;
+                }
+
                 Texture texture = data.crouching ? data.un_Crouch : data.crouch;
-                DrawTextureEx(texture, {(float)GetScreenWidth() - texture.width * size - margin, margin}, 0.f, size, WHITE);
+                DrawTextureEx(texture, {(float)GetScreenWidth() - texture.width * size - margin, margin * 2.f + texture.height * size}, 0.f, size, WHITE);
                 Rectangle crouch_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin, texture.width * size, texture.height * size};
 
                 crouch_Rectangle.x -= crouch_Rectangle.width / 2.f;
@@ -2182,7 +2285,7 @@ namespace Game {
                 }
 
                 Texture texture_Sprint = data.sprinting ? data.walk : data.sprint;
-                DrawTextureEx(texture_Sprint, {(float)GetScreenWidth() - texture_Sprint.width * size - margin, margin * 2.f + texture.height * size}, 0.f, size, WHITE);
+                DrawTextureEx(texture_Sprint, {(float)GetScreenWidth() - texture_Sprint.width * size - margin, margin * 3.f + texture.height * 2.f * size}, 0.f, size, WHITE);
                 Rectangle sprint_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin * 2.f + texture.height * size, texture.width * size, texture.height * size};
 
                 sprint_Rectangle.x -= sprint_Rectangle.width / 2.f;
@@ -2201,7 +2304,12 @@ namespace Game {
                     bool can_Update = data.movement.Can_Update(index);
                     Game_Data::Joystick_Data joystick = data.movement.Update(index);
 
-                    if(CheckCollisionPointRec(GetTouchPosition(index), crouch_Rectangle)) {
+                    if(CheckCollisionPointRec(GetTouchPosition(index), pause_Rectangle)) {
+                        if(data.holding_Pause != id) {
+                            On_Game_Pause();
+                            data.holding_Pause = id;
+                        }
+                    } else if(CheckCollisionPointRec(GetTouchPosition(index), crouch_Rectangle)) {
                         if(data.holding_Crouch != id) {
                             data.crouching = !data.crouching;
                             data.holding_Crouch = id;
@@ -2322,6 +2430,7 @@ namespace Game {
         if(!data.guide_Finished) {
             if(data.guide_Texts[data.guide_Index].Update()) {
                 data.guide_Index++;
+                if(data.guide_Index == 1) PlaySound(data.sounds.wake);
                 if(data.guide_Index > 3) {
                     data.guide_Finished = true;
                 }
@@ -2337,7 +2446,8 @@ namespace Game {
                 rectangle.width += button_Size * 60.f;
                 rectangle.height += button_Size * 60.f;
 
-                if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle)) {
+                if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle) && !data.guide_Finished) {
+                    PlaySound(data.sounds.wake);
                     int index = 0;
                     for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
                         if(caption.can_Skip == false) {
@@ -2349,7 +2459,8 @@ namespace Game {
                     }
                 }
             } else {
-                if(IsKeyPressed(KEY_E)) {
+                if(IsKeyPressed(KEY_E) && !data.guide_Finished) {
+                    PlaySound(data.sounds.wake);
                     int index = 0;
                     for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
                         if(caption.can_Skip == false) {
@@ -2460,24 +2571,34 @@ namespace Game {
             data.holding_Item = Game_Data::Item::NONE;
             data.camera_Start_Position = data.camera.position;
             data.camera_Start_Target = data.camera_Target;
+            data.fog_Density = 0.15f;
+            for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
+                if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                    Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
+                }
+            }
+
+            for(Light &light : data.lights) {
+                light.enabled = false;
+                UpdateLightValues(Shared::data.lighting, light);
+            }
             UpdateModelAnimation(data.father, data.animations[0], 16);
         }
 
-        if(data.hear_Cooldown <= 0.f) {
-            data.hear_Cooldown = rand() % 10 + 15;
+        if(data.sounds.hear_Cooldown <= 0.f) {
+            data.sounds.hear_Cooldown = rand() % 10 + 15;
 
             bool death_Screen = data.death_Animation_Tick - 2.f > (float)data.death_Animation.size() - 1.f;
 
-            if(!data.hear.Playing() && !death_Screen & !data.win.playing) {
-                float volume = Remap(Vector3Distance(data.camera.position, data.father_Position), 0.f, 50.f, 1.f, 0.f);
-                volume = Clamp(volume, 0.f, 1.f);
-
-                data.hear.Play(volume);
+            if(!data.sounds.see.Playing() && !data.sounds.hear.Playing() && !data.death_Animation_Playing & !data.win.playing) {
+                data.sounds.hear.Play(Get_Distance_Volume());
             }
         } else {
             if(data.clock_Fell)
-                data.hear_Cooldown -= GetFrameTime();
+                data.sounds.hear_Cooldown -= GetFrameTime();
         }
+
+        if(IsKeyPressed(KEY_P)) data.sounds.hear.Play(Get_Distance_Volume());
 
         /*
         if(IsKeyPressed(KEY_P)) {
@@ -2489,10 +2610,9 @@ namespace Game {
         if(IsKeyPressed(KEY_ESCAPE)) {
             data.game_Paused = !data.game_Paused;
             if(data.game_Paused) {
-                EnableCursor();
-                HideCursor();
+                On_Game_Pause();
             } else {
-                DisableCursor();
+                On_Game_Resume();
             }
         }
 
@@ -2507,7 +2627,7 @@ namespace Game {
             Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Hra pozastavena", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
 
             if(data.pause_Menu_Button.Update()) Switch_To_Scene(MENU);
-            if(data.pause_Continue_Button.Update()) { data.game_Paused = false; DisableCursor(); }
+            if(data.pause_Continue_Button.Update()) { On_Game_Resume(); }
         }
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);

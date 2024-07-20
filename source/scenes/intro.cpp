@@ -24,6 +24,7 @@ namespace Intro {
 
         data.tick = 0.f;
         data.blink_Countdown = 0;
+
         Mod_Callback("Init_Intro", (void*)&data);
     }
 
