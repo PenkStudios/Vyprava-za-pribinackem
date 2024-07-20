@@ -51,6 +51,8 @@ float Triangular_Modulo(float x, float y) {
 
 #include <algorithm>
 
+#define DEBUG_TIMER
+
 double t_Previous;
 std::map<std::string, double> t_Breakpoints;
 
@@ -97,6 +99,8 @@ namespace Game {
     public:
         class Door_Data {
         public:
+            BoundingBox start_Bbox;
+
             Vector3 position;
             Vector3 scale;
             float start_Rotation_Range;
@@ -108,10 +112,7 @@ namespace Game {
             float rotation;
 
             bool opening;
-            Door_Data(Vector3 door_Position, Vector3 door_Scale, float start_Rotation_Range, float end_Rotation_Range, int type, Material* material) :
-                position(door_Position), scale(door_Scale), start_Rotation_Range(start_Rotation_Range),
-                end_Rotation_Range(end_Rotation_Range), rotation(start_Rotation_Range /* (start_Rotation_Range + end_Rotation_Range) / 2.f */),
-                material(material), type(type), opening(false) {}
+            Door_Data(Vector3 door_Position, Vector3 door_Scale, float start_Rotation_Range, float end_Rotation_Range, int type, Material* material);
         };
 
         class Variable_Sound {
@@ -140,6 +141,12 @@ namespace Game {
                     if(IsSoundPlaying(sound)) return true;
                 }
                 return false;
+            }
+
+            void Play(int index, float volume = 1.f) {
+                Sound sound = sounds[index];
+                SetSoundVolume(sound, volume);
+                PlaySound(sound);
             }
 
             void Play(float volume = 1.f) {
@@ -248,7 +255,7 @@ namespace Game {
             Joystick() {}
 
             bool Can_Update(int touch_Id) {
-                return !(CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) && !(dragging && draggin_Id == touch_Id);
+                return !(CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) && !(dragging && draggin_Id == GetTouchPointId(touch_Id));
             }
 
             void Render();
@@ -258,8 +265,8 @@ namespace Game {
 
         Joystick movement;
 
-        #define MAX_ITEMS 5 // NONE, PRIBINACEK, SPOON, KEY, LOCK
-        enum Item {NONE, PRIBINACEK, SPOON, KEY, LOCK, _LAST};
+        #define MAX_ITEMS 6 // NONE, PRIBINACEK, SPOON, KEY, CLOCK, LOCK 
+        enum Item {NONE, PRIBINACEK, SPOON, KEY, CLOCK, LOCK, _LAST};
         class Item_Data {
         public:
             Vector3 position;
@@ -270,11 +277,12 @@ namespace Game {
             bool falling;
 
             int item_Id;
+            bool pickable;
 
             void Calculate_Collision();
 
-            Item_Data(int item_Id, Vector3 position, Vector3 rotation) : item_Id(item_Id), position(position), rotation(rotation), fall_Acceleration(0), falling(true) {}
-            Item_Data(int item_Id, Vector3 position) : item_Id(item_Id), position(position), rotation({0.f, 0.f, 0.f}), fall_Acceleration(0), falling(true) {}
+            Item_Data(int item_Id, Vector3 position, bool pickable, Vector3 rotation) : item_Id(item_Id), position(position), pickable(pickable), rotation(rotation), fall_Acceleration(0), falling(true) {}
+            Item_Data(int item_Id, Vector3 position, bool pickable) : item_Id(item_Id), position(position), pickable(pickable), rotation({0.f, 0.f, 0.f}), fall_Acceleration(0), falling(true) {}
         };
 
         std::vector<Item_Data> item_Data;
@@ -359,6 +367,7 @@ namespace Game {
             int fetch_Finish; // "sbírání" pribináčka + lžíci
             int open_Finish; // otevířání přibiňáčka
             int eat_Finish; // jezení ho
+            int show_Finish; // ukázání win screeny
 
             int pribinacek_Fetch;
             int spoon_Fetch;
@@ -374,6 +383,7 @@ namespace Game {
             void Update();
         };
 
+        Model clock;
         Win_Animation win;
 
         Vector3 father_Position = {0.f, 0.f, 0.f};
@@ -434,7 +444,77 @@ namespace Game {
 
         int holding_Sprint = -1;
         bool sprinting = false;
+
+        bool clock_Fell;
+        float clock_Fall_Cooldown;
     } data;
+
+    // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
+    BoundingBox Get_Model_BBox_Matrix(Model model, Matrix transform) {
+        Mesh mesh = model.meshes[0];
+        BoundingBox bb = {Vector3Zero(), Vector3Zero()};
+
+        float x = model.meshes[0].vertices[0];
+        float y = model.meshes[0].vertices[1];
+        float z = model.meshes[0].vertices[2];
+
+        Vector3 v = {x, y, z};
+        v = Vector3Transform(v, transform);
+
+        bb.min = v;
+        bb.max = v;
+
+        for(int i = 0; i < model.meshes[0].vertexCount * 3.f; i += 3) {
+            x = model.meshes[0].vertices[i];
+            y = model.meshes[0].vertices[i+1];
+            z = model.meshes[0].vertices[i+2];
+
+            v = {x, y, z};
+            v = Vector3Transform(v, transform);
+
+            if(v.x < bb.min.x) {
+                bb.min.x = v.x;
+            }
+            if(v.y < bb.min.y) {
+                bb.min.y = v.y;
+            }
+            if(v.z < bb.min.z) {
+                bb.min.z = v.z;
+            }
+            if(v.x > bb.max.x) {
+                bb.max.x = v.x;
+            }
+            if(v.y > bb.max.y) {
+                bb.max.y = v.y;
+            }
+            if(v.z > bb.max.z) {
+                bb.max.z = v.z;
+            }
+
+        }
+
+        return bb;
+    }
+
+    Matrix Get_Door_Matrix(Game_Data::Door_Data door_Data) {
+        Matrix matrix = MatrixIdentity();
+        matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
+        matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
+        matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
+        matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+        matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+        return matrix;
+    }
+
+    Game::Game_Data::Door_Data::Door_Data(Vector3 door_Position, Vector3 door_Scale, float start_Rotation_Range, float end_Rotation_Range, int type, Material* material) :
+            position(door_Position), scale(door_Scale), start_Rotation_Range(start_Rotation_Range),
+            end_Rotation_Range(end_Rotation_Range), rotation(start_Rotation_Range /* (start_Rotation_Range + end_Rotation_Range) / 2.f */),
+            material(material), type(type), opening(false) {
+        if(type != 0) {
+            Matrix matrix = Get_Door_Matrix(*this);
+            start_Bbox = Get_Model_BBox_Matrix(data.door, matrix);
+        }
+    }
 
     bool Game::Game_Data::Guide_Caption::Update() {
         if(!data.game_Paused)
@@ -480,11 +560,12 @@ namespace Game {
         tick = 0.f;
 
         walk_Finish = Vector3Distance(data.camera.position, CHAIR_POSITION) * 10;
-        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 5.f;
-        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 5.f;
+        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * .05f;
+        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * .05f;
         fetch_Finish = MAX(pribinacek_Fetch, spoon_Fetch) + walk_Finish;
         open_Finish = fetch_Finish + Shared::data.animations[0].frameCount - 1;
-        eat_Finish = open_Finish + GetFPS() * (0.4166f / 2.f);
+        eat_Finish = open_Finish + 300.f;
+        show_Finish = eat_Finish + 50.f;
 
         from_Rotation = data.camera_Rotation;
         from_Position = data.camera.position;
@@ -501,6 +582,91 @@ namespace Game {
                             (float)(((((int)target.y - (int)source.y) % 360) + 540) % 360) - 180,
                             (float)(((((int)target.z - (int)source.z) % 360) + 540) % 360) - 180};
         return Vector3Add(source, Vector3Multiply(addition, {amount, amount, amount}));
+    }
+
+    void On_Switch() {
+        DisableCursor();
+
+        data.item_Data.clear();
+        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f}, false)); //                                    NONE
+        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f), true)); //                             PRIBINACEK
+        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f), true)); //                            SPOON
+        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f}, true)); //                                     KEY
+        data.item_Data.push_back(Game_Data::Item_Data(4, {-10.3036f, 16.3811f, 27.5464f}, false, {0.f, -90.f, 0.f})); // CLOCK
+
+        int key_Position_Index = rand() % data.key_Spawns.size();
+        data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[key_Position_Index].position, true, data.key_Spawns[key_Position_Index].rotation);
+
+        for(Game_Data::Item_Data &item : data.item_Data) {
+            item.fall_Acceleration = 0.1f;
+            item.Calculate_Collision();
+            item.falling = true;
+        }
+
+        data.guide_Texts.clear();
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepřekonatelnou chuť na pribináčka"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Tvým cílem je jít pro pribináčka a sníst si ho tady v pokoji"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Jo a táta vždycky na noc vypíná pojistky, aby jsem nemohl být na mobilu"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý"));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribináček a\n    vem ho do pokoje", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("2. najdi klíč", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. odemkni šuplík s\n     lžičkou a vem\n     ji do pokoje", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček\n     v pokoji", false));
+
+        data.guide_Finished = false;
+        data.guide_Index = 0;
+
+        data.death_Animation_Tick = 0.f;
+        data.death_Animation_Finished = false;
+        data.death_Animation_Playing = false;
+
+        data.wake_Animation_Tick = 0.f;
+        data.wake_Animation_Finished = 0.f;
+
+        data.father_State = Game_Data::NORMAL_AI;
+        data.keyframe = 0;
+        data.keyframe_Tick = 0.f;
+
+        data.camera_Target = {0.f, 0.f, 1.f};
+        data.fuse_Box.Reset();
+
+        data.fog_Density = 0.15f;
+
+        /*
+        data.camera.position = {-10.f, 20.f, 23.5f}; // {0.f, 7.5f, 0.f};
+        data.camera.up = {0.f, 1.f, 0.f};
+        data.camera.target = {0.f, 20.f, 23.5f};
+        */
+
+        data.camera_Rotation = {0.f, 180.f, 0.f};
+        data.old_Mouse_Position = {0.f, 0.f}; // Pozice kurzoru na předchozím framu
+        data.start_Mouse_Position = {0.f, 0.f}; // Pozice kurzoru na začátku draggování
+        data.previous_Rotated = false; // Pokud byl rotate "event" předchozí frame
+
+        data.hear_Cooldown = 0.f;
+        data.crouching = false;
+
+        for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
+            if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
+            }
+        }
+
+        data.debug = false;
+        data.game_Paused = false;
+
+        data.sprinting = false;
+        data.camera.fovy = Shared::data.fov.progress * 179.f;
+
+        data.win.tick = 0.f;
+        data.win.playing = false;
+
+        data.clock_Fell = false;
+        data.clock_Fall_Cooldown = (float)(rand() % 15 + 10) / 10.f;
+
+        data.hear_Cooldown = rand() % 10 + 15;
+
+        Mod_Callback("Switch_Game", (void*)&data);
     }
 
     void Game_Data::Win_Animation::Update() {
@@ -532,26 +698,32 @@ namespace Game {
             UpdateModelAnimation(Shared::data.pribinacek, Shared::data.animations[0], ((float)(tick - fetch_Finish) / (float)(open_Finish - fetch_Finish)) * Shared::data.animations[0].frameCount);
         } else if(tick < eat_Finish) {
             float stage_Tick = Clamp((float)(tick - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
-            float next_Stage_Tick = Clamp((float)(tick + 1 - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
+            float next_Stage_Tick = Clamp((float)(tick + (GetFrameTime() * 50.f) - open_Finish) / (float)(eat_Finish - open_Finish), 0.f, 1.f);
             if(stage_Tick < 0.2f) {
                 // 0 - 0.2
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
                 //target.x -= 0.2f;
                 target.y += 2.5f;
                 target.z += 0.6f;
+                
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, stage_Tick / 0.2f);
                 data.item_Data[Game_Data::SPOON].rotation = Lerp_Rotation(from_Spoon_Rotation, {-75.f, 0.f, 0.f}, stage_Tick / 0.2f);
                 if(next_Stage_Tick < 0.2f != true) {
+                    data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, 1.f);
+                    data.item_Data[Game_Data::SPOON].rotation = Lerp_Rotation(from_Spoon_Rotation, {-75.f, 0.f, 0.f}, 1.f);
+
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                 }
             } else if(stage_Tick < 0.4f) {
                 // 0.2 - 0.4
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
-                // target.x -= 0.2f;
                 target.y += 1.f;
                 target.z += 0.4f; // 0.8
+                
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.2f) / 0.2f);
                 if(next_Stage_Tick < 0.4f != true) {
+                    data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, 1.f);
+                    
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                 }
             } else if(stage_Tick < 0.6f) {
@@ -562,6 +734,8 @@ namespace Game {
                 target.z += 0.6f;
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.4f) / 0.2f);
                 if(next_Stage_Tick < 0.6f != true) {
+                    data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, 1.f);
+
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                     from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
                 }
@@ -571,18 +745,63 @@ namespace Game {
                 // target.x -= 0.2f;
                 target.y += 2.f;
                 target.z += 0.1f;
+
                 data.item_Data[Game_Data::SPOON].rotation = Lerp_Rotation(from_Spoon_Rotation, {0.f, 90.f, 0.f}, (stage_Tick - 0.6f) / 0.2f);
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.6f) / 0.2f);
                 if(next_Stage_Tick < 0.8f != true) {
+                    data.item_Data[Game_Data::SPOON].rotation = Lerp_Rotation(from_Spoon_Rotation, {0.f, 90.f, 0.f}, 1.f);
+                    data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, 1.f);
+
                     from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                 }
-            } else {
+            } else if(stage_Tick < 1.f) {
                 // 0.8 - 1
                 Vector3 target = PRIBINACEK_WIN_ANIMATION;
                 target.x -= 2.f;
                 target.y += 2.f;
                 target.z += 0.1f;
+                
                 data.item_Data[Game_Data::SPOON].position = Vector3Lerp(from_Spoon_Position, target, (stage_Tick - 0.8f) / 0.2f);
+            }
+
+            if(next_Stage_Tick < 1.f != true) {
+                EnableCursor();
+                HideCursor();
+
+#if defined(PLATFORM_ANDROID)
+                if(rand() % 3 == 0)
+                    Show_Interstitial_Ad();
+#endif
+            }
+        } else {
+            Color tint = {255, 255, 255, (unsigned char)Clamp(Remap(tick, eat_Finish, show_Finish, 0.f, 255.f), 0.f, 255.f)};
+            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), ColorTint(BLACK, tint));
+
+            if(tick > show_Finish) {
+                Color tint_UI = {255, 255, 255, (unsigned char)Clamp(Remap(tick, show_Finish, show_Finish + 50, 0.f, 255.f), 0.f, 255.f)};
+
+                float font_Size = GetScreenHeight() / 15.f;
+                Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Vyhrál jsi", {GetScreenWidth() / 2.f, GetScreenHeight() / 4.f}, font_Size, 1.f, WHITE, tint_UI.a);
+                
+                int quests_Offset = 0;
+                for(int index = 0; index < data.guide_Texts.size(); index++) {
+                    if(!data.guide_Texts[index].can_Skip) {
+                        quests_Offset = index;
+                        break;
+                    }
+                }
+
+                int coins = 0;
+                for(int index = 4; index < data.guide_Texts.size(); index++) {
+                    coins += data.guide_Texts[index].done;
+                }
+
+                coins *= 2;
+
+                Shared::DrawTextExC(Shared::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, ColorTint(WHITE, tint_UI));
+            
+                if(data.play_Again_Button.Update(tint_UI.a)) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
+                else if(data.menu_Button.Update(tint_UI.a)) { Switch_To_Scene(MENU); Shared::data.coins += coins; }
             }
         }
     }
@@ -621,16 +840,7 @@ namespace Game {
             // Fun fact: Pořádí v matrixové multiplikaci záleží
             // aha ono je to reálně napsaný v dokumentaci MatrixMultiply ._.
 
-            Matrix matrix = MatrixIdentity();
-            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
-            
-            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-
-            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
-            
-            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
-
-            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+            Matrix matrix = Get_Door_Matrix(door_Data);
 
             RayCollision doorCollision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
             if (doorCollision.hit)
@@ -684,11 +894,11 @@ namespace Game {
             mouse_Point = Vector2Add({cos(angle) * size, sin(angle) * size}, center);
         }
 
-        if((!dragging && CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || (dragging && draggin_Id == touch_Id)) {
+        if((!dragging && CheckCollisionPointCircle(GetTouchPosition(touch_Id), center, size) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) || (dragging && draggin_Id == GetTouchPointId(touch_Id))) {
             DrawTextureEx(data.joystick_Pointer, {mouse_Point.x - size / 2.f, mouse_Point.y - size / 2.f}, 0.f, size / data.joystick_Pointer.width, WHITE);
             if(!dragging) {
                 dragging = true;
-                draggin_Id = touch_Id;
+                draggin_Id = GetTouchPointId(touch_Id);
             }
         }
 
@@ -762,6 +972,10 @@ namespace Game {
         Texture human = LoadTexture(ASSETS_ROOT "textures/human.png");
         SetMaterialTexture(&data.father.materials[0], MATERIAL_MAP_DIFFUSE, human);
 
+        data.door = LoadModel(ASSETS_ROOT "models/door.glb");
+        for(int material = 0; material < data.door.materialCount; material++)
+            data.door.materials[material].shader = Shared::data.lighting;
+
         int animation_Count = 0; // (1)
         data.animations = LoadModelAnimations(ASSETS_ROOT "models/human.iqm", &animation_Count);
 
@@ -828,11 +1042,11 @@ namespace Game {
                             rotation_Start >> rotation_End >> door_Type) {
             switch(door_Type) {
                 case 0: {
-                    material = &Shared::data.house.materials[14];
+                    material = &Shared::data.house.materials[12];
                     break;
                 }
                 case 1: {
-                    material = &Shared::data.house.materials[14];
+                    material = &Shared::data.house.materials[12];
                     break;
                 }
                 case 2: {
@@ -877,10 +1091,6 @@ namespace Game {
                                                                                father_Rotation));
         }
 
-        data.door = LoadModel(ASSETS_ROOT "models/door.glb");
-        for(int material = 0; material < data.door.materialCount; material++)
-            data.door.materials[material].shader = Shared::data.lighting;
-
         data.spoon = LoadModel(ASSETS_ROOT "models/spoon.glb");
         for(int material = 0; material < data.spoon.materialCount; material++)
             data.spoon.materials[material].shader = Shared::data.lighting;
@@ -916,7 +1126,7 @@ namespace Game {
             if(strings.size() > 2 && strings[1] == "=") {
                 if(strings[0] == "KEY_SPAWNS" && (strings.size() - 2) % 4 == 0) {
                     for(int index = 2; index < strings.size(); index += 4) {
-                        data.key_Spawns.push_back(Game_Data::Item_Data(-1, {std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, {0.f, std::stof(strings[index + 3]), 0.f}));
+                        data.key_Spawns.push_back(Game_Data::Item_Data(-1, {std::stof(strings[index]), std::stof(strings[index + 1]), std::stof(strings[index + 2])}, true, {0.f, std::stof(strings[index + 3]), 0.f}));
                     }
                 } else if(strings[0] == "DRAWERS" && (strings.size() - 2) % 4 == 0) {
                     for(int index = 2; index < strings.size(); index += 4) {
@@ -938,10 +1148,11 @@ namespace Game {
             }
         }
 
-        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f})); //              NONE
-        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f))); //      PRIBINACEK
-        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f))); //     SPOON
-        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f})); //              KEY
+        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f}, false)); //                                    NONE
+        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f), true)); //                             PRIBINACEK
+        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f), true)); //                            SPOON
+        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f}, true)); //                                     KEY
+        data.item_Data.push_back(Game_Data::Item_Data(4, {-10.3036f, 16.3811f, 27.5464f}, false, {0.f, -90.f, 0.f})); // CLOCK
 
         Init_UI();
 
@@ -963,68 +1174,11 @@ namespace Game {
         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
         SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
+        data.clock = LoadModel(ASSETS_ROOT "models/clock.glb");
+        for(int material = 0; material < data.clock.materialCount; material++)
+            data.clock.materials[material].shader = Shared::data.lighting;
+
         Mod_Callback("Init_Game", (void*)&data);
-    }
-
-    bool Ray_Side_Collision(Ray ray, Vector3 old_Position) {
-        RayCollision collision = Get_Collision_Ray(ray);
-        if(collision.hit && collision.distance < 2.f) {
-            return true;
-        }
-
-        if(data.debug) {
-            DrawLine3D(Vector3Add(data.camera.position, {0.f, -0.75f, 0.f}), collision.point, Color {255, 0, 0, 32});
-            DrawSphere(collision.point, 0.5f, Color {0, 0, 255, 32});
-        }
-
-        return false;
-    }
-
-    // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
-    BoundingBox Get_Model_BBox_Matrix(Model model, Matrix transform) {
-        Mesh mesh = model.meshes[0];
-        BoundingBox bb = {Vector3Zero(), Vector3Zero()};
-
-        float x = model.meshes[0].vertices[0];
-        float y = model.meshes[0].vertices[1];
-        float z = model.meshes[0].vertices[2];
-
-        Vector3 v = {x, y, z};
-        v = Vector3Transform(v, transform);
-
-        bb.min = v;
-        bb.max = v;
-
-        for(int i = 0; i < model.meshes[0].vertexCount * 3.f; i += 3) {
-            x = model.meshes[0].vertices[i];
-            y = model.meshes[0].vertices[i+1];
-            z = model.meshes[0].vertices[i+2];
-
-            v = {x, y, z};
-            v = Vector3Transform(v, transform);
-
-            if(v.x < bb.min.x) {
-                bb.min.x = v.x;
-            }
-            if(v.y < bb.min.y) {
-                bb.min.y = v.y;
-            }
-            if(v.z < bb.min.z) {
-                bb.min.z = v.z;
-            }
-            if(v.x > bb.max.x) {
-                bb.max.x = v.x;
-            }
-            if(v.y > bb.max.y) {
-                bb.max.y = v.y;
-            }
-            if(v.z > bb.max.z) {
-                bb.max.z = v.z;
-            }
-
-        }
-
-        return bb;
     }
 
     bool Get_Collision_Sphere(Vector3 center, float radius) {
@@ -1033,6 +1187,32 @@ namespace Game {
             if(data.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
 
             if(houseCollision) return true;
+        }
+
+        for(Game_Data::Door_Data &door_Data : data.doors) {
+            if(door_Data.type != 0) {
+                // Bohužel raylib nemá systém kolizi natočených bboxů + koulí, 
+                // takže jednoduše (moc ne teda) uděláme opak (otočíme tu kouli
+                // okolo pantů dveří o 
+                // -(door_Data.rotation - door_Data.start_Rotation_Range) stupňů)
+                BoundingBox bbox = door_Data.start_Bbox;
+
+                Matrix matrix = MatrixIdentity();
+                matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
+                matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+                matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+
+                Vector3 door_Hinge = {0.f, 0.f, 0.f};
+                door_Hinge = Vector3Transform(door_Hinge, matrix);
+
+                Vector3 sphere_Center = center;
+                sphere_Center = Vector3Subtract(sphere_Center, door_Hinge);
+                Vector3 calculated_Sphere_Center = Vector3RotateByQuaternion(sphere_Center, QuaternionFromEuler(0.f, -(door_Data.rotation - door_Data.start_Rotation_Range) * DEG2RAD, 0.f));
+                calculated_Sphere_Center = Vector3Add(calculated_Sphere_Center, door_Hinge);
+
+                bool door_Collision = CheckCollisionBoxSphere(bbox, calculated_Sphere_Center, radius);
+                if(door_Collision) return true;
+            }
         }
 
         return false;
@@ -1060,82 +1240,6 @@ namespace Game {
         return states;
     }
 
-    void On_Switch() {
-        DisableCursor();
-
-        data.item_Data.clear();
-        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f})); //              NONE
-        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f))); //      PRIBINACEK
-        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f))); //     SPOON
-        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f})); //              KEY
-
-        int key_Position_Index = rand() % data.key_Spawns.size();
-        data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[key_Position_Index].position, data.key_Spawns[key_Position_Index].rotation);
-
-        for(Game_Data::Item_Data &item : data.item_Data) {
-            item.fall_Acceleration = 0.1f;
-            item.Calculate_Collision();
-            item.falling = true;
-        }
-
-        data.guide_Texts.clear();
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepřekonatelnou chuť na pribináčka"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("Tvým cílem je jít pro pribináčka a sníst si ho tady v pokoji"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("Jo a táta vždycky na noc vypíná pojistky, aby jsem nemohl být na mobilu"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribináček a\n    vem ho do pokoje", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("2. najdi klíč", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. odemkni šuplík s\n     lžičkou a vem\n     ji do pokoje", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček\n     v pokoji", false));
-
-        data.guide_Finished = false;
-        data.guide_Index = 0;
-
-        data.death_Animation_Tick = 0.f;
-        data.death_Animation_Finished = false;
-        data.death_Animation_Playing = false;
-
-        data.wake_Animation_Tick = 0.f;
-        data.wake_Animation_Finished = 0.f;
-
-        data.father_State = Game_Data::NORMAL_AI;
-        data.keyframe = 0;
-        data.keyframe_Tick = 0.f;
-
-        data.camera_Target = {0.f, 0.f, 1.f};
-        data.fuse_Box.Reset();
-
-        data.fog_Density = 0.15f;
-
-        /*
-        data.camera.position = {-10.f, 20.f, 23.5f}; // {0.f, 7.5f, 0.f};
-        data.camera.up = {0.f, 1.f, 0.f};
-        data.camera.target = {0.f, 20.f, 23.5f};
-        */
-
-        data.camera_Rotation = {0.f, 180.f, 0.f};
-        data.old_Mouse_Position = {0.f, 0.f}; // Pozice kurzoru na předchozím framu
-        data.start_Mouse_Position = {0.f, 0.f}; // Pozice kurzoru na začátku draggování
-        data.previous_Rotated = false; // Pokud byl rotate "event" předchozí frame
-
-        data.hear_Cooldown = 0.f;
-        data.crouching = false;
-
-        for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
-            if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
-                Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
-            }
-        }
-
-        data.debug = false;
-        data.game_Paused = false;
-
-        data.sprinting = false;
-        data.camera.fovy = Shared::data.fov.progress * 179.f;
-
-        Mod_Callback("Switch_Game", (void*)&data);
-    }
-
     void Update_Camera_Android(int touch_Id, bool update_Camera) {
         data.camera_Target = Vector3RotateByQuaternion({0.f, 0.f, 10.f}, QuaternionFromEuler(data.camera_Rotation.x * DEG2RAD, data.camera_Rotation.y * DEG2RAD, data.camera_Rotation.z * DEG2RAD));
 
@@ -1154,7 +1258,10 @@ namespace Game {
         if(!update_Camera)
             return;
 
-        data.camera_Rotation = Vector3Add(data.camera_Rotation, {-delta.y * (GetScreenHeight() / 600.f), delta.x * (GetScreenWidth() / 1000.f), 0.f});
+        delta.x *= ((Shared::data.sensitivity.progress * 30.f) / 100.f) * 2.f;
+        delta.y *= ((Shared::data.sensitivity.progress * 30.f) / 100.f) * 2.f;
+
+        data.camera_Rotation = Vector3Add(data.camera_Rotation, {-delta.y, delta.x, 0.f});
         data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -85.f, 85.f);
     }
 
@@ -1173,35 +1280,11 @@ namespace Game {
             0.f);
 
         Vector2 delta = GetMouseDelta();
-        delta.x *= ((Shared::data.sensitivity.progress * 30.f) / 100.f);
-        delta.y *= ((Shared::data.sensitivity.progress * 30.f) / 100.f);
+        delta.x *= ((Shared::data.sensitivity.progress * 30.f) / 100.f) / 2.f;
+        delta.y *= ((Shared::data.sensitivity.progress * 30.f) / 100.f) / 2.f;
 
         data.camera_Rotation = Vector3Add(data.camera_Rotation, {delta.y, -delta.x, 0.f});
         data.camera_Rotation.x = Clamp(data.camera_Rotation.x, -85.f, 85.f);
-    }
-
-    // Získat kolizi cylindru (ze předu delší) s mapou
-    bool Get_Collision_Cylinder(Vector3 position, float radius) {
-        for (int m = 0; m < Shared::data.house.meshCount; m++) {
-            bool collide = CheckCollisionBoxSphere(data.house_BBoxes[m], position, radius);
-            if(collide) return true;
-        }
-        for(Game_Data::Door_Data &door_Data : data.doors) {
-            if(door_Data.opening) continue;
-
-            Matrix matrix = MatrixIdentity();
-            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
-            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-            
-            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
-            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
-            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
-
-            BoundingBox door = Get_Model_BBox_Matrix(data.door, matrix);
-            bool collide = CheckCollisionBoxSphere(door, position, radius);
-            if(collide) return true;
-        }
-        return false;
     }
 
     bool Player_Visible() {
@@ -1224,14 +1307,7 @@ namespace Game {
             // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
             // DrawLine3D(data.camera.position, door_Data.position, RED);
 
-            Matrix matrix = MatrixIdentity();
-            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
-
-            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
-            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
-
-            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+            Matrix matrix = Get_Door_Matrix(door_Data);
 
             DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
             
@@ -1272,7 +1348,7 @@ namespace Game {
                 RayCollision player_Item_Collision = GetRayCollisionBox(player_Ray, bbox);
                 bool item_Visible = player_Item_Collision.hit && player_Item_Collision.distance < 5.f;
 
-                if(item_Visible && data.holding_Item != (Game_Data::Item)index) {
+                if(item_Visible && data.holding_Item != (Game_Data::Item)index && data.item_Data[index].pickable) {
                     if(nearest_Item_Hit > player_Item_Collision.distance) {
                         nearest_Item_Hit = player_Item_Collision.distance;
                         nearest_Item_Id = index;
@@ -1364,37 +1440,13 @@ namespace Game {
 
         if((player_Map_Collision.distance > collision.distance) && collision.hit) {
             data.fuse_Box.lever_Turning = !data.fuse_Box.lever_Turning;
-
-            if(data.fuse_Box.lever_Turning) {
-                data.fog_Density = 0.05f;
-                for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
-                    if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
-                        Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = data.default_Shader;
-                    }
-                }
-
-                for(Light &light : data.lights) {
-                    light.enabled = true;
-                    UpdateLightValues(Shared::data.lighting, light);
-                }
-            } else {
-                data.fog_Density = 0.15f;
-                for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
-                    if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
-                        Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
-                    }
-                }
-
-                for(Light &light : data.lights) {
-                    light.enabled = false;
-                    UpdateLightValues(Shared::data.lighting, light);
-                }
-            }
         }
     }
 
     void Update() {
+        #ifdef DEBUG_TIMER
         t_Init();
+        #endif
 
         ClearBackground(BLACK);
         SetShaderValue(Shared::data.lighting, Shared::data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
@@ -1406,7 +1458,9 @@ namespace Game {
         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
         SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
-        t_Breakpoint("Lightning stuff");
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Lightning věci");
+        #endif
 
         data.action_Used = false; // If any action was used this frame (preventing click-through)
         if(!Shared::data.mobile_Mode.ticked)
@@ -1480,10 +1534,22 @@ namespace Game {
                     
                     data.camera.position = current_Position;
                     data.camera_Target = current_Target;
+                } else {
+                    bool clock_Visible = data.camera_Target.z > 0.f;
+                    if(!clock_Visible) data.clock_Fall_Cooldown -= GetFrameTime();
+                    if(data.clock_Fall_Cooldown < 0.f && !data.clock_Fell) {
+                        data.clock_Fell = true;
+                        data.item_Data[Game_Data::Item::CLOCK].position = {-10.392f, 13.2766f, 25.2803f};
+                        data.item_Data[Game_Data::Item::CLOCK].rotation.x = 90.f;
+                        data.item_Data[Game_Data::Item::CLOCK].Calculate_Collision();
+                        data.hear.Play(2, 0.25f);
+                    }
                 }
             }
 
-            t_Breakpoint("Wake animation");
+            #ifdef DEBUG_TIMER
+            t_Breakpoint("Wake animace");
+            #endif
 
             /* DEATH ANIMATION */ if(data.death_Animation_Playing) {
                 /*
@@ -1596,7 +1662,9 @@ namespace Game {
                 }
             }
 
-            t_Breakpoint("Death animation");
+            #ifdef DEBUG_TIMER
+            t_Breakpoint("Death animace");
+            #endif
 
             /* DOORS */ {
                 bool door_Opened = false;
@@ -1604,14 +1672,7 @@ namespace Game {
                     // DrawModelEx(door, door_Data.position, {0.f, 1.f, 0.f}, door_Data.rotation, door_Data.scale, WHITE);
                     // DrawLine3D(data.camera.position, door_Data.position, RED);
 
-                    Matrix matrix = MatrixIdentity();
-                    matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
-
-                    matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-                    matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
-                    matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
-
-                    matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+                    Matrix matrix = Get_Door_Matrix(door_Data);
 
                     DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
                     
@@ -1658,12 +1719,7 @@ namespace Game {
                     } else {
                         bool door_Updated = false;
                         if(Vector3Distance(door_Data.position, data.camera.position) < 5.f) {
-                            Matrix matrix = MatrixIdentity();
-                            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
-                            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-                            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
-                            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
-                            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+                            Matrix matrix = Get_Door_Matrix(door_Data);
 
                             Vector3 target = Vector3Transform({0.f, 0.f, 0.f}, matrix);
                             Ray raycast = {data.camera.position, Vector3Divide(Vector3Subtract(target, data.camera.position), {10.f, 10.f, 10.f})};
@@ -1690,12 +1746,7 @@ namespace Game {
 
                         Vector3 father_Position = Vector3Add(data.father_Position, {0.f, 6.5f, 0.f});
                         if(Vector3Distance(door_Data.position, father_Position) < 5.f) {
-                            Matrix matrix = MatrixIdentity();
-                            matrix = MatrixMultiply(matrix, MatrixScale(door_Data.scale.x, door_Data.scale.y, door_Data.scale.z));
-                            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.scale.x, 0.f, 0.f));
-                            matrix = MatrixMultiply(matrix, MatrixRotateY(door_Data.rotation * DEG2RAD));
-                            matrix = MatrixMultiply(matrix, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
-                            matrix = MatrixMultiply(matrix, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+                            Matrix matrix = Get_Door_Matrix(door_Data);
 
                             Vector3 target = Vector3Transform({0.f, 0.f, 0.f}, matrix);
                             Ray raycast = {father_Position, Vector3Divide(Vector3Subtract(target, father_Position), {10.f, 10.f, 10.f})};
@@ -1733,11 +1784,15 @@ namespace Game {
                 }
             }
 
-            t_Breakpoint("Doors");
+            #ifdef DEBUG_TIMER
+            t_Breakpoint("Dveře");
+            #endif
 
             DrawModel(Shared::data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
 
-            t_Breakpoint("House render");
+            #ifdef DEBUG_TIMER
+            t_Breakpoint("Renderace domu");
+            #endif
 
             // ------------------
 
@@ -1765,6 +1820,14 @@ namespace Game {
                                                                                                 data.item_Data[index].rotation.y * DEG2RAD,
                                                                                                 data.item_Data[index].rotation.z * DEG2RAD}));
                             DrawModel(data.key, data.item_Data[index].position, 1.f, WHITE);
+                            break;
+                        }
+
+                        case Game_Data::CLOCK: {
+                            data.clock.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
+                                                                                                     data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                     data.item_Data[index].rotation.z * DEG2RAD}));
+                            DrawModel(data.clock, data.item_Data[index].position, 1.f, WHITE);
                             break;
                         }
 
@@ -1804,7 +1867,9 @@ namespace Game {
                 }
             }
 
-            t_Breakpoint("Items");
+            #ifdef DEBUG_TIMER
+            t_Breakpoint("Předměty");
+            #endif
 
             float nearest_Hit = 10000.f;
             int nearest_Hit_Id = -1;
@@ -1850,7 +1915,9 @@ namespace Game {
                 index++;
             }
 
-            t_Breakpoint("Drawers");
+            #ifdef DEBUG_TIMER
+            t_Breakpoint("Šuplíky");
+            #endif
 
             // ----------------------
 
@@ -1874,23 +1941,57 @@ namespace Game {
             DrawModel(data.fuse_Box.model, data.fuse_Box.position, 1.f, WHITE);
 
             if(data.fuse_Box.lever_Turning) {
-                if(!data.game_Paused)
+                if(!data.game_Paused) {
                     data.fuse_Box.lever_Tick += GetFrameTime() * 80.f;
+
+                    float max_Lever_Tick = data.fuse_Box.animations[0].frameCount - 1.f;
+                    if((data.fuse_Box.lever_Tick < max_Lever_Tick / 2.f) && ((data.fuse_Box.lever_Tick + GetFrameTime() * 80.f) > max_Lever_Tick / 2.f)) {
+                        data.fog_Density = 0.05f;
+                        for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
+                            if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                                Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = data.default_Shader;
+                            }
+                        }
+
+                        for(Light &light : data.lights) {
+                            light.enabled = true;
+                            UpdateLightValues(Shared::data.lighting, light);
+                        }
+                    }
+                }
             } else {
-                if(!data.game_Paused)
+                if(!data.game_Paused) {
                     data.fuse_Box.lever_Tick -= GetFrameTime() * 80.f;
+
+                    float max_Lever_Tick = data.fuse_Box.animations[0].frameCount - 1.f;
+                    if((data.fuse_Box.lever_Tick > max_Lever_Tick / 2.f) && ((data.fuse_Box.lever_Tick - GetFrameTime() * 80.f) < max_Lever_Tick / 2.f)) {
+                        data.fog_Density = 0.15f;
+                        for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
+                            if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                                Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
+                            }
+                        }
+
+                        for(Light &light : data.lights) {
+                            light.enabled = false;
+                            UpdateLightValues(Shared::data.lighting, light);
+                        }
+                    }
+                }
             }
 
             data.fuse_Box.lever_Tick = Clamp(data.fuse_Box.lever_Tick, 0.f, data.fuse_Box.animations[0].frameCount - 1.f);
             
-            t_Breakpoint("Input & stuff");
+            #ifdef DEBUG_TIMER
+            t_Breakpoint("Vstup & věci");
+            #endif
 
             /* FATHER */ {
-                /* {
+                if(data.debug) {
                     if(IsKeyPressed(KEY_SPACE)) {
-                        data.father_Points.push_back(Game_Data::Father_Point(data.camera.position, Get_Door_States()));
+                        data.father_Points.push_back(Game_Data::Father_Point({data.camera.position.x, data.camera.position.y - 4.5f, data.camera.position.z}, Get_Door_States()));
                     } else if(IsKeyPressed(KEY_BACKSPACE)) {
-                        data.father_Points.back() = Game_Data::Father_Point(data.camera.position, Get_Door_States());
+                        data.father_Points.back() = Game_Data::Father_Point({data.camera.position.x, data.camera.position.y - 4.5f, data.camera.position.z}, Get_Door_States());
                     } else if(IsKeyPressed(KEY_ENTER)) {
                         for(Game_Data::Father_Point point : data.father_Points) {
                             std::string doors = "";
@@ -1901,16 +2002,14 @@ namespace Game {
                             std::cout << point.position.x << " " << point.position.y << " " << point.position.z << doors << std::endl;
                         }
                     }
-                } */
 
-                if(data.debug) {
                     Vector3 previous_Point = {0.f, 0.f, 0.f};
                     int index = 0;
                     for(Game_Data::Father_Point point : data.father_Points) {
                         if(index > 0) {
                             DrawLine3D(previous_Point, point.position, RED);
                         }
-                        bool invalid = Get_Collision_Cylinder(point.position, 1.5f);
+                        bool invalid = Get_Collision_Sphere(point.position, 1.5f);
                         DrawSphere(point.position, .5f, invalid ? RED : BLUE);
                         previous_Point = point.position;
                         index++;
@@ -1925,10 +2024,10 @@ namespace Game {
                             if(!data.game_Paused)
                                 data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
 
-                            bool collide_X = Get_Collision_Cylinder({data.father_Position.x, data.father_Position.y + 6.5f, old_Position.z}, 1.5f);
+                            bool collide_X = Get_Collision_Sphere({data.father_Position.x, data.father_Position.y + 6.5f, old_Position.z}, 1.5f);
                             if(collide_X) data.father_Position.x = old_Position.x;
 
-                            bool collide_Z = Get_Collision_Cylinder({old_Position.x, data.father_Position.y + 6.5f, data.father_Position.z}, 1.5f);
+                            bool collide_Z = Get_Collision_Sphere({old_Position.x, data.father_Position.y + 6.5f, data.father_Position.z}, 1.5f);
                             if(collide_Z) data.father_Position.z = old_Position.z;
 
                             Vector3 diff = Vector3Subtract(data.camera.position, data.father_Position);
@@ -1991,7 +2090,7 @@ namespace Game {
 
                             float max = Vector3Distance(source, target) / 4.f;
 
-                            if(!data.game_Paused)
+                            if(!data.game_Paused && data.clock_Fell)
                                 data.keyframe_Tick += 1.f * GetFrameTime();
 
                             data.father_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
@@ -2026,7 +2125,9 @@ namespace Game {
                     }
                 }
 
-                t_Breakpoint("Father");
+                #ifdef DEBUG_TIMER
+                t_Breakpoint("Táta");
+                #endif
 
                 Ray ray = {{data.father_Position.x, data.father_Position.y + 3.5f, data.father_Position.z}, {0.f, -0.1f, 0.f}};
                 float y = Get_Collision_Ray(ray).point.y;
@@ -2036,16 +2137,12 @@ namespace Game {
                 DrawModelEx(data.father, data.father_Position, {0.f, 1.f, 0.f}, data.father_Rotation + 90.f, Vector3 {12.f, 12.f, 12.f}, WHITE);
             }
 
-            Get_Collision_Sphere(data.camera.position, 0.1f);
-
             if(Player_Visible()) {
                 See_Player();
             }
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
-
-        data.win.Update();
 
         const float crosshair_size = 10.f;
         DrawLineEx({GetScreenWidth() / 2.f - crosshair_size, GetScreenHeight() / 2.f}, {GetScreenWidth() / 2.f + crosshair_size, GetScreenHeight() / 2.f}, 2.f, Fade(WHITE, 0.2f));
@@ -2059,7 +2156,13 @@ namespace Game {
                 data.movement.Render();
                 bool rotation_Updated = false;
 
-                if(data.movement.draggin_Id >= GetTouchPointCount())
+                bool id_Found = false;
+                for(int id = 0; id < GetTouchPointCount(); id++) {
+                    if(data.movement.draggin_Id == GetTouchPointId(id))
+                        id_Found = true;
+                }
+
+                if(!id_Found)
                     data.movement.dragging = false;
 
                 float size = GetScreenHeight() / 1300.f;
@@ -2095,8 +2198,8 @@ namespace Game {
                 for(int index = 0; index < GetTouchPointCount(); index++) {
                     int id = GetTouchPointId(index);
 
-                    bool can_Update = data.movement.Can_Update(id);
-                    Game_Data::Joystick_Data joystick = data.movement.Update(id);
+                    bool can_Update = data.movement.Can_Update(index);
+                    Game_Data::Joystick_Data joystick = data.movement.Update(index);
 
                     if(CheckCollisionPointRec(GetTouchPosition(index), crouch_Rectangle)) {
                         if(data.holding_Crouch != id) {
@@ -2160,7 +2263,9 @@ namespace Game {
             }
         }
 
-        t_Breakpoint("Platform-depended updation & drawing");
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Platform-depended updatace & vykreslování");
+        #endif
 
         /* COLLISIONS */ {
             if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
@@ -2210,7 +2315,9 @@ namespace Game {
             }
         }
 
-        t_Breakpoint("Collisions");
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Kolize");
+        #endif
 
         if(!data.guide_Finished) {
             if(data.guide_Texts[data.guide_Index].Update()) {
@@ -2285,7 +2392,9 @@ namespace Game {
             }
         }
 
-        t_Breakpoint("Guide renderition");
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Guide renderace");
+        #endif
 
         if(IsKeyPressed(KEY_TAB) && Shared::data.test_Mode.ticked) data.debug = !data.debug;
 
@@ -2338,7 +2447,11 @@ namespace Game {
             }
         }
 
-        t_Breakpoint("Death animation");
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Death animace");
+        #endif
+
+        data.win.Update();
 
 
         // ------------------------------------------------------------------
@@ -2358,10 +2471,12 @@ namespace Game {
             if(!data.hear.Playing() && !death_Screen & !data.win.playing) {
                 float volume = Remap(Vector3Distance(data.camera.position, data.father_Position), 0.f, 50.f, 1.f, 0.f);
                 volume = Clamp(volume, 0.f, 1.f);
+
                 data.hear.Play(volume);
             }
         } else {
-            data.hear_Cooldown -= GetFrameTime();
+            if(data.clock_Fell)
+                data.hear_Cooldown -= GetFrameTime();
         }
 
         /*
@@ -2405,9 +2520,11 @@ namespace Game {
             Shared::DrawTextExOutline(Shared::data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
         }
 
-        t_Breakpoint("End stuff i dont know how to name");
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Konečné věci");
 
         if(IsKeyPressed(KEY_KP_0)) t_Summary();
+        #endif
     }
 };
 

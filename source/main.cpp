@@ -160,6 +160,7 @@ void Update() {
         bool show_Cursor = true;
         if(scene == Scene::GAME) show_Cursor = false;
         if(scene == Scene::GAME && Game::data.game_Paused) show_Cursor = true;
+        if(scene == Scene::GAME && Game::data.win.tick > Game::data.win.eat_Finish) show_Cursor = true;
         if(scene == Scene::GAME && Game::data.death_Animation_Tick - 2.f > (float)Game::data.death_Animation.size() - 1.f) show_Cursor = true;
 
         if(IsCursorOnScreen() && show_Cursor)

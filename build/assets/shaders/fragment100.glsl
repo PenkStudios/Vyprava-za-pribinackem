@@ -59,7 +59,11 @@ void main()
             if (lights[i].type == LIGHT_POINT) light = normalize(lights[i].position - fragPosition);
 
             float NdotL = max(dot(normal, light), 0.0);
-            lightDot += lights[i].color.rgb*NdotL;
+            
+            float dist = length(lights[i].position - fragPosition);
+            vec3 Ldot = (lights[i].color.rgb*NdotL)/dist;
+
+            lightDot += Ldot;
 
             float specCo = 0.0;
             if (NdotL > 0.0) specCo = pow(max(0.0, dot(viewD, reflect(-(light), normal))), 16.0); // Shine: 16.0
