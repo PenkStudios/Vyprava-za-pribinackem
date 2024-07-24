@@ -5,7 +5,7 @@
 #include "mod_loader.cpp"
 
 #ifdef PLATFORM_ANDROID
-#include "ad.cpp"
+#include "android.cpp"
 #define ASSETS_ROOT ""
 #else
 #define ASSETS_ROOT "assets/"
@@ -60,34 +60,13 @@ void Ready() {
     srand(time(NULL));
 
     SetConfigFlags(FLAG_MSAA_4X_HINT);
-
-#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
-    InitWindow(0, 0, "Výprava za pribináčkem");
-#else
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(1000, 600, "Výprava za pribináčkem");
-#endif
-
-    InitAudioDevice();
-    
-    ChangeDirectory(GetApplicationDirectory());
-
-    Set_Scene_Data({
-        {INTRO,   {Intro::Init,   Intro::On_Switch,   Intro::Update}},
-        {MENU,    {Menu::Init,    Menu::On_Switch,    Menu::Update}},
-        {GAME,    {Game::Init,    Game::On_Switch,    Game::Update}}
-    });
-
-    SetTargetFPS(60);
-    EnableCursor();
-
-    SetExitKey(0);
-
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
     std::string root = std::string(GetAndroidApp()->activity->internalDataPath) + "/";
 #else
     std::string root = ASSETS_ROOT;
 #endif
+
+    Shared::data.quality = 2;
 
     std::fstream data_Stream(root + "player.txt", std::ios::in | std::ios::binary);
     data_Stream.unsetf(std::ios::skipws);
@@ -135,10 +114,54 @@ void Ready() {
                 Menu::data.camera.fovy = std::stof(strings[2]) * 179.f;
             } else if(strings[0] == "SENSITIVITY") {
                 Shared::data.sensitivity.progress = std::stof(strings[2]);
+            } else if(strings[0] == "RESOLUTION_X") {
+                Shared::data.display_Resolution.x = std::stoi(strings[2]);
+            } else if(strings[0] == "RESOLUTION_Y") {
+                Shared::data.display_Resolution.y = std::stoi(strings[2]);
+            } else if(strings[0] == "QUALITY") {
+                Shared::data.quality = std::stoi(strings[2]);
             }
         }
     }
     data_Stream.close();
+
+#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
+    // TODO: Implementovat down-scaling pro lepší performance
+    /*
+    Vector2 display_Size = {(float)GetScreenWidth(), (float)GetScreenHeight()};
+
+    float max_Width = 1000.f;
+    float scale = max_Width / display_Size.x;
+
+    display_Size = Vector2Scale(display_Size, scale);
+    window_Downscaling = 1.f / scale;
+    */
+
+    float downscaling = 1.f;
+    if(Shared::data.quality == 1 /* LOW */) downscaling = 2.f;
+    InitWindow(Shared::data.display_Resolution.x / downscaling, Shared::data.display_Resolution.y / downscaling, "Výprava za Pribináčkem");
+#else
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    InitWindow(1000, 600, "Výprava za Pribináčkem");
+#endif
+
+    InitAudioDevice();
+    
+    ChangeDirectory(GetApplicationDirectory());
+
+    Set_Scene_Data({
+        {INTRO,   {Intro::Init,   Intro::On_Switch,   Intro::Update}},
+        {MENU,    {Menu::Init,    Menu::On_Switch,    Menu::Update}},
+        {GAME,    {Game::Init,    Game::On_Switch,    Game::Update}}
+    });
+
+    if(FloatEquals(Shared::data.display_Resolution.x, 0.f))
+        Shared::data.display_Resolution = {(float)GetScreenWidth(), (float)GetScreenHeight()};
+
+    SetTargetFPS(60);
+    EnableCursor();
+
+    SetExitKey(0);
 
     cursor = LoadTexture(ASSETS_ROOT "textures/cursor.png");
     SetTextureFilter(cursor, TEXTURE_FILTER_BILINEAR);
@@ -149,7 +172,7 @@ void Ready() {
     Mod_Callback("Init", (void*)&Shared::data);
 
     Init_Scenes();
-    Switch_To_Scene(MENU);
+    Switch_To_Scene(INTRO);
 }
 
 void Update() {
@@ -162,6 +185,7 @@ void Update() {
         if(scene == Scene::GAME && Game::data.game_Paused) show_Cursor = true;
         if(scene == Scene::GAME && Game::data.win.tick > Game::data.win.eat_Finish) show_Cursor = true;
         if(scene == Scene::GAME && Game::data.death_Animation_Tick - 2.f > (float)Game::data.death_Animation.size() - 1.f) show_Cursor = true;
+        if(scene == Scene::INTRO) show_Cursor = false;
 
         if(IsCursorOnScreen() && show_Cursor)
             DrawTextureEx(cursor, Vector2Add(GetMousePosition(), {-10.f, 0.f}), 0.f, 0.5f, WHITE);
@@ -170,6 +194,15 @@ void Update() {
     } EndDrawing();
 
     if(IsWindowResized()) {
+        Game::Init_UI();
+        Menu::Init_UI();
+    }
+
+    if(IsKeyPressed(KEY_F11)) {
+        ToggleFullscreen();
+        int monitor = GetCurrentMonitor();
+        SetWindowSize(GetMonitorWidth(monitor), GetMonitorHeight(monitor));
+
         Game::Init_UI();
         Menu::Init_UI();
     }
@@ -184,6 +217,9 @@ void Save_Data() {
     string += "FPS_LIMIT = " + std::to_string(Shared::data.max_Fps.progress) + "\n";
     string += "FOV = " + std::to_string(Shared::data.fov.progress) + "\n";
     string += "SENSITIVITY = " + std::to_string(Shared::data.sensitivity.progress) + "\n";
+    string += "RESOLUTION_X = " + std::to_string(Shared::data.display_Resolution.x) + "\n";
+    string += "RESOLUTION_Y = " + std::to_string(Shared::data.display_Resolution.y) + "\n";
+    string += "QUALITY = " + std::to_string(Shared::data.quality) + "\n";
     std::vector<unsigned char> data = Encrypt(string);
 
 #if defined(PLATFORM_ANDROID)

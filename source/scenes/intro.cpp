@@ -20,7 +20,6 @@ namespace Intro {
     void Init() {
         data.intro_Sound = LoadSound(ASSETS_ROOT "audio/intro.wav");
         data.intro_Texture = LoadTexture(ASSETS_ROOT "textures/logo.png");
-        PlaySound(data.intro_Sound);
 
         data.tick = 0.f;
         data.blink_Countdown = 0;
@@ -29,6 +28,7 @@ namespace Intro {
     }
 
     void On_Switch() {
+        PlaySound(data.intro_Sound);
         Mod_Callback("Switch_Intro", (void*)&data);
     }
 
@@ -67,16 +67,17 @@ namespace Intro {
         opacity_Logo = Clamp(opacity_Logo, 0.f, 255.f);
         opacity_Light = Clamp(opacity_Light, 0.f, 255.f);
 
-        DrawEllipse(GetScreenWidth() / 2, GetScreenHeight() / 1.5, 200.f, 100.f, Color {255, 255, 255, (unsigned char)opacity_Light});
+        float size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 1.5f / 800.f;
+        DrawEllipse(GetScreenWidth() / 2, GetScreenHeight() / 1.5f, 200.f * size, 100.f * size, Color {255, 255, 255, (unsigned char)opacity_Light});
 
-        DrawTexture(data.intro_Texture, GetScreenWidth() / 2 - data.intro_Texture.width / 2, GetScreenHeight() / 2 - data.intro_Texture.height / 2, Color {255, 255, 255, (unsigned char)opacity_Logo});
-        DrawTriangle({GetScreenWidth() / 2.f - 200.f, GetScreenHeight() / 1.5f},
-                     {GetScreenWidth() / 2.f + 200.f, GetScreenHeight() / 1.5f},
+        DrawTextureEx(data.intro_Texture, {GetScreenWidth() / 2.f - (data.intro_Texture.width * size) / 2.f, GetScreenHeight() / 1.5f - (data.intro_Texture.height * size)}, 0.f, size, Color {255, 255, 255, (unsigned char)((opacity_Logo + opacity_Light) / 2.f)});
+        DrawTriangle({GetScreenWidth() / 2.f - 200.f * size, GetScreenHeight() / 1.5f},
+                     {GetScreenWidth() / 2.f + 200.f * size, GetScreenHeight() / 1.5f},
                      {GetScreenWidth() / 2.f, 50.f}, Color {255, 255, 255, (unsigned char)(opacity_Light / 4.f)});
         
-        DrawTriangle({GetScreenWidth() / 2.f - 200.f, GetScreenHeight() / 1.5f},
-                     {GetScreenWidth() / 2.f, GetScreenHeight() / 1.3f},
-                     {GetScreenWidth() / 2.f + 200.f, GetScreenHeight() / 1.5f}, Color {255, 255, 255, (unsigned char)(opacity_Light / 4.f)});
+        DrawTriangle({GetScreenWidth() / 2.f - 200.f * size, GetScreenHeight() / 1.5f},
+                     {GetScreenWidth() / 2.f, GetScreenHeight() / 1.5f + 100.f * size},
+                     {GetScreenWidth() / 2.f + 200.f * size, GetScreenHeight() / 1.5f}, Color {255, 255, 255, (unsigned char)(opacity_Light / 4.f)});
 
         if(data.tick < GetFPS() * 1) {
             DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color {0, 0, 0, (unsigned char)Remap(data.tick, 0.f, GetFPS() * 1.f, 255.f, 0.f)});

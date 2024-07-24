@@ -9,37 +9,10 @@
 #define RLIGHTS_IMPLEMENTATION
 #include "../rlights.h"
 
+// počet vertexů na hlavní části světla
+#define LIGHT_BASE_VERTICES 287
+
 namespace Shared {
-    void DrawTextExC(Font font, const char *text, Vector2 position, float fontSize, float spacing, Color tint) {
-        Vector2 size = MeasureTextEx(font, text, fontSize, spacing);
-        DrawTextEx(font, text, Vector2Subtract(position, Vector2Divide(size, {2.f, 2.f})), fontSize, spacing, tint);
-    }
-
-    void DrawTextExOutline(Font font, const char *text, Vector2 position, float fontSize, float spacing, Color tint, unsigned char alpha = 255) {
-        float outline_Size = (GetScreenWidth() + GetScreenHeight()) / 400.f;
-        for(int angle = 0; angle < 360; angle += 20) {
-            Vector2 offset = {cos(angle * DEG2RAD) * outline_Size, sin(angle * DEG2RAD) * outline_Size};
-
-            DrawTextExC(font, text, Vector2Add(position, offset), fontSize, spacing, Fade(BLACK, (float)alpha / 255.f));
-        }
-        DrawTextExC(font, text, position, fontSize, spacing, Fade(WHITE, (float)alpha / 255.f));
-    }
-
-    void Draw_Pack(Rectangle rectangle) {
-        float spacing = GetScreenHeight() / 240.f;
-        float border_Width = GetScreenHeight() / 120.f;
-        float roundness = (GetScreenWidth() + GetScreenHeight()) / 2.f / 800.f / 10.f;
-
-        DrawRectangleRounded(rectangle, roundness, 10, Color {10, 10, 10, 255});
-
-        /*
-        DrawRectangleRounded(rectangle, roundness, 10, WHITE);
-        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, roundness, 10, border_Width, GRAY);
-        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, roundness, 10, border_Width, BLACK);
-        DrawRectangleRoundedLinesEx(rectangle, roundness, 10, border_Width / 1.8f, WHITE);
-        */
-    }
-
     class Shared_Data {
     public:
         Font medium_Font;
@@ -60,7 +33,7 @@ namespace Shared {
             float font_Size;
 
             Button() {}
-            
+
             Button(Vector2 position, const char* text, float font_Size, Font font) : position(position), text(text), font_Size(font_Size), font(font) {
                 size = MeasureTextEx(font, text, font_Size, 0.f);
                 // float size_X = size.x * 1.5f;
@@ -121,6 +94,10 @@ namespace Shared {
         Slider fov {};
         Slider sensitivity {};
 
+        Button low_Quality_Button {};
+        Button medium_Quality_Button {};
+        Button high_Quality_Button {};
+
         Model pribinacek;
         ModelAnimation *animations;
         int animation_Frame_Counter = 0;
@@ -131,7 +108,40 @@ namespace Shared {
         Shader lighting;
 
         Light flashlight;
+
+        Vector2 display_Resolution = {0.f, 0.f};
+        int quality;
     } data;
+
+    void DrawTextExC(Font font, const char *text, Vector2 position, float fontSize, float spacing, Color tint) {
+        Vector2 size = MeasureTextEx(font, text, fontSize, spacing);
+        DrawTextEx(font, text, Vector2Subtract(position, Vector2Divide(size, {2.f, 2.f})), fontSize, spacing, tint);
+    }
+
+    void DrawTextExOutline(Font font, const char *text, Vector2 position, float fontSize, float spacing, Color tint, unsigned char alpha = 255) {
+        float outline_Size = (GetScreenWidth() + GetScreenHeight()) / 400.f;
+        for(int angle = 0; angle < 360; angle += 22) {
+            Vector2 offset = {cos(angle * DEG2RAD) * outline_Size, sin(angle * DEG2RAD) * outline_Size};
+
+            DrawTextExC(font, text, Vector2Add(position, offset), fontSize, spacing, Fade(BLACK, (float)alpha / 255.f));
+        }
+        DrawTextExC(font, text, position, fontSize, spacing, Fade(WHITE, (float)alpha / 255.f));
+    }
+
+    void Draw_Pack(Rectangle rectangle) {
+        // float spacing = GetScreenHeight() / 240.f;
+        // float border_Width = GetScreenHeight() / 120.f;
+        float roundness = (GetScreenWidth() + GetScreenHeight()) / 2.f / 800.f / 10.f;
+
+        DrawRectangleRounded(rectangle, roundness, 10, Color {10, 10, 10, 255});
+
+        /*
+        DrawRectangleRounded(rectangle, roundness, 10, WHITE);
+        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, roundness, 10, border_Width, GRAY);
+        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, roundness, 10, border_Width, BLACK);
+        DrawRectangleRoundedLinesEx(rectangle, roundness, 10, border_Width / 1.8f, WHITE);
+        */
+    }
 
     bool Shared_Data::Button::Update(unsigned char alpha, bool enabled) {
         float spacing = GetScreenHeight() / 240.f;
@@ -141,7 +151,7 @@ namespace Shared {
         DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, 0.3f, 10, border_Width, Fade(GRAY, (float)alpha / 255.f));
         DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, 0.3f, 10, border_Width, Fade(enabled ? BLACK : Color {64, 64, 64, 255}, (float)alpha / 255.f));
         DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
-    
+
         float offset = 0.f;
         if(!data.custom_Font) offset = 4.f;
         DrawTextEx(font, text, Vector2Add(Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), {0.f, offset}), font_Size, 0.f, enabled ? BLACK : GRAY);

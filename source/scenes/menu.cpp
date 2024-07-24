@@ -9,6 +9,12 @@
 
 #include "shared.cpp"
 
+#ifdef PLATFORM_ANDROID
+#include "../android.cpp"
+#else
+void Restart_App() {}
+#endif
+
 namespace Menu {
     class Menu_Data {
     public:
@@ -49,8 +55,12 @@ namespace Menu {
         Shared::data.page_2_Button = Shared::Shared_Data::Button({GetScreenWidth() - GetScreenWidth() / 8.f, GetScreenHeight() / 2.f}, ">", font_Size, Shared::data.medium_Font);
         Shared::data.page_1_Button = Shared::Shared_Data::Button({GetScreenWidth() / 8.f, GetScreenHeight() / 2.f}, "<", font_Size, Shared::data.medium_Font);
 
-        Shared::data.sensitivity = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 2.2f}, u8"Senzitivita", FloatEquals(Shared::data.sensitivity.progress, 0.f) ? 0.6666f : Shared::data.sensitivity.progress);
-        Shared::data.fov = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.5f}, u8"FOV", FloatEquals(Shared::data.fov.progress, 0.f) ? 0.5f : Shared::data.fov.progress);
+        Shared::data.sensitivity = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f, GetScreenHeight() / 2.5f}, u8"Senzitivita", FloatEquals(Shared::data.sensitivity.progress, 0.f) ? 0.6666f : Shared::data.sensitivity.progress);
+        Shared::data.fov = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.5f}, u8"FOV", FloatEquals(Shared::data.fov.progress, 0.f) ? 0.5f : Shared::data.fov.progress);
+
+        Shared::data.low_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f - GetScreenWidth() / 6.f, GetScreenHeight() / 1.33f}, "Nízká", font_Size, Shared::data.medium_Font);
+        Shared::data.medium_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.33f}, "Střední", font_Size, Shared::data.medium_Font);
+        Shared::data.high_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f + GetScreenWidth() / 6.f, GetScreenHeight() / 1.33f}, "Vysoká", font_Size, Shared::data.medium_Font);
     }
 
     void Init() {
@@ -85,7 +95,7 @@ namespace Menu {
         Mod_Callback("Switch_Menu", (void*)&data);
     }
 
-    void Switch_Scene(Menu_Data::Menu_Scene scene) {
+    void Switch_To_Menu_Scene(Menu_Data::Menu_Scene scene) {
         if(data.changing_Scene || data.scene == scene)
             return;
 
@@ -137,9 +147,10 @@ namespace Menu {
         switch(data.scene) {
             case Menu::Menu_Data::Menu_Scene::MAIN: {
                 float font_Size = GetScreenHeight() / 15.f;
-                Shared::DrawTextExOutline(Shared::data.bold_Font, "Výprava za pribináčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE, alpha);
+                Shared::DrawTextExOutline(Shared::data.bold_Font, "Výprava za Pribináčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE, alpha);
 
-                if(Shared::data.settings_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
+                if(Shared::data.settings_Button.Update(alpha))
+                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
                 if(Shared::data.play_Button.Update(alpha)) Switch_To_Scene(GAME);
                 break;
             }
@@ -159,13 +170,15 @@ namespace Menu {
 
                 if(Shared::data.max_Fps.Update(alpha, 360.f)) SetTargetFPS(fps);
 
-                if(Shared::data.back_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::MAIN);
+                if(Shared::data.back_Button.Update(alpha))
+                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::MAIN);
 
                 float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 40.f;
                 Shared::DrawTextExOutline(Shared::data.medium_Font, "*Hra potřebuje restart po\nmodifikování mobilního módu", {font_Size * 7.25f, (float)GetScreenHeight() - font_Size}, font_Size, 0.f, WHITE, alpha);
                 
                 Shared::data.page_1_Button.Update(alpha, false);
-                if(Shared::data.page_2_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_2);
+                if(Shared::data.page_2_Button.Update(alpha))
+                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_2);
                 break;
             }
             case Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_2: {
@@ -175,7 +188,12 @@ namespace Menu {
                 Shared::data.sensitivity.Update(alpha, 30.f);
                 if(Shared::data.fov.Update(alpha, 180.f)) data.camera.fovy = Shared::data.fov.progress * 179.f;
 
-                if(Shared::data.page_1_Button.Update(alpha)) Switch_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
+                if(Shared::data.low_Quality_Button.Update(alpha, Shared::data.quality != 1)) { Shared::data.quality = 1; Restart_App(); }
+                if(Shared::data.medium_Quality_Button.Update(alpha, Shared::data.quality != 2)) { Shared::data.quality = 2; Restart_App(); }
+                if(Shared::data.high_Quality_Button.Update(alpha, Shared::data.quality != 3)) { Shared::data.quality = 3; Restart_App(); }
+
+                if(Shared::data.page_1_Button.Update(alpha))
+                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
                 Shared::data.page_2_Button.Update(alpha, false);
                 break;
             }

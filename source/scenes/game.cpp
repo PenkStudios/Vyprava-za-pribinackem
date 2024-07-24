@@ -16,13 +16,10 @@
 #include "../mod_loader.cpp"
 
 #if defined(PLATFORM_ANDROID)
-#include "../ad.cpp"
+#include "../android.cpp"
 #endif
 
 #include "shared.cpp"
-
-// počet vertexů na hlavní části světla
-#define LIGHT_BASE_VERTICES 287
 
 /*
 float Triangular_Modulo(float x, float y) {
@@ -48,51 +45,6 @@ float Triangular_Modulo(float x, float y) {
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
-
-#include <algorithm>
-
-#define DEBUG_TIMER
-
-double t_Previous;
-std::map<std::string, double> t_Breakpoints;
-
-void t_Init() {
-    t_Previous = GetTime();
-}
-
-void t_Breakpoint(std::string name) {
-    double time = GetTime() - t_Previous;
-    if(t_Breakpoints.count(name)) {
-        t_Breakpoints[name] = (t_Breakpoints[name] + time) / 2.f;
-    } else {
-        t_Breakpoints[name] = time;
-    }
-    t_Previous = GetTime();
-}
-
-void t_Summary() {
-    std::vector<std::pair<std::string, double>> pairs;
-    for (auto iterator = t_Breakpoints.begin(); iterator != t_Breakpoints.end(); ++iterator)
-        pairs.push_back(*iterator);
-
-    std::sort(pairs.begin(), pairs.end(), [=](std::pair<std::string, double>& a, std::pair<std::string, double>& b)
-    {
-        return a.second > b.second;
-    }
-    );
-
-    TraceLog(LOG_INFO, "Time breakpoint summary");
-
-    int place = 1;
-    double sum = 0.f;
-    for(std::pair<std::string, double> pair : pairs) {
-        TraceLog(LOG_INFO, "%d. %s (%f seconds)", place, pair.first.c_str(), pair.second);
-        sum += pair.second;
-        place++;
-    }
-
-    TraceLog(LOG_INFO, "Performance sum: %f, fps: %f", sum, 1000.f / sum);
-}
 
 namespace Game {
     class Game_Data {
@@ -364,7 +316,7 @@ namespace Game {
             float tick = 0.f;
 
             int walk_Finish;
-            int fetch_Finish; // "sbírání" pribináčka + lžíci
+            int fetch_Finish; // "sbírání" Pribináčka + lžíci
             int open_Finish; // otevířání přibiňáčka
             int eat_Finish; // jezení ho
             int show_Finish; // ukázání win screeny
@@ -457,10 +409,12 @@ namespace Game {
             Sound stand;
 
             Sound walk;
-            Sound run;
+            Sound father_Walk;
 
             Sound clock_Fall;
             Variable_Sound lever{};
+
+            Sound eat;
         } sounds;
 
         Texture pause;
@@ -559,7 +513,7 @@ namespace Game {
 
         float button_Size = skip_Font_Size / 17.7f;
 
-        DrawTextEx(Shared::data.bold_Font, u8"Zmáčkněte E pro přeskočení", {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size) / 2.f - skip_Text_Size.x / 2.f, (float)GetScreenHeight() - (data.skip.height * button_Size) * 1.75f - skip_Text_Size.y / 2.f}, skip_Font_Size, 0.f, WHITE);
+        if(!Shared::data.mobile_Mode.ticked) DrawTextEx(Shared::data.bold_Font, u8"Zmáčkněte E pro přeskočení", {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size) / 2.f - skip_Text_Size.x / 2.f, (float)GetScreenHeight() - (data.skip.height * button_Size) * 1.75f - skip_Text_Size.y / 2.f}, skip_Font_Size, 0.f, WHITE);
         DrawTextureEx(data.skip, {(float)GetScreenWidth() - skip_Text_Size.x / 2.f - (data.skip.width * button_Size), (float)GetScreenHeight() - (data.skip.width * button_Size) * 1.5f}, 0.f, button_Size, WHITE);
 
         bool skip;
@@ -574,12 +528,12 @@ namespace Game {
     }
 
     void Game_Data::Win_Animation::Play() {
-        // Potom co se hráč dostal do místnosti s pribináčkem a lžicí na stole
+        // Potom co se hráč dostal do místnosti s Pribináčkem a lžicí na stole
         tick = 0.f;
 
         walk_Finish = Vector3Distance(data.camera.position, CHAIR_POSITION) * 10;
-        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * .05f;
-        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * .05f;
+        pribinacek_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::PRIBINACEK].position, PRIBINACEK_WIN_ANIMATION) * 5.f;
+        spoon_Fetch = Vector3DistanceSqr(data.item_Data[Game_Data::SPOON].position, SPOON_WIN_ANIMATION) * 5.f;
         fetch_Finish = MAX(pribinacek_Fetch, spoon_Fetch) + walk_Finish;
         open_Finish = fetch_Finish + Shared::data.animations[0].frameCount - 1;
         eat_Finish = open_Finish + 300.f;
@@ -605,6 +559,16 @@ namespace Game {
     void On_Switch() {
         DisableCursor();
 
+        for(Game_Data::Drawer_Data &drawer : data.drawers) {
+            drawer.position = drawer.original_Position;
+            drawer.opening = false;
+        }
+
+        for(Game_Data::Door_Data &door : data.doors) {
+            door.rotation = door.start_Rotation_Range;
+            door.opening = false;
+        }
+
         data.item_Data.clear();
         data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f}, false)); //                                    NONE
         data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f), true)); //                             PRIBINACEK
@@ -622,14 +586,14 @@ namespace Game {
         }
 
         data.guide_Texts.clear();
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepřekonatelnou chuť na pribináčka"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("Tvým cílem je jít pro pribináčka a sníst si ho tady v pokoji"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("Jo a táta vždycky na noc vypíná pojistky, aby jsem nemohl být na mobilu"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý"));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("1. najdi pribináček a\n    vem ho do pokoje", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("2. najdi klíč", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. odemkni šuplík s\n     lžičkou a vem\n     ji do pokoje", false));
-        data.guide_Texts.push_back(Game_Data::Guide_Caption("4. dej si pribináček\n     v pokoji", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Probudíš se uprostřed noci a máš nepřekonatelnou chuť na Pribináčka, "));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("tvým cílem je jít pro Pribináčka a sníst si ho tady v pokoji."));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("Jo a táta vždycky na noc vypíná pojistky, abych nemohl být na wifině."));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("...je trochu přehnaňe starostlivý."));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("1. Najdi Pribináček a\n    vezmi ho do pokoje\n    polož ho na stůl", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("2. Najdi klíč", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("3. Odemkni šuplík s\n     lžičkou a vezmi\n     ji do pokoje a polož\n     ji na stůl", false));
+        data.guide_Texts.push_back(Game_Data::Guide_Caption("4. Sněz si Pribináček\n     v pokoji", false));
 
         data.guide_Finished = false;
         data.guide_Index = 0;
@@ -664,10 +628,16 @@ namespace Game {
         data.sounds.hear_Cooldown = 0.f;
         data.crouching = false;
 
+        data.fog_Density = 0.15f;
         for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
             if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
                 Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
             }
+        }
+
+        for(Light &light : data.lights) {
+            light.enabled = false;
+            UpdateLightValues(Shared::data.lighting, light);
         }
 
         data.debug = false;
@@ -683,6 +653,8 @@ namespace Game {
         data.clock_Fall_Cooldown = (float)(rand() % 15 + 10) / 10.f;
 
         data.sounds.hear_Cooldown = rand() % 10 + 15;
+        int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
+        SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -712,6 +684,10 @@ namespace Game {
                 from_Spoon_Position = data.item_Data[Game_Data::SPOON].position;
                 from_Spoon_Rotation = data.item_Data[Game_Data::SPOON].rotation;
             }
+
+            float next_Tick = tick + GetFrameTime() * 50.f;
+            if(next_Tick > fetch_Finish)
+                PlaySound(data.sounds.eat);
         } else if(tick < open_Finish) {
             UpdateModelAnimation(Shared::data.pribinacek, Shared::data.animations[0], ((float)(tick - fetch_Finish) / (float)(open_Finish - fetch_Finish)) * Shared::data.animations[0].frameCount);
         } else if(tick < eat_Finish) {
@@ -819,7 +795,25 @@ namespace Game {
                 Shared::DrawTextExC(Shared::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, ColorTint(WHITE, tint_UI));
             
                 if(data.play_Again_Button.Update(tint_UI.a)) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
-                else if(data.menu_Button.Update(tint_UI.a)) { Switch_To_Scene(MENU); Shared::data.coins += coins; }
+                else if(data.menu_Button.Update(tint_UI.a)) {
+                    data.fog_Density = 0.15f;
+                    for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
+                        if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                            Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
+                        }
+                    }
+
+                    for(Light &light : data.lights) {
+                        light.enabled = false;
+                        UpdateLightValues(Shared::data.lighting, light);
+                    }
+
+                    int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
+                    SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+
+                    Switch_To_Scene(MENU);
+                    Shared::data.coins += coins;
+                }
             }
         }
     }
@@ -935,8 +929,8 @@ namespace Game {
         DrawTextureEx(data.joystick_Base, {center.x - size, center.y - size}, 0.f, size * 2.f / data.joystick_Base.width, WHITE);
     }
 
-    float Get_Distance_Volume() {
-        float distance = Vector3Distance(data.camera.position, data.father_Position);
+    float Get_Distance_Volume(Vector3 target) {
+        float distance = Vector3Distance(data.camera.position, target);
         float volume = Remap(distance, 5.f, 40.f, 1.f, 0.f);
         return Clamp(volume, 0.0f, 1.2f);
     }
@@ -950,7 +944,7 @@ namespace Game {
             bool death_Screen = data.death_Animation_Tick - 2.f > (float)data.death_Animation.size() - 1.f;
 
             if(!data.sounds.hear.Playing() && !data.sounds.see.Playing() && !data.death_Animation_Playing & !data.win.playing) {
-                data.sounds.see.Play(Get_Distance_Volume());
+                data.sounds.see.Play(Get_Distance_Volume(data.father_Position));
             }
         } else {
             if(data.clock_Fell)
@@ -1218,13 +1212,14 @@ namespace Game {
         data.sounds.wake = LoadSound(ASSETS_ROOT "audio/wake.wav");
         data.sounds.stand = LoadSound(ASSETS_ROOT "audio/stand.wav");
 
-        data.sounds.run = LoadSound(ASSETS_ROOT "audio/run.wav");
         data.sounds.walk = LoadSound(ASSETS_ROOT "audio/walk.wav");
+        data.sounds.father_Walk = LoadSound(ASSETS_ROOT "audio/father_walk.wav");
 
         data.sounds.clock_Fall = LoadSound(ASSETS_ROOT "audio/clock_fall.wav");
         data.sounds.lever = Game_Data::Variable_Sound(ASSETS_ROOT "audio/lever");
 
         data.pause = LoadTexture(ASSETS_ROOT "textures/pause.png");
+        data.sounds.eat = LoadSound(ASSETS_ROOT "audio/eat.wav");
 
         Mod_Callback("Init_Game", (void*)&data);
     }
@@ -1498,7 +1493,7 @@ namespace Game {
 
         PauseSound(data.sounds.wake);
         PauseSound(data.sounds.walk);
-        PauseSound(data.sounds.run);
+        PauseSound(data.sounds.father_Walk);
     }
 
     void On_Game_Resume() {
@@ -1507,7 +1502,7 @@ namespace Game {
 
         ResumeSound(data.sounds.wake);
         ResumeSound(data.sounds.walk);
-        ResumeSound(data.sounds.run);
+        ResumeSound(data.sounds.father_Walk);
     }
 
     void Update() {
@@ -1534,7 +1529,7 @@ namespace Game {
             data.sprinting = IsKeyDown(KEY_LEFT_SHIFT);
 
         bool walking = (IsKeyDown(KEY_W) || IsKeyDown(KEY_A) ||
-                       IsKeyDown(KEY_S) || IsKeyDown(KEY_D)) && data.guide_Finished && !data.game_Paused;
+                       IsKeyDown(KEY_S) || IsKeyDown(KEY_D)) && data.guide_Finished && !data.game_Paused && !data.win.playing && !data.death_Animation_Playing;
 
         float speed = 1.f;
         if(data.crouching) speed = 0.8f;
@@ -1545,6 +1540,14 @@ namespace Game {
         else if(!IsSoundPlaying(data.sounds.walk) && walking) ResumeSound(data.sounds.walk);
 
         if(walking && !IsSoundPlaying(data.sounds.walk)) PlaySound(data.sounds.walk);
+
+        bool father_Walking = data.guide_Finished && !data.game_Paused && !data.win.playing && !data.death_Animation_Playing;
+        SetSoundVolume(data.sounds.father_Walk, Get_Distance_Volume(data.father_Position) / 4.f);
+
+        if(IsSoundPlaying(data.sounds.father_Walk) && !father_Walking) PauseSound(data.sounds.father_Walk);
+        else if(!IsSoundPlaying(data.sounds.father_Walk) && father_Walking) ResumeSound(data.sounds.father_Walk);
+
+        if(father_Walking && !IsSoundPlaying(data.sounds.father_Walk)) PlaySound(data.sounds.father_Walk);
 
         BeginMode3D(data.camera); {
             Mod_Callback("Update_Game_3D", (void*)&data);
@@ -1622,6 +1625,7 @@ namespace Game {
                     if(!clock_Visible) data.clock_Fall_Cooldown -= GetFrameTime();
                     if(data.clock_Fall_Cooldown < 0.f && !data.clock_Fell) {
                         data.clock_Fell = true;
+                        SetSoundVolume(data.sounds.clock_Fall, Get_Distance_Volume(data.item_Data[Game_Data::Item::CLOCK].position));
                         PlaySound(data.sounds.clock_Fall);
                         data.item_Data[Game_Data::Item::CLOCK].position = {-10.392f, 13.2766f, 25.2803f};
                         data.item_Data[Game_Data::Item::CLOCK].rotation.x = 90.f;
@@ -1672,6 +1676,9 @@ namespace Game {
                         data.camera.position = target_Camera_Position;
                         data.camera_Target = target_Camera_Target;
                     }
+
+                    float next_Tick = data.death_Animation_Tick + 1.f * GetFrameTime();
+                    if(next_Tick > 2.f) PlaySound(data.sounds.wake);
                 } else {
                     if(data.death_Animation_Tick - 2.f < data.death_Animation.size() - 1) {
                         Vector3 source_Camera_Position = data.death_Animation[(int)(data.death_Animation_Tick - 2.f)].camera_Position;
@@ -2230,6 +2237,8 @@ namespace Game {
             } else {
                 data.sounds.see_Cooldown = 0.f;
             }
+
+            data.win.Update();
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
@@ -2273,7 +2282,7 @@ namespace Game {
 
                 Texture texture = data.crouching ? data.un_Crouch : data.crouch;
                 DrawTextureEx(texture, {(float)GetScreenWidth() - texture.width * size - margin, margin * 2.f + texture.height * size}, 0.f, size, WHITE);
-                Rectangle crouch_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin, texture.width * size, texture.height * size};
+                Rectangle crouch_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin * 2.f + texture.height * size, texture.width * size, texture.height * size};
 
                 crouch_Rectangle.x -= crouch_Rectangle.width / 2.f;
                 crouch_Rectangle.y -= crouch_Rectangle.height / 2.f;
@@ -2286,7 +2295,7 @@ namespace Game {
 
                 Texture texture_Sprint = data.sprinting ? data.walk : data.sprint;
                 DrawTextureEx(texture_Sprint, {(float)GetScreenWidth() - texture_Sprint.width * size - margin, margin * 3.f + texture.height * 2.f * size}, 0.f, size, WHITE);
-                Rectangle sprint_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin * 2.f + texture.height * size, texture.width * size, texture.height * size};
+                Rectangle sprint_Rectangle = {(float)GetScreenWidth() - texture.width * size - margin, margin * 3.f + texture.height * 2.f * size, texture.width * size, texture.height * size};
 
                 sprint_Rectangle.x -= sprint_Rectangle.width / 2.f;
                 sprint_Rectangle.y -= sprint_Rectangle.height / 2.f;
@@ -2447,7 +2456,7 @@ namespace Game {
                 rectangle.height += button_Size * 60.f;
 
                 if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), rectangle) && !data.guide_Finished) {
-                    PlaySound(data.sounds.wake);
+                    if(data.wake_Animation_Tick < 1.1f) PlaySound(data.sounds.wake);
                     int index = 0;
                     for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
                         if(caption.can_Skip == false) {
@@ -2460,7 +2469,7 @@ namespace Game {
                 }
             } else {
                 if(IsKeyPressed(KEY_E) && !data.guide_Finished) {
-                    PlaySound(data.sounds.wake);
+                    if(data.wake_Animation_Tick < 1.1f) PlaySound(data.sounds.wake);
                     int index = 0;
                     for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
                         if(caption.can_Skip == false) {
@@ -2543,7 +2552,25 @@ namespace Game {
                     Shared::DrawTextExC(Shared::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
                 
                     if(data.play_Again_Button.Update()) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
-                    else if(data.menu_Button.Update()) { Switch_To_Scene(MENU); Shared::data.coins += coins; }
+                    else if(data.menu_Button.Update()) {
+                        data.fog_Density = 0.15f;
+                        for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
+                            if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                                Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
+                            }
+                        }
+
+                        for(Light &light : data.lights) {
+                            light.enabled = false;
+                            UpdateLightValues(Shared::data.lighting, light);
+                        }
+
+                        int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
+                        SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+
+                        Switch_To_Scene(MENU);
+                        Shared::data.coins += coins;
+                    }
 
                     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), ColorTint(color, BLACK));
                 } else if((data.death_Animation_Tick + 1.f * GetFrameTime()) - 2.f > (float)data.death_Animation.size() - 1.f) {
@@ -2561,8 +2588,6 @@ namespace Game {
         #ifdef DEBUG_TIMER
         t_Breakpoint("Death animace");
         #endif
-
-        data.win.Update();
 
 
         // ------------------------------------------------------------------
@@ -2590,22 +2615,19 @@ namespace Game {
 
             bool death_Screen = data.death_Animation_Tick - 2.f > (float)data.death_Animation.size() - 1.f;
 
-            if(!data.sounds.see.Playing() && !data.sounds.hear.Playing() && !data.death_Animation_Playing & !data.win.playing) {
-                data.sounds.hear.Play(Get_Distance_Volume());
+            float distance = Vector3Distance(data.camera.position, data.father_Position);
+            if(distance > 100.f && !data.sounds.see.Playing() && !data.sounds.hear.Playing() && !data.death_Animation_Playing & !data.win.playing) {
+                data.sounds.hear.Play(Get_Distance_Volume(data.father_Position));
             }
         } else {
             if(data.clock_Fell)
                 data.sounds.hear_Cooldown -= GetFrameTime();
         }
 
-        if(IsKeyPressed(KEY_P)) data.sounds.hear.Play(Get_Distance_Volume());
-
-        /*
         if(IsKeyPressed(KEY_P)) {
             data.item_Data[Game_Data::Item::SPOON].position = Vector3Add(data.players_Room_Table.min, {0.f, 1.f, 0.f});
             data.item_Data[Game_Data::Item::PRIBINACEK].position = Vector3Add(data.players_Room_Table.min, {0.f, 1.f, 0.f});
         }
-        */
 
         if(IsKeyPressed(KEY_ESCAPE)) {
             data.game_Paused = !data.game_Paused;
@@ -2626,7 +2648,24 @@ namespace Game {
             float font_Size = GetScreenHeight() / 15.f;
             Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Hra pozastavena", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
 
-            if(data.pause_Menu_Button.Update()) Switch_To_Scene(MENU);
+            if(data.pause_Menu_Button.Update()) {
+                data.fog_Density = 0.15f;
+                for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
+                    if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                        Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
+                    }
+                }
+
+                for(Light &light : data.lights) {
+                    light.enabled = false;
+                    UpdateLightValues(Shared::data.lighting, light);
+                }
+
+                int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
+                SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+
+                Switch_To_Scene(MENU);
+            }
             if(data.pause_Continue_Button.Update()) { On_Game_Resume(); }
         }
 
