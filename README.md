@@ -1,6 +1,6 @@
-# Výprava za pribináčkem verze 0.1.0
+# Výprava za pribináčkem verze 1.0.0
 Velice vtipná hra o cestě pro pribináčka
-Beta 0.1.0 🎉
+Beta 1.0.0 🎉
 
 ## Přídáno
 - [Google play](https://play.google.com/store/apps/details?id=com.zahon.pribinacek) release 🎉
