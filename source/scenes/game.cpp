@@ -46,6 +46,8 @@ float Triangular_Modulo(float x, float y) {
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+#define DEBUG_TIMER
+
 namespace Game {
     class Game_Data {
     public:
@@ -128,8 +130,6 @@ namespace Game {
 
             Father_Point(Vector3 position, std::vector<bool> door_States) : position(position), door_States(door_States) {}
         };
-
-        std::vector<BoundingBox> house_BBoxes;
         
         Model father;
         Camera3D camera;
@@ -138,7 +138,6 @@ namespace Game {
         Mesh door_Handle;
         float fall_Acceleration = 0.f;
 
-        float fog_Density = 0.15f;
         bool crouching = false;
         int frame_Counter = 0;
         float animation_Frame_Count = 0;
@@ -612,7 +611,7 @@ namespace Game {
         data.camera_Target = {0.f, 0.f, 1.f};
         data.fuse_Box.Reset();
 
-        data.fog_Density = 0.15f;
+        Shared::data.fog_Density = 0.1f;
 
         /*
         data.camera.position = {-10.f, 20.f, 23.5f}; // {0.f, 7.5f, 0.f};
@@ -628,7 +627,8 @@ namespace Game {
         data.sounds.hear_Cooldown = 0.f;
         data.crouching = false;
 
-        data.fog_Density = 0.15f;
+        Shared::data.fog_Density = 0.1f;
+        
         for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
             if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
                 Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
@@ -654,7 +654,7 @@ namespace Game {
 
         data.sounds.hear_Cooldown = rand() % 10 + 15;
         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
-        SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -796,7 +796,7 @@ namespace Game {
             
                 if(data.play_Again_Button.Update(tint_UI.a)) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
                 else if(data.menu_Button.Update(tint_UI.a)) {
-                    data.fog_Density = 0.15f;
+                    Shared::data.fog_Density = 0.1f;
                     for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
                         if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
                             Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
@@ -809,7 +809,7 @@ namespace Game {
                     }
 
                     int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
-                    SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+                    SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
 
                     Switch_To_Scene(MENU);
                     Shared::data.coins += coins;
@@ -832,11 +832,11 @@ namespace Game {
             // NOTE: We consider the model.transform for the collision check but 
             // it can be checked against any transform Matrix, used when checking against same
             // model drawn multiple times with multiple transforms
-            RayCollision houseCollision = GetRayCollisionBox(ray, data.house_BBoxes[m]);
+            RayCollision houseCollision = GetRayCollisionBox(ray, Shared::data.house_BBoxes[m]);
 
             /*
-            Vector3 size = Vector3Subtract(data.house_BBoxes[m].max, data.house_BBoxes[m].min);
-            Vector3 position = Vector3Divide(Vector3Add(data.house_BBoxes[m].max, data.house_BBoxes[m].min), {2.f, 2.f, 2.f});
+            Vector3 size = Vector3Subtract(Shared::data.house_BBoxes[m].max, Shared::data.house_BBoxes[m].min);
+            Vector3 position = Vector3Divide(Vector3Add(Shared::data.house_BBoxes[m].max, Shared::data.house_BBoxes[m].min), {2.f, 2.f, 2.f});
             DrawCubeV(position, size, ColorFromHSV((m * 70) % 360, 1.f, 1.f));
             */
 
@@ -994,7 +994,7 @@ namespace Game {
         data.default_Shader = LoadMaterialDefault().shader;
 
         for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
-            data.house_BBoxes.push_back(GetMeshBoundingBox(Shared::data.house.meshes[mesh]));
+            Shared::data.house_BBoxes.push_back(GetMeshBoundingBox(Shared::data.house.meshes[mesh]));
         }
 
         data.father = LoadModel(ASSETS_ROOT "models/human.iqm");
@@ -1203,7 +1203,7 @@ namespace Game {
         data.sounds.see = Game_Data::Variable_Sound(ASSETS_ROOT "audio/see");
 
         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
-        SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         data.clock = LoadModel(ASSETS_ROOT "models/clock.glb");
         for(int material = 0; material < data.clock.materialCount; material++)
@@ -1226,8 +1226,8 @@ namespace Game {
 
     bool Get_Collision_Sphere(Vector3 center, float radius) {
         for(int m = 0; m < Shared::data.house.meshCount; m++) {
-            bool houseCollision = CheckCollisionBoxSphere(data.house_BBoxes[m], center, radius);
-            if(data.debug) DrawBoundingBox(data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
+            bool houseCollision = CheckCollisionBoxSphere(Shared::data.house_BBoxes[m], center, radius);
+            if(data.debug) DrawBoundingBox(Shared::data.house_BBoxes[m], ColorFromHSV((m * 70) % 360, 1.f, 1.f));
 
             if(houseCollision) return true;
         }
@@ -1518,7 +1518,7 @@ namespace Game {
 
         Vector3 old_Position = data.camera.position;
         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
-        SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
 
         #ifdef DEBUG_TIMER
         t_Breakpoint("Lightning věci");
@@ -1879,7 +1879,7 @@ namespace Game {
             t_Breakpoint("Dveře");
             #endif
 
-            DrawModel(Shared::data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
+            Shared::Draw_Model_Optimized(data.camera.position, Shared::data.house_BBoxes, Shared::data.house, {0.f, 0.f, 0.f}, 1.f, WHITE);
 
             #ifdef DEBUG_TIMER
             t_Breakpoint("Renderace domu");
@@ -2012,7 +2012,7 @@ namespace Game {
 
             // ----------------------
 
-            if(data.debug) data.fog_Density += GetMouseWheelMove() / 100.f;
+            if(data.debug) Shared::data.fog_Density += GetMouseWheelMove() / 100.f;
             if(IsKeyPressed(KEY_LEFT_CONTROL)) data.crouching = !data.crouching;
 
             if(CheckCollisionBoxSphere(data.players_Room_Table, data.item_Data[Game_Data::PRIBINACEK].position, 0.1f))
@@ -2037,7 +2037,7 @@ namespace Game {
 
                     float max_Lever_Tick = data.fuse_Box.animations[0].frameCount - 1.f;
                     if((data.fuse_Box.lever_Tick < max_Lever_Tick / 2.f) && ((data.fuse_Box.lever_Tick + GetFrameTime() * 80.f) > max_Lever_Tick / 2.f)) {
-                        data.fog_Density = 0.05f;
+                        Shared::data.fog_Density = 0.025f;
                         for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
                             if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
                                 Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = data.default_Shader;
@@ -2058,7 +2058,7 @@ namespace Game {
 
                     float max_Lever_Tick = data.fuse_Box.animations[0].frameCount - 1.f;
                     if((data.fuse_Box.lever_Tick > max_Lever_Tick / 2.f) && ((data.fuse_Box.lever_Tick - GetFrameTime() * 80.f) < max_Lever_Tick / 2.f)) {
-                        data.fog_Density = 0.15f;
+                        Shared::data.fog_Density = 0.1f;
                         for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
                             if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
                                 Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
@@ -2553,7 +2553,7 @@ namespace Game {
                 
                     if(data.play_Again_Button.Update()) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
                     else if(data.menu_Button.Update()) {
-                        data.fog_Density = 0.15f;
+                        Shared::data.fog_Density = 0.1f;
                         for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
                             if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
                                 Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
@@ -2566,7 +2566,7 @@ namespace Game {
                         }
 
                         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
-                        SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+                        SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
 
                         Switch_To_Scene(MENU);
                         Shared::data.coins += coins;
@@ -2596,7 +2596,7 @@ namespace Game {
             data.holding_Item = Game_Data::Item::NONE;
             data.camera_Start_Position = data.camera.position;
             data.camera_Start_Target = data.camera_Target;
-            data.fog_Density = 0.15f;
+            Shared::data.fog_Density = 0.1f;
             for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
                 if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
                     Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
@@ -2649,7 +2649,7 @@ namespace Game {
             Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Hra pozastavena", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
 
             if(data.pause_Menu_Button.Update()) {
-                data.fog_Density = 0.15f;
+                Shared::data.fog_Density = 0.1f;
                 for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
                     if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
                         Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
@@ -2662,7 +2662,7 @@ namespace Game {
                 }
 
                 int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
-                SetShaderValue(Shared::data.lighting, fogDensityLoc, &data.fog_Density, SHADER_UNIFORM_FLOAT);
+                SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
 
                 Switch_To_Scene(MENU);
             }

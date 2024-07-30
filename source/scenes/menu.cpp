@@ -15,6 +15,7 @@
 void Restart_App() {}
 #endif
 
+
 namespace Menu {
     class Menu_Data {
     public:
@@ -58,9 +59,11 @@ namespace Menu {
         Shared::data.sensitivity = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f, GetScreenHeight() / 2.5f}, u8"Senzitivita", FloatEquals(Shared::data.sensitivity.progress, 0.f) ? 0.6666f : Shared::data.sensitivity.progress);
         Shared::data.fov = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.5f}, u8"FOV", FloatEquals(Shared::data.fov.progress, 0.f) ? 0.5f : Shared::data.fov.progress);
 
-        Shared::data.low_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f - GetScreenWidth() / 6.f, GetScreenHeight() / 1.33f}, "Nízká", font_Size, Shared::data.medium_Font);
+        Shared::data.low_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f - GetScreenWidth() / 5.f, GetScreenHeight() / 1.33f}, "Nízká", font_Size, Shared::data.medium_Font);
         Shared::data.medium_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.33f}, "Střední", font_Size, Shared::data.medium_Font);
-        Shared::data.high_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f + GetScreenWidth() / 6.f, GetScreenHeight() / 1.33f}, "Vysoká", font_Size, Shared::data.medium_Font);
+        Shared::data.high_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f + GetScreenWidth() / 5.f, GetScreenHeight() / 1.33f}, "Vysoká", font_Size, Shared::data.medium_Font);
+    
+        // Shared::data.mobile_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 1.9f}, u8"Mobilní mód", Shared::data.mobile_Mode.ticked);
     }
 
     void Init() {
@@ -107,6 +110,10 @@ namespace Menu {
     }
 
     void Update() {
+        #ifdef DEBUG_TIMER
+        t_Init();
+        #endif
+
         if(data.changing_Scene) {
             data.scene_Change_Tick += 1.f * GetFrameTime();
             
@@ -124,12 +131,20 @@ namespace Menu {
             }
         }
 
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Changing scene věci");
+        #endif
+
         ClearBackground(BLACK);
 
         BeginMode3D(data.camera); {
-            DrawModel(Shared::data.house, {-26.5f, -7.05f, -41.f}, 1.f, WHITE);
+            Shared::Draw_Model_Optimized(data.camera.position, Shared::data.house_BBoxes, Shared::data.house, {-26.5f, -7.05f, -41.f}, 1.f, WHITE);
             DrawModel(Shared::data.pribinacek, {0.f, -0.5f, 0.f}, 1.f, WHITE);
         } EndMode3D();
+
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Renderace domu");
+        #endif
 
         SetShaderValue(Shared::data.lighting, Shared::data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
 
@@ -144,14 +159,32 @@ namespace Menu {
         bool fading_In = data.old_Scene == data.scene;
         unsigned char alpha = fading_In ? Clamp(Remap(data.scene_Change_Tick, 0.f, 0.5f, 255.f, 0.f), 0.f, 255.f) : Clamp(Remap(data.scene_Change_Tick, 0.5f, 1.f, 0.f, 255.f), 0.f, 255.f);
 
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Shader věci, flashlight, mod update callback");
+        #endif
+
         switch(data.scene) {
             case Menu::Menu_Data::Menu_Scene::MAIN: {
                 float font_Size = GetScreenHeight() / 15.f;
                 Shared::DrawTextExOutline(Shared::data.bold_Font, "Výprava za Pribináčkem", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE, alpha);
 
+                #ifdef DEBUG_TIMER
+                t_Breakpoint("MAIN: Renderace textu");
+                #endif
+
                 if(Shared::data.settings_Button.Update(alpha))
                     Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
+                
+                #ifdef DEBUG_TIMER
+                t_Breakpoint("MAIN: Tlačítko 1");
+                #endif
+                
                 if(Shared::data.play_Button.Update(alpha)) Switch_To_Scene(GAME);
+                
+                #ifdef DEBUG_TIMER
+                t_Breakpoint("MAIN: Tlačítko 2");
+                #endif
+                
                 break;
             }
             case Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1: {
@@ -188,6 +221,9 @@ namespace Menu {
                 Shared::data.sensitivity.Update(alpha, 30.f);
                 if(Shared::data.fov.Update(alpha, 180.f)) data.camera.fovy = Shared::data.fov.progress * 179.f;
 
+                float label_Font_Size = GetScreenHeight() / 15.f;
+                Shared::DrawTextExOutline(Shared::data.medium_Font, u8"Kvalita grafiky", {GetScreenWidth() / 2.f, GetScreenHeight() / 1.8f}, label_Font_Size, 0.f, WHITE, alpha);
+                
                 if(Shared::data.low_Quality_Button.Update(alpha, Shared::data.quality != 1)) { Shared::data.quality = 1; Restart_App(); }
                 if(Shared::data.medium_Quality_Button.Update(alpha, Shared::data.quality != 2)) { Shared::data.quality = 2; Restart_App(); }
                 if(Shared::data.high_Quality_Button.Update(alpha, Shared::data.quality != 3)) { Shared::data.quality = 3; Restart_App(); }
@@ -218,6 +254,12 @@ namespace Menu {
             Vector2 size = MeasureTextEx(Shared::data.medium_Font, text, font_Size, 0.f);
             Shared::DrawTextExOutline(Shared::data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
         }
+
+        #ifdef DEBUG_TIMER
+        t_Breakpoint("Menu věci, které nevím jak pojmenovat ._.");
+        #endif
+
+        if(IsKeyPressed(KEY_KP_0)) t_Summary();
 
         /*
         const char *test_Text = "TEXT text y";

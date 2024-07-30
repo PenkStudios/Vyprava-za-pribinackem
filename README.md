@@ -1,9 +1,14 @@
-# Výprava za pribináčkem verze 0.1.0
+# Výprava za pribináčkem verze 1.0.5
 Velice vtipná hra o cestě pro pribináčka
-Beta 0.1.0 🎉
+
+## Stažení
+- [Itch.io](https://penk-studios.itch.io/vyprava-za-pribinackem-lite)
+- [Google Play](https://play.google.com/console/u/3/developers/8129940632737788573/app/4976413492932229479/main-store-listing)
 
 ## Přídáno
-- [Google play](https://play.google.com/store/apps/details?id=com.zahon.pribinacek) release 🎉
+- Vylepšeno nastavení kvality grafiky
+- Optimalizace renderování modelu domu
+- Snížena mlha
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

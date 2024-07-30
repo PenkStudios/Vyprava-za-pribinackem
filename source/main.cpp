@@ -1,4 +1,5 @@
 #include <raylib.h>
+
 #include <time.h>
 #include <iterator>
 #include "scene.cpp"
@@ -126,7 +127,7 @@ void Ready() {
     data_Stream.close();
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
-    // TODO: Implementovat down-scaling pro lepší performance
+    //
     /*
     Vector2 display_Size = {(float)GetScreenWidth(), (float)GetScreenHeight()};
 
