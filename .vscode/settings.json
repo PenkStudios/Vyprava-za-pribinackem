@@ -80,6 +80,9 @@
         "iomanip": "cpp",
         "thread": "cpp",
         "*.rh": "cpp",
-        "stop_token": "cpp"
+        "stop_token": "cpp",
+        "hash_map": "cpp",
+        "span": "cpp",
+        "format": "cpp"
     }
 }

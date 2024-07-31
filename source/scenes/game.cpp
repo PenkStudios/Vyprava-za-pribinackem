@@ -2237,8 +2237,6 @@ namespace Game {
             } else {
                 data.sounds.see_Cooldown = 0.f;
             }
-
-            data.win.Update();
         } EndMode3D();
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
@@ -2624,10 +2622,14 @@ namespace Game {
                 data.sounds.hear_Cooldown -= GetFrameTime();
         }
 
+        data.win.Update();
+
+        /*
         if(IsKeyPressed(KEY_P)) {
             data.item_Data[Game_Data::Item::SPOON].position = Vector3Add(data.players_Room_Table.min, {0.f, 1.f, 0.f});
             data.item_Data[Game_Data::Item::PRIBINACEK].position = Vector3Add(data.players_Room_Table.min, {0.f, 1.f, 0.f});
         }
+        */
 
         if(IsKeyPressed(KEY_ESCAPE)) {
             data.game_Paused = !data.game_Paused;

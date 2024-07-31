@@ -128,6 +128,7 @@ namespace Shared {
 
         Button settings_Button {};
         Button play_Button {};
+        Button shop_Button {};
 
         // nastavení
         Button back_Button {};
@@ -193,7 +194,7 @@ namespace Shared {
             size.x = size.x > -size.x ? size.x : -size.x;
             size.y = size.y > -size.y ? size.y : -size.y;
             size.z = size.z > -size.z ? size.z : -size.z;
-            float distance = 1.5f / data.fog_Density;
+            float distance = 1.8f / data.fog_Density;
             bool cull = Box_SDF(Vector3Subtract(viewer_Position, center), size) > distance;
             if(cull) { culled++; continue; }
 
