@@ -15,11 +15,12 @@
 void Restart_App() {}
 #endif
 
+#include "../mission.cpp"
 
 namespace Menu {
     class Menu_Data {
     public:
-        enum Menu_Scene {MAIN, SETTINGS_PAGE_1, SETTINGS_PAGE_2, SHOP};
+        enum Menu_Scene {MAIN, SETTINGS_PAGE_1, SETTINGS_PAGE_2, SETTINGS_PAGE_3, MISSIONS};
         Menu_Scene scene;
 
         bool changing_Scene = false;
@@ -31,7 +32,8 @@ namespace Menu {
             {MAIN, {0.f, 0.f, -5.f}},
             {SETTINGS_PAGE_1, {0.f /* raylib nemá rádo perfektní top-down pohledy ._. */, 2.f, -0.1f}},
             {SETTINGS_PAGE_2, {1.5f, 0.f, 0.f}},
-            {SHOP, {1.5f, 0.f, 0.f}}
+            {SETTINGS_PAGE_3, {0.f, 0.f, 1.5f}},
+            {MISSIONS, {1.5f, 0.f, 0.f}}
         };
 
         Camera camera {0};
@@ -44,7 +46,7 @@ namespace Menu {
 
         Shared::data.settings_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 0.f}, "Nastavení", font_Size, Shared::data.medium_Font);
         Shared::data.play_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Hrát", font_Size, Shared::data.medium_Font);
-        Shared::data.shop_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 2.f}, "Obchod", font_Size, Shared::data.medium_Font);
+        Shared::data.mission_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 2.f}, "Mise", font_Size, Shared::data.medium_Font);
 
         Shared::data.back_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.15f}, "Zpět", font_Size, Shared::data.medium_Font);
 
@@ -52,20 +54,21 @@ namespace Menu {
         Shared::data.test_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f, GetScreenHeight() / 1.9f}, u8"Testový mód", Shared::data.test_Mode.ticked);
         Shared::data.mobile_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 1.9f}, u8"Mobilní mód", Shared::data.mobile_Mode.ticked);
 
-        Shared::data.volume = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 3.f}, u8"Hlasitost", Shared::data.volume.progress);
-        Shared::data.max_Fps = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.4f}, u8"FPS limiter", FloatEquals(Shared::data.max_Fps.progress, 0.f) ? 0.167f : Shared::data.max_Fps.progress);
+        Shared::data.volume = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 3.f}, u8"Hlasitost", Shared::data.volume.set ? Shared::data.volume.progress : 0.5f);
+        Shared::data.max_Fps = Shared::Shared_Data::Slider({GetScreenWidth() / 2.f, GetScreenHeight() / 1.4f}, u8"FPS limiter", Shared::data.max_Fps.set ? Shared::data.max_Fps.progress : 0.167f);
 
         Shared::data.page_2_Button = Shared::Shared_Data::Button({GetScreenWidth() - GetScreenWidth() / 8.f, GetScreenHeight() / 2.f}, ">", font_Size, Shared::data.medium_Font);
         Shared::data.page_1_Button = Shared::Shared_Data::Button({GetScreenWidth() / 8.f, GetScreenHeight() / 2.f}, "<", font_Size, Shared::data.medium_Font);
 
-        Shared::data.sensitivity = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f, GetScreenHeight() / 2.5f}, u8"Senzitivita", FloatEquals(Shared::data.sensitivity.progress, 0.f) ? 0.6666f : Shared::data.sensitivity.progress);
-        Shared::data.fov = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.5f}, u8"FOV", FloatEquals(Shared::data.fov.progress, 0.f) ? 0.5f : Shared::data.fov.progress);
+        Shared::data.sensitivity = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f, GetScreenHeight() / 2.5f}, u8"Senzitivita", Shared::data.sensitivity.set ? Shared::data.sensitivity.progress : 0.6666f);
+        Shared::data.fov = Shared::Shared_Data::Slider({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 2.5f}, u8"FOV", Shared::data.fov.set ? Shared::data.fov.progress : 0.5f);
 
         Shared::data.low_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f - GetScreenWidth() / 5.f, GetScreenHeight() / 1.33f}, "Nízká", font_Size, Shared::data.medium_Font);
         Shared::data.medium_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.33f}, "Střední", font_Size, Shared::data.medium_Font);
         Shared::data.high_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f + GetScreenWidth() / 5.f, GetScreenHeight() / 1.33f}, "Vysoká", font_Size, Shared::data.medium_Font);
 
         // Shared::data.mobile_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 1.9f}, u8"Mobilní mód", Shared::data.mobile_Mode.ticked);
+        Shared::data.show_Tutorial = Shared::Shared_Data::TickBox({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Zapnout tutoriál", Shared::data.show_Tutorial.set ? Shared::data.show_Tutorial.ticked : true);
     }
 
     void Init() {
@@ -109,6 +112,26 @@ namespace Menu {
 
         data.old_Scene = data.scene;
         data.next_Scene = scene;
+    }
+
+    void Switch_To_Menu_Scene_Instant(Menu_Data::Menu_Scene scene) {
+        data.scene_Change_Tick = 1.f;
+        data.changing_Scene = false;
+
+        data.old_Scene = data.scene;
+        data.next_Scene = scene;
+        
+        data.scene = scene;
+
+        data.camera.position = Vector3Lerp(data.scene_Perspectives[data.old_Scene],
+                                           data.scene_Perspectives[data.next_Scene],
+                                           data.scene_Change_Tick);
+    }
+
+    void Switch_To_Menu_Scene_Buffer(Menu_Data::Menu_Scene scene) {
+        if(data.next_Scene == scene)
+            Switch_To_Menu_Scene_Instant(scene);
+        Switch_To_Menu_Scene(scene);
     }
 
     void Update() {
@@ -173,8 +196,8 @@ namespace Menu {
                 if(Shared::data.settings_Button.Update(alpha))
                     Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
 
-                if(Shared::data.shop_Button.Update(alpha))
-                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::SHOP);
+                if(Shared::data.mission_Button.Update(alpha))
+                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::MISSIONS);
                 
                 if(Shared::data.play_Button.Update(alpha)) Switch_To_Scene(GAME);
                 
@@ -203,8 +226,9 @@ namespace Menu {
                 Shared::DrawTextExOutline(Shared::data.medium_Font, "*Hra potřebuje restart po\nmodifikování mobilního módu", {font_Size * 7.25f, (float)GetScreenHeight() - font_Size}, font_Size, 0.f, WHITE, alpha);
                 
                 Shared::data.page_1_Button.Update(alpha, false);
-                if(Shared::data.page_2_Button.Update(alpha))
-                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_2);
+                if(Shared::data.page_2_Button.Update(alpha)) {
+                    Switch_To_Menu_Scene_Buffer(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_2);
+                }
                 break;
             }
             case Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_2: {
@@ -222,11 +246,31 @@ namespace Menu {
                 if(Shared::data.high_Quality_Button.Update(alpha, Shared::data.quality != 3)) { Shared::data.quality = 3; Restart_App(); }
 
                 if(Shared::data.page_1_Button.Update(alpha))
-                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
+                    Switch_To_Menu_Scene_Buffer(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1);
+                if(Shared::data.page_2_Button.Update(alpha))
+                    Switch_To_Menu_Scene_Buffer(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_3);
+                break;
+            }
+            case Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_3: {
+                float text_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
+                Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Jiné nastavení", {GetScreenWidth() / 2.f, GetScreenHeight() / 8.5f}, text_Font_Size, 0.f, WHITE, alpha);
+
+                Shared::data.show_Tutorial.Update(alpha);
+
+                if(Shared::data.page_1_Button.Update(alpha))
+                    Switch_To_Menu_Scene_Buffer(Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_2);
                 Shared::data.page_2_Button.Update(alpha, false);
                 break;
             }
-            case Menu::Menu_Data::Menu_Scene::SHOP: {
+            case Menu::Menu_Data::Menu_Scene::MISSIONS: {
+                float text_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
+                Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Mise", {GetScreenWidth() / 2.f, GetScreenHeight() / 8.5f}, text_Font_Size, 0.f, WHITE, alpha);
+
+                Mission::Draw_Mission_Preview(Mission::missions[0], alpha);
+
+                Shared::data.page_1_Button.Update(alpha, false);
+                Shared::data.page_2_Button.Update(alpha, false);
+
                 if(Shared::data.back_Button.Update(alpha))
                     Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::MAIN);
                 break;

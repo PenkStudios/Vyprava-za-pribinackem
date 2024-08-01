@@ -12,6 +12,8 @@
 #define ASSETS_ROOT "assets/"
 #endif
 
+#include "mission.cpp"
+
 #include "scenes/intro.cpp"
 #include "scenes/menu.cpp"
 #include "scenes/game.cpp"
@@ -102,25 +104,35 @@ void Ready() {
                 Shared::data.coins = std::stoi(strings[2]);
             } else if(strings[0] == "SHOW_FPS") {
                 Shared::data.show_Fps.ticked = (bool)std::stoi(strings[2]);
+                Shared::data.show_Fps.set = true;
             } else if(strings[0] == "TEST_MODE") {
                 Shared::data.test_Mode.ticked = (bool)std::stoi(strings[2]);
+                Shared::data.test_Mode.set = true;
             } else if(strings[0] == "MOBILE_MODE") {
                 Shared::data.mobile_Mode.ticked = (bool)std::stoi(strings[2]);
+                Shared::data.mobile_Mode.set = true;
             } else if(strings[0] == "VOLUME") {
                 Shared::data.volume.progress = std::stof(strings[2]);
+                Shared::data.volume.set = true;
             } else if(strings[0] == "FPS_LIMIT") {
                 Shared::data.max_Fps.progress = std::stof(strings[2]);
+                Shared::data.max_Fps.set = true;
             } else if(strings[0] == "FOV") {
                 Shared::data.fov.progress = std::stof(strings[2]);
                 Menu::data.camera.fovy = std::stof(strings[2]) * 179.f;
+                Shared::data.fov.set = true;
             } else if(strings[0] == "SENSITIVITY") {
                 Shared::data.sensitivity.progress = std::stof(strings[2]);
+                Shared::data.sensitivity.set = true;
             } else if(strings[0] == "RESOLUTION_X") {
                 Shared::data.display_Resolution.x = std::stoi(strings[2]);
             } else if(strings[0] == "RESOLUTION_Y") {
                 Shared::data.display_Resolution.y = std::stoi(strings[2]);
             } else if(strings[0] == "QUALITY") {
                 Shared::data.quality = std::stoi(strings[2]);
+            } else if(strings[0] == "TUTORIAL") {
+                Shared::data.show_Tutorial.ticked = std::stoi(strings[2]);
+                Shared::data.show_Tutorial.set = true;
             }
         }
     }
@@ -155,6 +167,8 @@ void Ready() {
         {MENU,    {Menu::Init,    Menu::On_Switch,    Menu::Update}},
         {GAME,    {Game::Init,    Game::On_Switch,    Game::Update}}
     });
+
+    Mission::Init_Missions();
 
     if(FloatEquals(Shared::data.display_Resolution.x, 0.f))
         Shared::data.display_Resolution = {(float)GetScreenWidth(), (float)GetScreenHeight()};
@@ -221,6 +235,7 @@ void Save_Data() {
     string += "RESOLUTION_X = " + std::to_string(Shared::data.display_Resolution.x) + "\n";
     string += "RESOLUTION_Y = " + std::to_string(Shared::data.display_Resolution.y) + "\n";
     string += "QUALITY = " + std::to_string(Shared::data.quality) + "\n";
+    string += "TUTORIAL = " + std::to_string(Shared::data.show_Tutorial.ticked) + "\n";
     std::vector<unsigned char> data = Encrypt(string);
 
 #if defined(PLATFORM_ANDROID)

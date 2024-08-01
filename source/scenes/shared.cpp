@@ -102,6 +102,8 @@ namespace Shared {
             const char* caption;
             bool ticked = false;
 
+            bool set = false;
+
             TickBox() {}
 
             TickBox(Vector2 position, const char* caption) : position(position), caption(caption) {}
@@ -117,6 +119,8 @@ namespace Shared {
 
             float progress = 0;
             bool holding = false;
+            
+            bool set = false;
 
             Slider() {}
 
@@ -128,7 +132,7 @@ namespace Shared {
 
         Button settings_Button {};
         Button play_Button {};
-        Button shop_Button {};
+        Button mission_Button {};
 
         // nastavení
         Button back_Button {};
@@ -148,6 +152,8 @@ namespace Shared {
         Button low_Quality_Button {};
         Button medium_Quality_Button {};
         Button high_Quality_Button {};
+
+        TickBox show_Tutorial {};
 
         Model pribinacek;
         ModelAnimation *animations;
@@ -297,7 +303,10 @@ namespace Shared {
         }
 
         Vector2 mouse_Position = GetMousePosition();
-        bool to_Return = false;
+        bool to_Return = IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mouse_Position, hitbox);
+        // | pro live updataci off
+        // v
+        // bool to_Return = IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mouse_Position, hitbox);
 
         if(IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
             if(CheckCollisionPointRec(mouse_Position, hitbox)) {
@@ -305,7 +314,6 @@ namespace Shared {
             }
         } else {
             holding = false;
-            to_Return = true;
         }
 
         if(holding) {

@@ -216,8 +216,8 @@ namespace Game {
 
         Joystick movement;
 
-        #define MAX_ITEMS 6 // NONE, PRIBINACEK, SPOON, KEY, CLOCK, LOCK 
-        enum Item {NONE, PRIBINACEK, SPOON, KEY, CLOCK, LOCK, _LAST};
+        #define MAX_ITEMS 6 // NONE, PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, LOCK 
+        enum Item {NONE, PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, LOCK, _LAST};
         class Item_Data {
         public:
             Vector3 position;
@@ -335,6 +335,7 @@ namespace Game {
         };
 
         Model clock;
+
         Win_Animation win;
 
         Vector3 father_Position = {0.f, 0.f, 0.f};
@@ -418,6 +419,8 @@ namespace Game {
 
         Texture pause;
         int holding_Pause = -1;
+    
+        Model tv_Remote;
     } data;
 
     // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
@@ -569,11 +572,12 @@ namespace Game {
         }
 
         data.item_Data.clear();
-        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f}, false)); //                                    NONE
-        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f), true)); //                             PRIBINACEK
-        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f), true)); //                            SPOON
-        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f}, true)); //                                     KEY
-        data.item_Data.push_back(Game_Data::Item_Data(4, {-10.3036f, 16.3811f, 27.5464f}, false, {0.f, -90.f, 0.f})); // CLOCK
+        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f}, false)); //                                       NONE
+        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f), true)); //                                PRIBINACEK
+        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f), true)); //                               SPOON
+        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f}, true)); //                                        KEY
+        data.item_Data.push_back(Game_Data::Item_Data(4, {-28.336458f, 3.205174f, 4.820066f}, true, {0.f, -45.f, 0.f})); // TV_REMOTE
+        data.item_Data.push_back(Game_Data::Item_Data(5, {-10.3036f, 16.3811f, 27.5464f}, false, {0.f, -90.f, 0.f})); //    CLOCK
 
         int key_Position_Index = rand() % data.key_Spawns.size();
         data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[key_Position_Index].position, true, data.key_Spawns[key_Position_Index].rotation);
@@ -656,7 +660,40 @@ namespace Game {
         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
         SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
 
+        if(!Shared::data.show_Tutorial.ticked) {
+            data.guide_Finished = true;
+
+            int index = 0;
+            for(Game::Game_Data::Guide_Caption &caption : data.guide_Texts) {
+                if(caption.can_Skip == false) {
+                    data.guide_Index = index;
+                    data.guide_Finished = true;
+                    break;
+                }
+                index++;
+            }
+        }
+
         Mod_Callback("Switch_Game", (void*)&data);
+    }
+
+    void Main_Menu() {
+        Shared::data.fog_Density = 0.1f;
+        for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
+            if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
+                Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
+            }
+        }
+
+        for(Light &light : data.lights) {
+            light.enabled = false;
+            UpdateLightValues(Shared::data.lighting, light);
+        }
+
+        int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
+        SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
+
+        Switch_To_Scene(MENU);
     }
 
     void Game_Data::Win_Animation::Update() {
@@ -796,22 +833,8 @@ namespace Game {
             
                 if(data.play_Again_Button.Update(tint_UI.a)) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
                 else if(data.menu_Button.Update(tint_UI.a)) {
-                    Shared::data.fog_Density = 0.1f;
-                    for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
-                        if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
-                            Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
-                        }
-                    }
-
-                    for(Light &light : data.lights) {
-                        light.enabled = false;
-                        UpdateLightValues(Shared::data.lighting, light);
-                    }
-
-                    int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
-                    SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
-
-                    Switch_To_Scene(MENU);
+                    Shared::data.show_Tutorial.ticked = false;
+                    Main_Menu();
                     Shared::data.coins += coins;
                 }
             }
@@ -1178,11 +1201,12 @@ namespace Game {
             }
         }
 
-        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f}, false)); //                                    NONE
-        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f), true)); //                             PRIBINACEK
-        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f), true)); //                            SPOON
-        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f}, true)); //                                     KEY
-        data.item_Data.push_back(Game_Data::Item_Data(4, {-10.3036f, 16.3811f, 27.5464f}, false, {0.f, -90.f, 0.f})); // CLOCK
+        data.item_Data.push_back(Game_Data::Item_Data(0, {0.f, 0.f, 0.f}, false)); //                                       NONE
+        data.item_Data.push_back(Game_Data::Item_Data(1, B2RL(26.5f, -41.f, 8.f), true)); //                                PRIBINACEK
+        data.item_Data.push_back(Game_Data::Item_Data(2, B2RL(-26.5f, 10.f, 4.4f), true)); //                               SPOON
+        data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f}, true)); //                                        KEY
+        data.item_Data.push_back(Game_Data::Item_Data(4, {-28.336458f, 3.205174f, 4.820066f}, true, {0.f, -45.f, 0.f})); // TV_REMOTE
+        data.item_Data.push_back(Game_Data::Item_Data(5, {-10.3036f, 16.3811f, 27.5464f}, false, {0.f, -90.f, 0.f})); //    CLOCK
 
         Init_UI();
 
@@ -1220,6 +1244,10 @@ namespace Game {
 
         data.pause = LoadTexture(ASSETS_ROOT "textures/pause.png");
         data.sounds.eat = LoadSound(ASSETS_ROOT "audio/eat.wav");
+
+        data.tv_Remote = LoadModel(ASSETS_ROOT "models/remote.glb");
+        for(int material = 0; material < data.tv_Remote.materialCount; material++)
+            data.tv_Remote.materials[material].shader = Shared::data.lighting;
 
         Mod_Callback("Init_Game", (void*)&data);
     }
@@ -1914,6 +1942,14 @@ namespace Game {
                             break;
                         }
 
+                        case Game_Data::TV_REMOTE: {
+                            data.tv_Remote.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
+                                                                                                data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                data.item_Data[index].rotation.z * DEG2RAD}));
+                            DrawModel(data.tv_Remote, data.item_Data[index].position, 1.f, WHITE);
+                            break;
+                        }
+
                         case Game_Data::CLOCK: {
                             data.clock.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
                                                                                                      data.item_Data[index].rotation.y * DEG2RAD,
@@ -2481,7 +2517,7 @@ namespace Game {
             }
         }
 
-        if(data.guide_Finished) {
+        if(data.guide_Finished && Shared::data.show_Tutorial.ticked) {
             float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 30.f;
             float font_Size_Smaller = (GetScreenWidth() + GetScreenHeight()) / 2.f / 35.f;
 
@@ -2551,22 +2587,7 @@ namespace Game {
                 
                     if(data.play_Again_Button.Update()) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
                     else if(data.menu_Button.Update()) {
-                        Shared::data.fog_Density = 0.1f;
-                        for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
-                            if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
-                                Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
-                            }
-                        }
-
-                        for(Light &light : data.lights) {
-                            light.enabled = false;
-                            UpdateLightValues(Shared::data.lighting, light);
-                        }
-
-                        int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
-                        SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
-
-                        Switch_To_Scene(MENU);
+                        Main_Menu();
                         Shared::data.coins += coins;
                     }
 
@@ -2651,22 +2672,7 @@ namespace Game {
             Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Hra pozastavena", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
 
             if(data.pause_Menu_Button.Update()) {
-                Shared::data.fog_Density = 0.1f;
-                for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
-                    if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
-                        Shared::data.house.materials[Shared::data.house.meshMaterial[mesh]].shader = Shared::data.lighting;
-                    }
-                }
-
-                for(Light &light : data.lights) {
-                    light.enabled = false;
-                    UpdateLightValues(Shared::data.lighting, light);
-                }
-
-                int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
-                SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
-
-                Switch_To_Scene(MENU);
+                Main_Menu();
             }
             if(data.pause_Continue_Button.Update()) { On_Game_Resume(); }
         }

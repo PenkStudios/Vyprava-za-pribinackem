@@ -6,7 +6,7 @@ LINK=-std=c++17 -g
 all: release
 
 release:
-	cp player.txt build/assets/player.txt
+	rm -f build/assets/player.txt
 	make linux
 	make windows
 	make finish

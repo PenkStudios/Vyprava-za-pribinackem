@@ -85,6 +85,11 @@ namespace Intro {
             DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color {0, 0, 0, (unsigned char)Remap(Clamp(data.tick, GetFPS() * 3.f, GetFPS() * 5.f), GetFPS() * 3.f, GetFPS() * 5.f, 0.f, 255.f)});
         }
 
+        if(IsKeyPressed(KEY_SPACE)) {
+            data.tick = GetFPS() * 6.1f;
+            StopSound(data.intro_Sound);
+        }
+
         Mod_Callback("Update_Intro", (void*)&data, true);
     }
 };
