@@ -83,6 +83,7 @@
         "stop_token": "cpp",
         "hash_map": "cpp",
         "span": "cpp",
-        "format": "cpp"
+        "format": "cpp",
+        "reasings.c": "cpp"
     }
 }

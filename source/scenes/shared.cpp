@@ -4,6 +4,9 @@
 #include <raylib.h>
 #include <raymath.h>
 
+#define PL_MPEG_IMPLEMENTATION
+#include "../pl_mpeg.h"
+
 #include "../reasings.c"
 
 #define RLIGHTS_IMPLEMENTATION
@@ -130,6 +133,62 @@ namespace Shared {
             bool Update(unsigned char alpha = 255, float display_Multiplier = 1.f);
         };
 
+        struct Mpeg_Video {
+            plm_t *plm;
+
+            double framerate;
+            int samplerate;	
+
+            int width, height;
+
+            plm_frame_t *frame = NULL;
+            plm_samples_t *sample = NULL;
+
+            Image imFrame = { 0 };
+            Texture texture;
+
+            float baseTime;
+            Mpeg_Video() {}
+
+            void Load(const char* path, bool loop) {
+                plm = plm_create_with_filename(path);
+                framerate = plm_get_framerate(plm);
+                samplerate = plm_get_samplerate(plm);
+
+                plm_set_loop(plm, loop);
+                plm_set_audio_enabled(plm, 0);
+
+                width = plm_get_width(plm);
+                height = plm_get_height(plm);
+
+                imFrame.width = width;
+                imFrame.height = height;
+                imFrame.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8;
+                imFrame.mipmaps = 1;
+                imFrame.data = (unsigned char*)malloc(width * height * 3);
+            
+                texture = LoadTextureFromImage(imFrame);
+                baseTime = GetTime();
+            }
+
+            Texture* Update() {
+                double time = (GetTime() - baseTime);
+                if(time > (1.0 / framerate)) {
+                    baseTime = GetTime();
+
+                    frame = plm_decode_video(plm);
+                    if(!frame)
+                        return &texture;
+
+                    plm_frame_to_rgb(frame, (unsigned char*)imFrame.data, width * 3);
+
+                    UpdateTexture(texture, imFrame.data);
+                }
+
+                return &texture;
+            }
+        };
+
         Button settings_Button {};
         Button play_Button {};
         Button mission_Button {};
@@ -172,6 +231,8 @@ namespace Shared {
         int quality;
 
         float fog_Density = 0.1f;
+        Mpeg_Video tv_Video;
+        Music tv_Sound;
     } data;
 
     float Box_SDF(Vector3 p, Vector3 b) {
@@ -393,6 +454,15 @@ namespace Shared {
         for(int material = 0; material < data.house.materialCount; material++) {
             SetTextureFilter(data.house.materials[material].maps[MATERIAL_MAP_DIFFUSE].texture, TEXTURE_FILTER_BILINEAR);
         }
+
+        data.tv_Video = Shared_Data::Mpeg_Video();
+        data.tv_Video.Load(ASSETS_ROOT "vecernicek.mpg", true);
+
+        data.tv_Sound = LoadMusicStream(ASSETS_ROOT "audio/vecernicek.mp3");
+        PlayMusicStream(data.tv_Sound);
+
+        Shared::data.house.materials[30].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
+        Shared::data.house.materials[30].maps[MATERIAL_MAP_DIFFUSE].texture = data.tv_Video.texture;
     }
 };
 

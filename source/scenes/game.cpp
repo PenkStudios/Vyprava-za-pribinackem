@@ -20,6 +20,7 @@
 #endif
 
 #include "shared.cpp"
+#include "../mission.cpp"
 
 /*
 float Triangular_Modulo(float x, float y) {
@@ -1492,7 +1493,6 @@ namespace Game {
             }
         }
 
-
         if(data.holding_Item != Game_Data::NONE && !data.action_Used && !data.win.playing) {
             data.item_Data[data.holding_Item].fall_Acceleration = 0.1f;
             data.item_Data[data.holding_Item].Calculate_Collision();
@@ -2275,6 +2275,11 @@ namespace Game {
             }
         } EndMode3D();
 
+        Shared::data.tv_Video.Update();
+        
+        UpdateMusicStream(Shared::data.tv_Sound);
+        SetMusicVolume(Shared::data.tv_Sound, Get_Distance_Volume({5.57f, 7.13f, 1.68f}));
+
         Mod_Callback("Update_Game_2D", (void*)&data, false);
 
         float crosshair_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 80.f;
@@ -2411,6 +2416,13 @@ namespace Game {
                 if(!data.crouching && data.sprinting) speed *= 1.5f;
 
                 Update_Camera_Desktop(speed);
+            }
+        }
+
+        if(data.holding_Item == Game_Data::TV_REMOTE && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && !data.action_Used) {
+            float distance = Vector3Distance(data.camera.position, {5.57f, 7.13f, 1.68f});
+            if(distance < 25.f && data.fuse_Box.lever_Turning) {
+                Mission::Complete_Mission("Večerníček");
             }
         }
 
@@ -2686,6 +2698,8 @@ namespace Game {
             Vector2 size = MeasureTextEx(Shared::data.medium_Font, text, font_Size, 0.f);
             Shared::DrawTextExOutline(Shared::data.medium_Font, text, {GetScreenWidth() - size.x / 2.f - font_Size, GetScreenHeight() - size.y / 2.f - font_Size}, font_Size, 0.f, WHITE);
         }
+
+        Mission::Update_Mission_Overlay();
 
         #ifdef DEBUG_TIMER
         t_Breakpoint("Konečné věci");

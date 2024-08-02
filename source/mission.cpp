@@ -6,9 +6,13 @@
 #include <cassert>
 
 #include "scenes/shared.cpp"
+#include "reasings.c"
 
 namespace Mission {
     class Mission {
+    private:
+        float popup_Tick;
+
     public:
         const char* caption;
         std::vector<const char*> text;
@@ -27,6 +31,43 @@ namespace Mission {
                 thumbnail = LoadTexture(thumbnail_Path);
                 SetTextureFilter(thumbnail, TEXTURE_FILTER_BILINEAR);
             }
+
+        void Complete() {
+            done = true;
+            popup_Tick = 0.f;
+        }
+
+        void Render_Popup() {
+            if(popup_Tick < 5.f && done) {
+                popup_Tick += GetFrameTime();
+                Vector2 size = {GetScreenWidth() / 4.f, GetScreenHeight() / 7.f};
+                float margin = GetScreenHeight() / 30.f;
+                Vector2 position = {0.f, margin};
+                
+                float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 30.f;
+
+                if(popup_Tick < 1.f) {
+                    position.x = EaseBounceOut(popup_Tick, GetScreenWidth(), -size.x - margin, 1.f);
+                } else if(popup_Tick > 3.5) {
+                    position.x = EaseSineOut(popup_Tick - 3.5f, GetScreenWidth() - size.x - margin, size.x + margin, 1.5f);
+                } else {
+                    position.x = GetScreenWidth() - size.x - margin;
+                }
+
+                Rectangle rectangle = {position.x, position.y, size.x, size.y};
+
+                float spacing = GetScreenHeight() / 240.f;
+                float border_Width = GetScreenHeight() / 120.f;
+
+                DrawRectangleRounded(rectangle, 0.3f, 10, Color {20, 20, 20, 255});
+
+                Vector2 text_Size = MeasureTextEx(Shared::data.medium_Font, "Mise dokončena", font_Size, 0.f);
+                DrawTextEx(Shared::data.medium_Font, "Mise dokončena", {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y}, font_Size, 0.f, WHITE);
+            
+                text_Size = MeasureTextEx(Shared::data.medium_Font, caption, font_Size, 0.f);
+                DrawTextEx(Shared::data.medium_Font, caption, {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, font_Size, 0.f, WHITE);
+            }
+        }
     };
 
     std::vector<Mission> missions = {};
@@ -66,6 +107,28 @@ namespace Mission {
 
         float scale = (rectangle.width / 2.1f) / mission.thumbnail.width;
         DrawTextureEx(mission.thumbnail, {rectangle.x + rectangle.width / 2.f, rectangle.y + rectangle.height / 2.f - (mission.thumbnail.height * scale / 2.f)}, 0.f, scale, {255, 255, 255, alpha});
+    }
+
+    void Complete_Mission(int mission_Index) {
+        Mission *mission = &missions[mission_Index];
+        mission->Complete();
+    }
+
+    void Complete_Mission(const char* mission_Caption) {
+        int index = 0;
+        for(Mission &mission : missions) {
+            if(TextIsEqual(mission.caption, mission_Caption)) {
+                Complete_Mission(index);
+                return;
+            }
+            index++;
+        }
+    }
+
+    void Update_Mission_Overlay() {
+        for(Mission &mission : missions) {
+            mission.Render_Popup();
+        }
     }
 };
 

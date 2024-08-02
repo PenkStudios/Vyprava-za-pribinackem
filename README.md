@@ -1,4 +1,4 @@
-# Výprava za pribináčkem verze 1.0.2
+# Výprava za pribináčkem verze 1.0.25
 Velice vtipná hra o cestě pro pribináčka
 
 ## Stažení
@@ -6,11 +6,7 @@ Velice vtipná hra o cestě pro pribináčka
 - [Google Play](https://play.google.com/store/apps/details?id=com.zahon.pribinacek)
 
 ## Přídáno
-- Skipování tlačítek (šipky u nastavení, intro)
-- Opraven `bool` hodnota z `Slider::Update`
-- Přidaná možnost ukázání tutoriálu
-- Zpraveny bug s nastavením
-- Začátek misí (tlačítko v menu, ovladač na televizi)
+- Televize nyní (skoro) funguje
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
