@@ -18,6 +18,8 @@ namespace Mission {
         std::vector<const char*> text;
         Texture thumbnail;
 
+        float best_Time = -1.f;
+        bool best_Time_Set = false;
         bool done = false;
 
         Mission(const char* caption, std::vector<const char*> text, const char* thumbnail_Path) :
@@ -32,9 +34,15 @@ namespace Mission {
                 SetTextureFilter(thumbnail, TEXTURE_FILTER_BILINEAR);
             }
 
-        void Complete() {
+        void Complete(float time) {
             done = true;
             popup_Tick = 0.f;
+            if(!best_Time_Set) {
+                best_Time = time;
+                best_Time_Set = true;
+            } else {
+                if(time < best_Time) best_Time = time;
+            }
         }
 
         void Render_Popup() {
@@ -109,16 +117,16 @@ namespace Mission {
         DrawTextureEx(mission.thumbnail, {rectangle.x + rectangle.width / 2.f, rectangle.y + rectangle.height / 2.f - (mission.thumbnail.height * scale / 2.f)}, 0.f, scale, {255, 255, 255, alpha});
     }
 
-    void Complete_Mission(int mission_Index) {
+    void Complete_Mission(int mission_Index, float time) {
         Mission *mission = &missions[mission_Index];
-        mission->Complete();
+        mission->Complete(time);
     }
 
-    void Complete_Mission(const char* mission_Caption) {
+    void Complete_Mission(const char* mission_Caption, float time) {
         int index = 0;
         for(Mission &mission : missions) {
             if(TextIsEqual(mission.caption, mission_Caption)) {
-                Complete_Mission(index);
+                Complete_Mission(index, time);
                 return;
             }
             index++;

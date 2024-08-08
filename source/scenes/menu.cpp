@@ -20,7 +20,7 @@ void Restart_App() {}
 namespace Menu {
     class Menu_Data {
     public:
-        enum Menu_Scene {MAIN, SETTINGS_PAGE_1, SETTINGS_PAGE_2, SETTINGS_PAGE_3, MISSIONS};
+        enum Menu_Scene {MAIN, NEW_GAME, SETTINGS_PAGE_1, SETTINGS_PAGE_2, SETTINGS_PAGE_3, MISSIONS};
         Menu_Scene scene;
 
         bool changing_Scene = false;
@@ -30,6 +30,7 @@ namespace Menu {
 
         std::map<Menu_Scene, Vector3> scene_Perspectives = {
             {MAIN, {0.f, 0.f, -5.f}},
+            {NEW_GAME, {0.f, 0.f, -5.f}},
             {SETTINGS_PAGE_1, {0.f /* raylib nemá rádo perfektní top-down pohledy ._. */, 2.f, -0.1f}},
             {SETTINGS_PAGE_2, {1.5f, 0.f, 0.f}},
             {SETTINGS_PAGE_3, {0.f, 0.f, 1.5f}},
@@ -38,6 +39,8 @@ namespace Menu {
 
         Camera camera {0};
         Texture coin;
+
+        int new_Game_Difficulty = 2;
     } data;
 
     void Init_UI() {
@@ -45,7 +48,7 @@ namespace Menu {
         float button_Height = GetScreenHeight() / 8.f;
 
         Shared::data.settings_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 0.f}, "Nastavení", font_Size, Shared::data.medium_Font);
-        Shared::data.play_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Hrát", font_Size, Shared::data.medium_Font);
+        Shared::data.new_Game_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 1.f}, "Nová hra", font_Size, Shared::data.medium_Font);
         Shared::data.mission_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height * 2.f}, "Mise", font_Size, Shared::data.medium_Font);
 
         Shared::data.back_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.15f}, "Zpět", font_Size, Shared::data.medium_Font);
@@ -66,6 +69,11 @@ namespace Menu {
         Shared::data.low_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f - GetScreenWidth() / 5.f, GetScreenHeight() / 1.33f}, "Nízká", font_Size, Shared::data.medium_Font);
         Shared::data.medium_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 1.33f}, "Střední", font_Size, Shared::data.medium_Font);
         Shared::data.high_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f + GetScreenWidth() / 5.f, GetScreenHeight() / 1.33f}, "Vysoká", font_Size, Shared::data.medium_Font);
+
+        Shared::data.low_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f - GetScreenWidth() / 7.f * 2.f, GetScreenHeight() / 1.33f}, "Lehká", font_Size, Shared::data.medium_Font);
+        Shared::data.medium_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f - GetScreenWidth() / 7.f, GetScreenHeight() / 1.33f}, "Střední", font_Size, Shared::data.medium_Font);
+        Shared::data.high_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f + GetScreenWidth() / 7.f, GetScreenHeight() / 1.33f}, "Těžká", font_Size, Shared::data.medium_Font);
+        Shared::data.low_Quality_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f + GetScreenWidth() / 7.f * 2.f, GetScreenHeight() / 1.33f}, "Velmi těžká", font_Size, Shared::data.medium_Font);
 
         // Shared::data.mobile_Mode = Shared::Shared_Data::TickBox({GetScreenWidth() / 3.f * 2.f, GetScreenHeight() / 1.9f}, u8"Mobilní mód", Shared::data.mobile_Mode.ticked);
         Shared::data.show_Tutorial = Shared::Shared_Data::TickBox({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Zapnout tutoriál", Shared::data.show_Tutorial.set ? Shared::data.show_Tutorial.ticked : true);
@@ -99,6 +107,7 @@ namespace Menu {
     }
 
     void On_Switch() {
+        data.new_Game_Difficulty = 2;
         UpdateModelAnimation(Shared::data.pribinacek, Shared::data.animations[0], 0);
         Mod_Callback("Switch_Menu", (void*)&data);
     }
@@ -115,7 +124,7 @@ namespace Menu {
     }
 
     void Switch_To_Menu_Scene_Instant(Menu_Data::Menu_Scene scene) {
-        data.scene_Change_Tick = 1.f;
+        data.scene_Change_Tick = 1.f; // normální
         data.changing_Scene = false;
 
         data.old_Scene = data.scene;
@@ -199,8 +208,20 @@ namespace Menu {
                 if(Shared::data.mission_Button.Update(alpha))
                     Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::MISSIONS);
                 
-                if(Shared::data.play_Button.Update(alpha)) Switch_To_Scene(GAME);
+                if(Shared::data.new_Game_Button.Update(alpha))
+                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::NEW_GAME);
                 
+                break;
+            }
+            case Menu::Menu_Data::Menu_Scene::NEW_GAME: {
+                float text_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
+                Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Nová hra", {GetScreenWidth() / 2.f, GetScreenHeight() / 8.5f}, text_Font_Size, 0.f, WHITE, alpha);
+
+                if(Shared::data.easy_Difficulty_Button.Update(alpha, data.new_Game_Difficulty != 1)) { data.new_Game_Difficulty = 1; }
+                if(Shared::data.medium_Difficulty_Button.Update(alpha, data.new_Game_Difficulty != 2)) { data.new_Game_Difficulty = 2; }
+                if(Shared::data.hard_Difficulty_Button.Update(alpha, data.new_Game_Difficulty != 3)) { data.new_Game_Difficulty = 3; }
+                if(Shared::data.very_Hard_Difficulty_Button.Update(alpha, data.new_Game_Difficulty != 4)) { data.new_Game_Difficulty = 4; }
+
                 break;
             }
             case Menu::Menu_Data::Menu_Scene::SETTINGS_PAGE_1: {

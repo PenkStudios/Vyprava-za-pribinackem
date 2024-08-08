@@ -17,6 +17,9 @@ linux: source/main.cpp
 windows: source/main.cpp
 	$(WINDOWS-CXX) source/main.cpp $(LINK) -L. -l:build/raylib.dll -static -mwindows -lwinmm -o build/pribináček.exe
 
+git:
+	./github.py
+
 finish:
 	@echo "\033[96m"
 

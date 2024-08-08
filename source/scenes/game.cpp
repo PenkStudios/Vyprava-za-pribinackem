@@ -33,6 +33,8 @@ float Triangular_Modulo(float x, float y) {
 }
 */
 
+#define FATHER_SPEED 6.f
+
 // Přemění blender souřadnice na raylib souřadnice
 #define B2RL(x, y, z) {x, z, -y}
 
@@ -422,6 +424,7 @@ namespace Game {
         int holding_Pause = -1;
     
         Model tv_Remote;
+        float time = 0.f;
     } data;
 
     // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
@@ -559,6 +562,21 @@ namespace Game {
         return Vector3Add(source, Vector3Multiply(addition, {amount, amount, amount}));
     }
 
+    void Set_TV_State(bool state) {
+        if(state) {
+            Shared::data.tv_Video.Play();
+            PlayMusicStream(Shared::data.tv_Sound);
+
+            Shared::data.house.materials[30].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
+            Shared::data.house.materials[30].maps[MATERIAL_MAP_DIFFUSE].texture = Shared::data.tv_Video.texture;
+        } else {
+            StopMusicStream(Shared::data.tv_Sound);
+
+            Shared::data.house.materials[30].maps[MATERIAL_MAP_DIFFUSE].color = GRAY;
+            Shared::data.house.materials[30].maps[MATERIAL_MAP_DIFFUSE].texture = LoadMaterialDefault().maps[MATERIAL_MAP_DIFFUSE].texture;
+        }
+    }
+
     void On_Switch() {
         DisableCursor();
 
@@ -674,6 +692,9 @@ namespace Game {
                 index++;
             }
         }
+
+        Set_TV_State(false);
+        data.time = 0.f;
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -954,7 +975,8 @@ namespace Game {
     }
 
     float Get_Distance_Volume(Vector3 target) {
-        float distance = Vector3Distance(data.camera.position, target);
+        float distance = Vector3Distance({data.camera.position.x, 0.f, data.camera.position.z}, {target.x, 0.f, target.z});
+        distance += fabs(target.y - data.camera.position.y);
         float volume = Remap(distance, 5.f, 40.f, 1.f, 0.f);
         return Clamp(volume, 0.0f, 1.2f);
     }
@@ -1522,6 +1544,9 @@ namespace Game {
         PauseSound(data.sounds.wake);
         PauseSound(data.sounds.walk);
         PauseSound(data.sounds.father_Walk);
+
+        Shared::data.tv_Video.Pause();
+        PauseMusicStream(Shared::data.tv_Sound);
     }
 
     void On_Game_Resume() {
@@ -1531,9 +1556,14 @@ namespace Game {
         ResumeSound(data.sounds.wake);
         ResumeSound(data.sounds.walk);
         ResumeSound(data.sounds.father_Walk);
+
+        Shared::data.tv_Video.Resume();
+        ResumeMusicStream(Shared::data.tv_Sound);
     }
 
     void Update() {
+        data.time += GetFrameTime();
+
         #ifdef DEBUG_TIMER
         t_Init();
         #endif
@@ -2153,7 +2183,7 @@ namespace Game {
                             Vector3 old_Position = data.father_Position;
 
                             if(!data.game_Paused)
-                                data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f);
+                                data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f * FATHER_SPEED);
 
                             bool collide_X = Get_Collision_Sphere({data.father_Position.x, data.father_Position.y + 6.5f, old_Position.z}, 1.5f);
                             if(collide_X) data.father_Position.x = old_Position.x;
@@ -2202,7 +2232,7 @@ namespace Game {
                                 data.father_Rotation += addition / 20.f;
 
                             if(!data.game_Paused)
-                                data.return_Tick += 1.f * GetFrameTime();
+                                data.return_Tick += 1.f * FATHER_SPEED * GetFrameTime();
                             
                             if(data.return_Tick > 1.f) {
                                 data.father_State = Game_Data::NORMAL_AI;
@@ -2222,7 +2252,7 @@ namespace Game {
                             float max = Vector3Distance(source, target) / 4.f;
 
                             if(!data.game_Paused && data.clock_Fell)
-                                data.keyframe_Tick += 1.f * GetFrameTime();
+                                data.keyframe_Tick += 1.f * FATHER_SPEED * GetFrameTime();
 
                             data.father_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
                                                     Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
@@ -2275,7 +2305,7 @@ namespace Game {
             }
         } EndMode3D();
 
-        Shared::data.tv_Video.Update();
+        Shared::data.tv_Video.Update(&Shared::data.tv_Sound);
         
         UpdateMusicStream(Shared::data.tv_Sound);
         SetMusicVolume(Shared::data.tv_Sound, Get_Distance_Volume({5.57f, 7.13f, 1.68f}));
@@ -2422,7 +2452,8 @@ namespace Game {
         if(data.holding_Item == Game_Data::TV_REMOTE && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && !data.action_Used) {
             float distance = Vector3Distance(data.camera.position, {5.57f, 7.13f, 1.68f});
             if(distance < 25.f && data.fuse_Box.lever_Turning) {
-                Mission::Complete_Mission("Večerníček");
+                Mission::Complete_Mission("Večerníček", data.time);
+                Set_TV_State(true);
             }
         }
 

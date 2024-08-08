@@ -148,6 +148,7 @@ namespace Shared {
             Texture texture;
 
             float baseTime;
+            bool playing = false;
             Mpeg_Video() {}
 
             void Load(const char* path, bool loop) {
@@ -168,21 +169,42 @@ namespace Shared {
                 imFrame.data = (unsigned char*)malloc(width * height * 3);
             
                 texture = LoadTextureFromImage(imFrame);
-                baseTime = GetTime();
             }
 
-            Texture* Update() {
-                double time = (GetTime() - baseTime);
-                if(time > (1.0 / framerate)) {
-                    baseTime = GetTime();
+            void Play() {
+                baseTime = GetTime();
+                plm_seek(plm, 0.f, 0);
+                playing = true;
+            }
 
-                    frame = plm_decode_video(plm);
-                    if(!frame)
-                        return &texture;
+            void Stop() {
+                playing = false;
+            }
 
-                    plm_frame_to_rgb(frame, (unsigned char*)imFrame.data, width * 3);
+            void Pause() {
+                playing = false;
+            }
 
-                    UpdateTexture(texture, imFrame.data);
+            void Resume() {
+                playing = true;
+            }
+
+            Texture* Update(Music *music = nullptr) {
+                if(playing) {
+                    double time = (GetTime() - baseTime);
+                    if(time > (1.0 / framerate)) {
+                        if(music) SeekMusicStream(*music, plm_get_time(plm));
+
+                        baseTime = GetTime();
+
+                        frame = plm_decode_video(plm);
+                        if(!frame)
+                            return &texture;
+
+                        plm_frame_to_rgb(frame, (unsigned char*)imFrame.data, width * 3);
+
+                        UpdateTexture(texture, imFrame.data);
+                    }
                 }
 
                 return &texture;
@@ -190,7 +212,7 @@ namespace Shared {
         };
 
         Button settings_Button {};
-        Button play_Button {};
+        Button new_Game_Button {};
         Button mission_Button {};
 
         // nastavení
@@ -211,6 +233,11 @@ namespace Shared {
         Button low_Quality_Button {};
         Button medium_Quality_Button {};
         Button high_Quality_Button {};
+
+        Button easy_Difficulty_Button {};
+        Button medium_Difficulty_Button {};
+        Button hard_Difficulty_Button {};
+        Button very_Hard_Difficulty_Button {};
 
         TickBox show_Tutorial {};
 
@@ -459,10 +486,6 @@ namespace Shared {
         data.tv_Video.Load(ASSETS_ROOT "vecernicek.mpg", true);
 
         data.tv_Sound = LoadMusicStream(ASSETS_ROOT "audio/vecernicek.mp3");
-        PlayMusicStream(data.tv_Sound);
-
-        Shared::data.house.materials[30].maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
-        Shared::data.house.materials[30].maps[MATERIAL_MAP_DIFFUSE].texture = data.tv_Video.texture;
     }
 };
 

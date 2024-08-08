@@ -1,4 +1,4 @@
-# Výprava za pribináčkem verze 1.0.25
+# Výprava za pribináčkem verze 1.0.3
 Velice vtipná hra o cestě pro pribináčka
 
 ## Stažení
@@ -6,7 +6,8 @@ Velice vtipná hra o cestě pro pribináčka
 - [Google Play](https://play.google.com/store/apps/details?id=com.zahon.pribinacek)
 
 ## Přídáno
-- Televize nyní (skoro) funguje
+- Vylepšena televize
+- Testování on-commit hooku
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
