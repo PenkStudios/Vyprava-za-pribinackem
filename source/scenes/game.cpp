@@ -33,8 +33,6 @@ float Triangular_Modulo(float x, float y) {
 }
 */
 
-#define FATHER_SPEED 6.f
-
 // Přemění blender souřadnice na raylib souřadnice
 #define B2RL(x, y, z) {x, z, -y}
 
@@ -50,6 +48,7 @@ float Triangular_Modulo(float x, float y) {
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 #define DEBUG_TIMER
+#define NOT_SPAWNED {0.f, 100.f, 0.f}
 
 namespace Game {
     class Game_Data {
@@ -219,8 +218,9 @@ namespace Game {
 
         Joystick movement;
 
-        #define MAX_ITEMS 6 // NONE, PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, LOCK 
-        enum Item {NONE, PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, LOCK, _LAST};
+        #define MAX_ITEMS 8 // NONE, PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, POPCORN_PACKAGE, POPCORN_DONE, LOCK 
+        // ...proč je jich 9?
+        enum Item {NONE, PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, POPCORN_PACKAGE, POPCORN_DONE, LOCK, _LAST};
         class Item_Data {
         public:
             Vector3 position;
@@ -425,6 +425,17 @@ namespace Game {
     
         Model tv_Remote;
         float time = 0.f;
+
+        float father_Speed = 1.f;
+        Material microwave_Door;
+
+        Model popcorn_Package;
+        Model popcorn_Done;
+
+        Sound microwave_Sound;
+
+        float microwave_Animation_Playing = false;
+        float microwave_Animation_Tick = 0.f;
     } data;
 
     // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
@@ -597,6 +608,8 @@ namespace Game {
         data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f}, true)); //                                        KEY
         data.item_Data.push_back(Game_Data::Item_Data(4, {-28.336458f, 3.205174f, 4.820066f}, true, {0.f, -45.f, 0.f})); // TV_REMOTE
         data.item_Data.push_back(Game_Data::Item_Data(5, {-10.3036f, 16.3811f, 27.5464f}, false, {0.f, -90.f, 0.f})); //    CLOCK
+        data.item_Data.push_back(Game_Data::Item_Data(6, {1.652715f, 4.066285f, 12.127025f}, true, {0.f, -135.9, 0.f})); // POPCORN_PACKAGE
+        data.item_Data.push_back(Game_Data::Item_Data(7, NOT_SPAWNED, true, {0.f, 0.f, 0.f})); //                           POPCORN_DONE
 
         int key_Position_Index = rand() % data.key_Spawns.size();
         data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[key_Position_Index].position, true, data.key_Spawns[key_Position_Index].rotation);
@@ -696,10 +709,35 @@ namespace Game {
         Set_TV_State(false);
         data.time = 0.f;
 
+        switch(Shared::data.game_Difficulty) {
+            case 1: { // lehká
+                data.father_Speed = 0.75f;
+                break;
+            }
+
+            case 2: { // normální
+                data.father_Speed = 1.f;
+                break;
+            }
+
+            case 3: { // těžká
+                data.father_Speed = 3.f;
+                break;
+            }
+
+            case 4: { // velmi těžká
+                data.father_Speed = 6.f;
+                break;
+            }
+        }
+
+        data.microwave_Animation_Tick = 0.f;
+        data.microwave_Animation_Playing = false;
+
         Mod_Callback("Switch_Game", (void*)&data);
     }
 
-    void Main_Menu() {
+    void Main_Menu(bool play_Again) {
         Shared::data.fog_Density = 0.1f;
         for(int mesh = 0; mesh < Shared::data.house.meshCount; mesh++) {
             if(Shared::data.house.meshes[mesh].vertexCount == LIGHT_BASE_VERTICES) {
@@ -715,6 +753,7 @@ namespace Game {
         int fogDensityLoc = GetShaderLocation(Shared::data.lighting, "fogDensity");
         SetShaderValue(Shared::data.lighting, fogDensityLoc, &Shared::data.fog_Density, SHADER_UNIFORM_FLOAT);
 
+        Shared::data.play_Again = play_Again;
         Switch_To_Scene(MENU);
     }
 
@@ -853,10 +892,10 @@ namespace Game {
 
                 Shared::DrawTextExC(Shared::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, ColorTint(WHITE, tint_UI));
             
-                if(data.play_Again_Button.Update(tint_UI.a)) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
+                if(data.play_Again_Button.Update(tint_UI.a)) { Main_Menu(true); Shared::data.coins += coins; } // resetuje všechen progress
                 else if(data.menu_Button.Update(tint_UI.a)) {
                     Shared::data.show_Tutorial.ticked = false;
-                    Main_Menu();
+                    Main_Menu(false);
                     Shared::data.coins += coins;
                 }
             }
@@ -975,8 +1014,8 @@ namespace Game {
     }
 
     float Get_Distance_Volume(Vector3 target) {
-        float distance = Vector3Distance({data.camera.position.x, 0.f, data.camera.position.z}, {target.x, 0.f, target.z});
-        distance += fabs(target.y - data.camera.position.y);
+        float distance = Vector3Distance(data.camera.position, target);
+        // distance += fabs(target.y - data.camera.position.y);
         float volume = Remap(distance, 5.f, 40.f, 1.f, 0.f);
         return Clamp(volume, 0.0f, 1.2f);
     }
@@ -1133,6 +1172,10 @@ namespace Game {
                     material = &data.fuse_Box.model.materials[1];
                     break;
                 }
+                case 4: {
+                    material = &data.microwave_Door;
+                    break;
+                }
             }
             data.doors.push_back(Game_Data::Door_Data(Vector3 {position_X, position_Y, position_Z},
                                                       Vector3 {scale_X, scale_Y, scale_Z},
@@ -1230,6 +1273,8 @@ namespace Game {
         data.item_Data.push_back(Game_Data::Item_Data(3, {0.f, 0.f, 0.f}, true)); //                                        KEY
         data.item_Data.push_back(Game_Data::Item_Data(4, {-28.336458f, 3.205174f, 4.820066f}, true, {0.f, -45.f, 0.f})); // TV_REMOTE
         data.item_Data.push_back(Game_Data::Item_Data(5, {-10.3036f, 16.3811f, 27.5464f}, false, {0.f, -90.f, 0.f})); //    CLOCK
+        data.item_Data.push_back(Game_Data::Item_Data(6, {1.652715f, 4.066285f, 12.127025f}, true, {0.f, -135.9, 0.f})); // POPCORN_PACKAGE
+        data.item_Data.push_back(Game_Data::Item_Data(7, NOT_SPAWNED, true, {0.f, 0.f, 0.f})); //                           POPCORN_DONE
 
         Init_UI();
 
@@ -1271,6 +1316,20 @@ namespace Game {
         data.tv_Remote = LoadModel(ASSETS_ROOT "models/remote.glb");
         for(int material = 0; material < data.tv_Remote.materialCount; material++)
             data.tv_Remote.materials[material].shader = Shared::data.lighting;
+
+        data.microwave_Door = LoadMaterialDefault();
+        data.microwave_Door.shader = Shared::data.lighting;
+        data.microwave_Door.maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture(ASSETS_ROOT "textures/microwave_door.png");
+
+        data.popcorn_Package = LoadModel(ASSETS_ROOT "models/popcorn_package.glb");
+        for(int material = 0; material < data.popcorn_Package.materialCount; material++)
+            data.popcorn_Package.materials[material].shader = Shared::data.lighting;
+
+        data.popcorn_Done = LoadModel(ASSETS_ROOT "models/popcorn_done.glb");
+        for(int material = 0; material < data.popcorn_Done.materialCount; material++)
+            data.popcorn_Done.materials[material].shader = Shared::data.lighting;
+
+        data.microwave_Sound = LoadSound(ASSETS_ROOT "audio/microwave.wav");
 
         Mod_Callback("Init_Game", (void*)&data);
     }
@@ -1545,6 +1604,8 @@ namespace Game {
         PauseSound(data.sounds.walk);
         PauseSound(data.sounds.father_Walk);
 
+        PauseSound(data.microwave_Sound);
+
         Shared::data.tv_Video.Pause();
         PauseMusicStream(Shared::data.tv_Sound);
     }
@@ -1556,6 +1617,8 @@ namespace Game {
         ResumeSound(data.sounds.wake);
         ResumeSound(data.sounds.walk);
         ResumeSound(data.sounds.father_Walk);
+
+        ResumeSound(data.microwave_Sound);
 
         Shared::data.tv_Video.Resume();
         ResumeMusicStream(Shared::data.tv_Sound);
@@ -1680,7 +1743,7 @@ namespace Game {
                     data.camera_Target = current_Target;
                 } else {
                     bool clock_Visible = data.camera_Target.z > 0.f;
-                    if(!clock_Visible) data.clock_Fall_Cooldown -= GetFrameTime();
+                    if(!clock_Visible && !data.game_Paused) data.clock_Fall_Cooldown -= GetFrameTime();
                     if(data.clock_Fall_Cooldown < 0.f && !data.clock_Fell) {
                         data.clock_Fell = true;
                         SetSoundVolume(data.sounds.clock_Fall, Get_Distance_Volume(data.item_Data[Game_Data::Item::CLOCK].position));
@@ -1825,20 +1888,22 @@ namespace Game {
 
                     DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
                     
-                    Matrix matrix_Door_Handle = MatrixIdentity();
+                    if(door_Data.type != 4) {
+                        Matrix matrix_Door_Handle = MatrixIdentity();
 
-                    // matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
-                    float size = Remap(door_Data.scale.y, 0.f, 5.f, 0.35f, 0.75f);
-                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixScale(size, size, size));
+                        // matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
+                        float size = Remap(door_Data.scale.y, 0.f, 5.f, 0.35f, 0.75f);
+                        matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixScale(size, size, size));
 
-                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
-                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixRotateY(door_Data.rotation * DEG2RAD));
-                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
+                        matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixTranslate(door_Data.scale.x + door_Data.scale.x / 2.f, door_Data.scale.y / 4.f, -door_Data.scale.z));
+                        matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixRotateY(door_Data.rotation * DEG2RAD));
+                        matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
-                    matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
-                    
-                    DrawMesh(data.door_Handle, *door_Data.material, matrix_Door_Handle);
-                    
+                        matrix_Door_Handle = MatrixMultiply(matrix_Door_Handle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
+                        
+                        DrawMesh(data.door_Handle, *door_Data.material, matrix_Door_Handle);
+                    }
+
                     if(door_Data.type != 0) {
                         if(door_Data.start_Rotation_Range < door_Data.end_Rotation_Range) {
                             if(door_Data.opening) {
@@ -1985,6 +2050,22 @@ namespace Game {
                                                                                                      data.item_Data[index].rotation.y * DEG2RAD,
                                                                                                      data.item_Data[index].rotation.z * DEG2RAD}));
                             DrawModel(data.clock, data.item_Data[index].position, 1.f, WHITE);
+                            break;
+                        }
+
+                        case Game_Data::POPCORN_PACKAGE: {
+                            data.popcorn_Package.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
+                                                                                                               data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                               data.item_Data[index].rotation.z * DEG2RAD}));
+                            DrawModel(data.popcorn_Package, data.item_Data[index].position, 1.f, WHITE);
+                            break;
+                        }
+
+                        case Game_Data::POPCORN_DONE: {
+                            data.popcorn_Done.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
+                                                                                                            data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                            data.item_Data[index].rotation.z * DEG2RAD}));
+                            DrawModel(data.popcorn_Done, data.item_Data[index].position, 1.f, WHITE);
                             break;
                         }
 
@@ -2183,7 +2264,7 @@ namespace Game {
                             Vector3 old_Position = data.father_Position;
 
                             if(!data.game_Paused)
-                                data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f * FATHER_SPEED);
+                                data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f * data.father_Speed);
 
                             bool collide_X = Get_Collision_Sphere({data.father_Position.x, data.father_Position.y + 6.5f, old_Position.z}, 1.5f);
                             if(collide_X) data.father_Position.x = old_Position.x;
@@ -2232,7 +2313,7 @@ namespace Game {
                                 data.father_Rotation += addition / 20.f;
 
                             if(!data.game_Paused)
-                                data.return_Tick += 1.f * FATHER_SPEED * GetFrameTime();
+                                data.return_Tick += 1.f * data.father_Speed * GetFrameTime();
                             
                             if(data.return_Tick > 1.f) {
                                 data.father_State = Game_Data::NORMAL_AI;
@@ -2252,7 +2333,7 @@ namespace Game {
                             float max = Vector3Distance(source, target) / 4.f;
 
                             if(!data.game_Paused && data.clock_Fell)
-                                data.keyframe_Tick += 1.f * FATHER_SPEED * GetFrameTime();
+                                data.keyframe_Tick += 1.f * data.father_Speed * GetFrameTime();
 
                             data.father_Position = {Remap(data.keyframe_Tick, 0.f, max, source.x, target.x),
                                                     Remap(data.keyframe_Tick, 0.f, max, source.y, target.y),
@@ -2302,6 +2383,42 @@ namespace Game {
                 See_Player();
             } else {
                 data.sounds.see_Cooldown = 0.f;
+            }
+
+            /* CLIP
+            if(GetFPS() < 30) SetTargetFPS(60);
+            if(IsKeyPressed(KEY_C)) SetTargetFPS(1);
+            */
+
+            // ITEM DUMP
+            if(IsKeyPressed(KEY_I)) {
+                for(Game_Data::Item_Data item : data.item_Data) {
+                    TraceLog(LOG_INFO, "Item dump: item id %d, pozice: %f %f %f, y rotace %f",
+                                    item.item_Id, item.position.x, item.position.y, item.position.z,
+                                    item.rotation.y);
+                }
+            }
+
+            // BBOX DUMP
+            if(IsKeyDown(KEY_KP_ADD)) {
+                static int bbox_Index = 0;
+
+                if(IsKeyPressed(KEY_KP_6)) {
+                    bbox_Index++;
+                }
+
+                if(IsKeyPressed(KEY_KP_4)) {
+                    bbox_Index--;
+                }
+
+                BoundingBox *bbox = &Shared::data.house_BBoxes[bbox_Index];
+                DrawBoundingBox(*bbox, RED);
+
+                if(IsKeyPressed(KEY_B)) {
+                    TraceLog(LOG_INFO, "Bounding box dump: BoundingBox {{%f, %f, %f}, {%f, %f, %f}}",
+                                    bbox->min.x, bbox->min.y, bbox->min.z,
+                                    bbox->max.x, bbox->max.y, bbox->max.z);
+                }
             }
         } EndMode3D();
 
@@ -2454,6 +2571,46 @@ namespace Game {
             if(distance < 25.f && data.fuse_Box.lever_Turning) {
                 Mission::Complete_Mission("Večerníček", data.time);
                 Set_TV_State(true);
+            }
+        }
+
+        const BoundingBox microwave_Bbox = BoundingBox {{1.210129f, 16.935200f, 10.476102f}, {2.835903f, 18.817120f, 13.290030f}};
+        bool microwave_Mission_Can_Trigger = CheckCollisionBoxSphere(microwave_Bbox, data.item_Data[Game_Data::POPCORN_PACKAGE].position, 0.1f) &&
+                                                                     data.holding_Item != Game_Data::POPCORN_PACKAGE &&
+                                                                     data.fuse_Box.lever_Turning;
+        if(microwave_Mission_Can_Trigger) {
+            if(!data.microwave_Animation_Playing) {
+                PlaySound(data.microwave_Sound);
+                data.microwave_Animation_Tick = 0.f;
+                data.microwave_Animation_Playing = true;
+            }
+        }
+
+        if(data.microwave_Animation_Playing) {
+            data.microwave_Animation_Tick += GetFrameTime();
+
+            if(data.microwave_Animation_Tick > 14.66f) {
+                for(Game_Data::Door_Data &door : data.doors) {
+                    if(door.type == 4)
+                        door.opening = true;
+                }
+            } else if(data.microwave_Animation_Tick > 8.16f) {
+                if(microwave_Mission_Can_Trigger) {
+                    data.item_Data[Game_Data::POPCORN_DONE].position = Vector3Lerp(microwave_Bbox.min, microwave_Bbox.max, 0.5f);
+                    data.item_Data[Game_Data::POPCORN_DONE].position.y = microwave_Bbox.min.y;
+                    data.item_Data[Game_Data::POPCORN_DONE].Calculate_Collision();
+                    data.item_Data[Game_Data::POPCORN_PACKAGE].position = NOT_SPAWNED;
+                }
+            } else if(data.microwave_Animation_Tick > 1.66f) {
+                for(Game_Data::Door_Data &door : data.doors) {
+                    if(door.type == 4)
+                        door.opening = false;
+                }
+            }
+
+            if(data.microwave_Animation_Tick > (data.microwave_Sound.frameCount/data.microwave_Sound.stream.sampleRate)) {
+                data.microwave_Animation_Playing = false;
+                Mission::Complete_Mission("Komedie", data.time);
             }
         }
 
@@ -2628,9 +2785,9 @@ namespace Game {
                     }
                     Shared::DrawTextExC(Shared::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
                 
-                    if(data.play_Again_Button.Update()) { On_Switch(); Shared::data.coins += coins; } // resetuje všechen progress
+                    if(data.play_Again_Button.Update()) { Main_Menu(true); Shared::data.coins += coins; } // resetuje všechen progress
                     else if(data.menu_Button.Update()) {
-                        Main_Menu();
+                        Main_Menu(false);
                         Shared::data.coins += coins;
                     }
 
@@ -2715,7 +2872,7 @@ namespace Game {
             Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Hra pozastavena", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
 
             if(data.pause_Menu_Button.Update()) {
-                Main_Menu();
+                Main_Menu(false);
             }
             if(data.pause_Continue_Button.Update()) { On_Game_Resume(); }
         }

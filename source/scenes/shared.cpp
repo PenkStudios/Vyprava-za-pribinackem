@@ -239,6 +239,8 @@ namespace Shared {
         Button hard_Difficulty_Button {};
         Button very_Hard_Difficulty_Button {};
 
+        Button play_Button {};
+
         TickBox show_Tutorial {};
 
         Model pribinacek;
@@ -260,6 +262,9 @@ namespace Shared {
         float fog_Density = 0.1f;
         Mpeg_Video tv_Video;
         Music tv_Sound;
+
+        int game_Difficulty = 2;
+        bool play_Again;
     } data;
 
     float Box_SDF(Vector3 p, Vector3 b) {

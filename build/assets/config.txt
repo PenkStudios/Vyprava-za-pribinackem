@@ -18,7 +18,7 @@ Každá žádka = jedny dveře
 
 Formát řádku: `pozice_x pozice_y pozice_z velikost_x velikost_y velikost_z začáteční_rotace konečná_rotace typ`
 
-`typ` - ID typu dveří (id=0 dřevěné + otevírací; id=1 dřevěné + NEotevírací; id=2 bílý materiál, dveře od lednice + NEotevírácí; id=3 pojistky + NEotevírácí)
+`typ` - ID typu dveří (id=0 dřevěné + otevírací; id=1 dřevěné + NEotevírací; id=2 bílý materiál, dveře od lednice + NEotevírácí; id=3 pojistky + NEotevírácí; id=4 mikrovlnka + NEotvírací + bez držáku na dveře)
 
 spawn_animation.txt
 -------------------

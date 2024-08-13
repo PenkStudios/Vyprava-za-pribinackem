@@ -84,7 +84,18 @@ namespace Mission {
         // Init_Missions() by mělo být zavoláno akorát v main() jednou
         assert(missions.empty());
 
-        missions.push_back(Mission("Večerníček", {"Zapni pojistky,", "najdi ovladač a", "zapni televizi"}, ASSETS_ROOT "textures/missions/tv.png"));
+        missions = {
+            Mission(
+                "Večerníček",
+                {"Podívej se", "na televizi"},
+                ASSETS_ROOT "textures/missions/tv.png"
+            ),
+            Mission(
+                "Komedie",
+                {"Udělej si popkorn"},
+                ASSETS_ROOT "textures/missions/popcorn.png"
+            )
+        };
     }
 
     void Draw_Text_Centered(Font font, std::vector<const char*> lines, Vector2 position, float font_Size, float spacing, Color tint) {

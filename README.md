@@ -1,4 +1,4 @@
-# Výprava za pribináčkem verze 1.0.3
+# Výprava za pribináčkem verze 1.0.4
 Velice vtipná hra o cestě pro pribináčka
 
 ## Stažení
@@ -6,8 +6,12 @@ Velice vtipná hra o cestě pro pribináčka
 - [Google Play](https://play.google.com/store/apps/details?id=com.zahon.pribinacek)
 
 ## Přídáno
-- Vylepšena televize
-- Testování on-commit hooku
+- Menu nové hry
+- Obtížnost nové hry
+- Vlastní model domova pro menu
+- Vylepšen nábytek
+- Mikrovlnka
+- Popcorn mise
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
