@@ -69,11 +69,11 @@ namespace Mission {
 
                 DrawRectangleRounded(rectangle, 0.3f, 10, Color {20, 20, 20, 255});
 
-                Vector2 text_Size = MeasureTextEx(Shared::data.medium_Font, "Mise dokončena", font_Size, 0.f);
-                DrawTextEx(Shared::data.medium_Font, "Mise dokončena", {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y}, font_Size, 0.f, WHITE);
+                Vector2 text_Size = MeasureTextEx(Shared::data.bold_Font, "Mise dokončena", font_Size, 0.f);
+                DrawTextEx(Shared::data.bold_Font, "Mise dokončena", {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y}, font_Size, 0.f, WHITE);
             
-                text_Size = MeasureTextEx(Shared::data.medium_Font, caption, font_Size, 0.f);
-                DrawTextEx(Shared::data.medium_Font, caption, {rectangle.x + rectangle.width / 2.f - text_Size.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size.y / 2.f}, font_Size, 0.f, WHITE);
+                Vector2 text_Size2 = MeasureTextEx(Shared::data.medium_Font, caption, font_Size, 0.f);
+                DrawTextEx(Shared::data.medium_Font, caption, {rectangle.x + rectangle.width / 2.f - text_Size2.x / 2.f, rectangle.y + rectangle.height / 2.f - text_Size2.y / 2.f + text_Size.y / 2.f}, font_Size, 0.f, WHITE);
             }
         }
     };

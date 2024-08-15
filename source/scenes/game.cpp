@@ -1669,6 +1669,7 @@ namespace Game {
         else if(!IsSoundPlaying(data.sounds.father_Walk) && father_Walking) ResumeSound(data.sounds.father_Walk);
 
         if(father_Walking && !IsSoundPlaying(data.sounds.father_Walk)) PlaySound(data.sounds.father_Walk);
+        const BoundingBox microwave_Bbox = BoundingBox {{1.210129f, 16.935200f, 10.476102f}, {2.835903f, 18.817120f, 13.290030f}};
 
         BeginMode3D(data.camera); {
             Mod_Callback("Update_Game_3D", (void*)&data);
@@ -1758,6 +1759,68 @@ namespace Game {
 
             #ifdef DEBUG_TIMER
             t_Breakpoint("Wake animace");
+            #endif
+
+            bool microwave_Mission_Can_Trigger = CheckCollisionBoxSphere(microwave_Bbox, data.item_Data[Game_Data::POPCORN_PACKAGE].position, 0.1f) &&
+                                                                        data.holding_Item != Game_Data::POPCORN_PACKAGE &&
+                                                                        data.fuse_Box.lever_Turning;
+            
+            if(microwave_Mission_Can_Trigger) {
+                if(!data.microwave_Animation_Playing) {
+                    PlaySound(data.microwave_Sound);
+                    data.microwave_Animation_Tick = 0.f;
+                    data.microwave_Animation_Playing = true;
+                }
+            }
+
+            if(data.microwave_Animation_Playing) {
+                data.microwave_Animation_Tick += GetFrameTime();
+
+                Vector3 diff = Vector3Subtract(Vector3Lerp(microwave_Bbox.min, microwave_Bbox.max, 0.5f), data.camera.position);
+                float yaw = (-atan2(diff.z, diff.x) * RAD2DEG) + 90.f;
+
+                // https://stackoverflow.com/a/4036151/18373960
+                // Velký milestone: už vím jak získat pitch rotaci
+                float pitch = (atan2(-diff.y, sqrt(diff.z*diff.z + diff.x*diff.x)) * RAD2DEG);
+
+                /*
+                Vector3 destination = Vector3Lerp(microwave_Bbox.min, microwave_Bbox.max, 0.5f);
+
+                Vector3 target_Angle;
+                target_Angle.x = -atan2f(destination.x - data.camera.position.x, destination.y - data.camera.position.y) / PI * 180.0f + 180.0f;
+                target_Angle.y = asinf((destination.z - data.camera.position.z) / Vector3Distance(data.camera.position, destination)) * RAD2DEG;
+                target_Angle.z = 0.0f;
+                */
+
+                data.camera_Rotation = Lerp_Rotation(data.camera_Rotation, {pitch, yaw, 0.f}, 0.05f);
+
+                if(data.microwave_Animation_Tick > 14.66f) {
+                    for(Game_Data::Door_Data &door : data.doors) {
+                        if(door.type == 4)
+                            door.opening = true;
+                    }
+                } else if(data.microwave_Animation_Tick > 8.16f) {
+                    if(microwave_Mission_Can_Trigger) {
+                        data.item_Data[Game_Data::POPCORN_DONE].position = Vector3Lerp(microwave_Bbox.min, microwave_Bbox.max, 0.5f);
+                        data.item_Data[Game_Data::POPCORN_DONE].position.y = microwave_Bbox.min.y;
+                        data.item_Data[Game_Data::POPCORN_DONE].Calculate_Collision();
+                        data.item_Data[Game_Data::POPCORN_PACKAGE].position = NOT_SPAWNED;
+                    }
+                } else if(data.microwave_Animation_Tick > 1.66f) {
+                    for(Game_Data::Door_Data &door : data.doors) {
+                        if(door.type == 4)
+                            door.opening = false;
+                    }
+                }
+
+                if(data.microwave_Animation_Tick > (data.microwave_Sound.frameCount/data.microwave_Sound.stream.sampleRate)) {
+                    data.microwave_Animation_Playing = false;
+                    Mission::Complete_Mission("Komedie", data.time);
+                }
+            }
+
+            #ifdef DEBUG_TIMER
+            t_Breakpoint("Cutscéna s mikrovlnkou");
             #endif
 
             /* DEATH ANIMATION */ if(data.death_Animation_Playing) {
@@ -2526,6 +2589,7 @@ namespace Game {
                                 float speed = 1.f;
                                 if (data.crouching) speed /= 1.5f;
                                 if (!data.crouching && data.sprinting) speed *= 1.5f;
+                                if(data.microwave_Animation_Playing) speed = 0.f;
 
                                 float camera_Angle = atan2(data.camera_Target.z, data.camera_Target.x) +
                                                     90.f * DEG2RAD;
@@ -2561,6 +2625,7 @@ namespace Game {
                 float speed = 1.f;
                 if(data.crouching) speed /= 1.5f;
                 if(!data.crouching && data.sprinting) speed *= 1.5f;
+                if(data.microwave_Animation_Playing) speed = 0.f;
 
                 Update_Camera_Desktop(speed);
             }
@@ -2574,45 +2639,14 @@ namespace Game {
             }
         }
 
-        const BoundingBox microwave_Bbox = BoundingBox {{1.210129f, 16.935200f, 10.476102f}, {2.835903f, 18.817120f, 13.290030f}};
-        bool microwave_Mission_Can_Trigger = CheckCollisionBoxSphere(microwave_Bbox, data.item_Data[Game_Data::POPCORN_PACKAGE].position, 0.1f) &&
-                                                                     data.holding_Item != Game_Data::POPCORN_PACKAGE &&
-                                                                     data.fuse_Box.lever_Turning;
-        if(microwave_Mission_Can_Trigger) {
-            if(!data.microwave_Animation_Playing) {
-                PlaySound(data.microwave_Sound);
-                data.microwave_Animation_Tick = 0.f;
-                data.microwave_Animation_Playing = true;
-            }
+        
+        if(IsKeyPressed(KEY_L)) {
+            data.item_Data[Game_Data::POPCORN_PACKAGE].position = Vector3Lerp(microwave_Bbox.min, microwave_Bbox.max, 0.5f);
+            data.item_Data[Game_Data::POPCORN_PACKAGE].position.y = microwave_Bbox.min.y;
+            data.item_Data[Game_Data::POPCORN_PACKAGE].Calculate_Collision();
+            data.fuse_Box.lever_Turning = true;
         }
-
-        if(data.microwave_Animation_Playing) {
-            data.microwave_Animation_Tick += GetFrameTime();
-
-            if(data.microwave_Animation_Tick > 14.66f) {
-                for(Game_Data::Door_Data &door : data.doors) {
-                    if(door.type == 4)
-                        door.opening = true;
-                }
-            } else if(data.microwave_Animation_Tick > 8.16f) {
-                if(microwave_Mission_Can_Trigger) {
-                    data.item_Data[Game_Data::POPCORN_DONE].position = Vector3Lerp(microwave_Bbox.min, microwave_Bbox.max, 0.5f);
-                    data.item_Data[Game_Data::POPCORN_DONE].position.y = microwave_Bbox.min.y;
-                    data.item_Data[Game_Data::POPCORN_DONE].Calculate_Collision();
-                    data.item_Data[Game_Data::POPCORN_PACKAGE].position = NOT_SPAWNED;
-                }
-            } else if(data.microwave_Animation_Tick > 1.66f) {
-                for(Game_Data::Door_Data &door : data.doors) {
-                    if(door.type == 4)
-                        door.opening = false;
-                }
-            }
-
-            if(data.microwave_Animation_Tick > (data.microwave_Sound.frameCount/data.microwave_Sound.stream.sampleRate)) {
-                data.microwave_Animation_Playing = false;
-                Mission::Complete_Mission("Komedie", data.time);
-            }
-        }
+        
 
         #ifdef DEBUG_TIMER
         t_Breakpoint("Platform-depended updatace & vykreslování");
