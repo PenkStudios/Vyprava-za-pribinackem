@@ -436,6 +436,8 @@ namespace Game {
 
         float microwave_Animation_Playing = false;
         float microwave_Animation_Tick = 0.f;
+    
+        Model safe_Door;
     } data;
 
     // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
@@ -1149,6 +1151,10 @@ namespace Game {
         int fuse_Box_Animation_Count = 2 /* 2 animace */ - 1;
         data.fuse_Box.animations = LoadModelAnimations(ASSETS_ROOT "models/fusebox.glb", &fuse_Box_Animation_Count);
 
+        data.safe_Door = LoadModel(ASSETS_ROOT "models/safe_door.glb");
+        for(int material = 0; material < data.safe_Door.materialCount; material++)
+            data.safe_Door.materials[material].shader = Shared::data.lighting;
+
         int door_Type;
         Material *material;
 
@@ -1174,6 +1180,10 @@ namespace Game {
                 }
                 case 4: {
                     material = &data.microwave_Door;
+                    break;
+                }
+                case 5: {
+                    material = &data.safe_Door.materials[1];
                     break;
                 }
             }
@@ -1462,7 +1472,7 @@ namespace Game {
 
             Matrix matrix = Get_Door_Matrix(door_Data);
 
-            DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
+            // DrawMesh(door_Data.type == 5 ? data.safe_Door.meshes[0]: data.door.meshes[0], *door_Data.material, matrix);
             
             Matrix matrixDoorHandle = MatrixIdentity();
             // matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
@@ -1474,7 +1484,7 @@ namespace Game {
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(-door_Data.scale.x, 0.f, 0.f));
 
             matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixTranslate(door_Data.position.x, door_Data.position.y, door_Data.position.z));
-            DrawMesh(data.door_Handle, *door_Data.material, matrixDoorHandle);
+            // DrawMesh(data.door_Handle, *door_Data.material, matrixDoorHandle);
 
             Ray ray = GetMouseRay({(float)GetScreenWidth() / 2.f, (float)GetScreenHeight() / 2.f}, data.camera);
             RayCollision collision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
@@ -1949,9 +1959,9 @@ namespace Game {
 
                     Matrix matrix = Get_Door_Matrix(door_Data);
 
-                    DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
+                    DrawMesh(door_Data.type == 5 ? data.safe_Door.meshes[0]: data.door.meshes[0], *door_Data.material, matrix);
                     
-                    if(door_Data.type != 4) {
+                    if(door_Data.type != 4 && door_Data.type != 5) {
                         Matrix matrix_Door_Handle = MatrixIdentity();
 
                         // matrixDoorHandle = MatrixMultiply(matrixDoorHandle, MatrixScale(0.75f, 0.75f, 0.75f));
@@ -2485,10 +2495,17 @@ namespace Game {
             }
         } EndMode3D();
 
-        Shared::data.tv_Video.Update(&Shared::data.tv_Sound);
+        if(Shared::data.tv_Video.playing) {
+            Shared::data.tv_Video.Update(&Shared::data.tv_Sound);
+            
+            UpdateMusicStream(Shared::data.tv_Sound);
+            SetMusicVolume(Shared::data.tv_Sound, Get_Distance_Volume({5.57f, 7.13f, 1.68f}));
         
-        UpdateMusicStream(Shared::data.tv_Sound);
-        SetMusicVolume(Shared::data.tv_Sound, Get_Distance_Volume({5.57f, 7.13f, 1.68f}));
+            if(plm_has_ended(Shared::data.tv_Video.plm)) {
+                Set_TV_State(false);
+                Shared::data.tv_Video.Stop();
+            }
+        }
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
 

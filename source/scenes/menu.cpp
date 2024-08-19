@@ -313,10 +313,7 @@ namespace Menu {
                 float text_Font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
                 Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Mise", {GetScreenWidth() / 2.f, GetScreenHeight() / 8.5f}, text_Font_Size, 0.f, WHITE, alpha);
 
-                Mission::Draw_Mission_Preview(Mission::missions[0], alpha);
-
-                Shared::data.page_1_Button.Update(alpha, false);
-                Shared::data.page_2_Button.Update(alpha, false);
+                Mission::Draw_Missions(alpha);
 
                 if(Shared::data.back_Button.Update(alpha))
                     Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::MAIN);

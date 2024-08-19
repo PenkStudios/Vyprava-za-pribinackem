@@ -1,4 +1,4 @@
-# Výprava za pribináčkem verze 1.1.0
+# Výprava za pribináčkem verze 1.1.5
 Velice vtipná hra o cestě pro pribináčka
 
 ## Stažení
@@ -6,9 +6,13 @@ Velice vtipná hra o cestě pro pribináčka
 - [Google Play](https://play.google.com/store/apps/details?id=com.zahon.pribinacek)
 
 ## Přídáno
-- Vylepšena mise s mikrovlnkou
-- Vylepšen systém misí
-- Opravena `pitch` rotace u mise mikrovlnky
+- Vylepšen systém misí (více než jedna stránka)
+- Rekord na misi
+- Večerníček se nyní stopne
+- Začátek mise s mobilem (začátek sklepu)
+
+## Nevýhody
+- Případný copyright: pribináček, večerníček
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)

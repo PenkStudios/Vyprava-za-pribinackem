@@ -7,6 +7,7 @@ all: release
 
 release:
 	rm -f build/assets/player.txt
+	rm -f build/assets/missions.txt
 	make linux
 	make windows
 	make finish

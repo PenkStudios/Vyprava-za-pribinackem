@@ -33,27 +33,6 @@ extern "C" {
 
 Texture cursor;
 
-// Velice kvalitní zabezpečení
-std::vector<unsigned char> Encrypt(std::string string) {
-    std::vector<unsigned char> output {};
-    int index = 0;
-    for(char character : string) {
-        output.push_back(index % 2 == 0 ? (character ^ 'Z') : (character ^ 'W'));
-        index++;
-    }
-    return output;
-}
-
-std::string Decrypt(std::vector<unsigned char> data) {
-    std::string output = "";
-    int index = 0;
-    for(unsigned char byte : data) {
-        output.push_back(index % 2 == 0 ? (byte ^ 'Z') : (byte ^ 'W'));
-        index++;
-    }
-    return output;
-}
-
 #ifdef PLATFORM_ANDROID
 #include <android_native_app_glue.h>
 extern "C" android_app* GetAndroidApp();
@@ -71,23 +50,7 @@ void Ready() {
 
     Shared::data.quality = 2;
 
-    std::fstream data_Stream(root + "player.txt", std::ios::in | std::ios::binary);
-    data_Stream.unsetf(std::ios::skipws);
-
-    data_Stream.seekg(0, std::ios::end);
-    std::streampos file_Size = data_Stream.tellg();
-    data_Stream.seekg(0, std::ios::beg);
-
-    std::vector<unsigned char> data;
-    data.reserve(Clamp((int)file_Size, 1, 99999));
-
-    data.insert(data.begin(),
-               std::istream_iterator<unsigned char>(data_Stream),
-               std::istream_iterator<unsigned char>());
-
-    std::string text = Decrypt(data);
-    std::istringstream iss(text);
-
+    std::istringstream iss = Shared::Load_From_File("player.txt");
     std::string line;
     while (std::getline(iss, line)) {
         std::stringstream string_Stream(line);
@@ -136,7 +99,6 @@ void Ready() {
             }
         }
     }
-    data_Stream.close();
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
     //
@@ -224,6 +186,8 @@ void Update() {
 }
 
 void Save_Data() {
+    Mission::Save_Missions();
+
     std::string string = "COINS = " + std::to_string(Shared::data.coins) + "\n";
     string += "SHOW_FPS = " + std::to_string(Shared::data.show_Fps.ticked) + "\n";
     string += "TEST_MODE = " + std::to_string(Shared::data.test_Mode.ticked) + "\n";
@@ -236,17 +200,7 @@ void Save_Data() {
     string += "RESOLUTION_Y = " + std::to_string(Shared::data.display_Resolution.y) + "\n";
     string += "QUALITY = " + std::to_string(Shared::data.quality) + "\n";
     string += "TUTORIAL = " + std::to_string(Shared::data.show_Tutorial.ticked) + "\n";
-    std::vector<unsigned char> data = Encrypt(string);
-
-#if defined(PLATFORM_ANDROID)
-    std::string root = std::string(GetAndroidApp()->activity->internalDataPath) + "/";
-#else
-    std::string root = ASSETS_ROOT;
-#endif
-
-    std::fstream data_Stream(root + "player.txt", std::ios::out);
-    data_Stream.write((char *)&data[0], data.size());
-    data_Stream.close();
+    Shared::Save_To_File(string, "player.txt");
 }
 
 #if defined(PLATFORM_ANDROID)

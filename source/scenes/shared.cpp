@@ -23,6 +23,11 @@
 #include <string>
 #include <vector>
 
+#include <fstream>
+#include <istream>
+#include <sstream>
+#include <iterator>
+
 double t_Previous;
 std::map<std::string, double> t_Breakpoints;
 
@@ -267,6 +272,61 @@ namespace Shared {
         bool play_Again;
     } data;
 
+    // Velice kvalitní zabezpečení
+    std::vector<unsigned char> Encrypt(std::string string) {
+        std::vector<unsigned char> output {};
+        int index = 0;
+        for(char character : string) {
+            output.push_back(index % 2 == 0 ? (character ^ 'Z') : (character ^ 'W'));
+            index++;
+        }
+        return output;
+    }
+
+    std::string Decrypt(std::vector<unsigned char> data) {
+        std::string output = "";
+        int index = 0;
+        for(unsigned char byte : data) {
+            output.push_back(index % 2 == 0 ? (byte ^ 'Z') : (byte ^ 'W'));
+            index++;
+        }
+        return output;
+    }
+
+#if defined(PLATFORM_ANDROID)
+    std::string save_Root = std::string(GetAndroidApp()->activity->internalDataPath) + "/";
+#else
+    std::string save_Root = ASSETS_ROOT;
+#endif
+
+    void Save_To_File(std::string string, std::string file) {
+        std::vector<unsigned char> data = Encrypt(string);
+
+        std::fstream data_Stream(save_Root + file, std::ios::out);
+        data_Stream.write((char *)&data[0], data.size());
+        data_Stream.close();
+    }
+
+    std::istringstream Load_From_File(std::string file) {
+        std::fstream data_Stream(save_Root + file, std::ios::in | std::ios::binary);
+        data_Stream.unsetf(std::ios::skipws);
+
+        data_Stream.seekg(0, std::ios::end);
+        std::streampos file_Size = data_Stream.tellg();
+        data_Stream.seekg(0, std::ios::beg);
+
+        std::vector<unsigned char> data;
+        data.reserve(Clamp((int)file_Size, 1, 99999));
+
+        data.insert(data.begin(),
+                std::istream_iterator<unsigned char>(data_Stream),
+                std::istream_iterator<unsigned char>());
+        data_Stream.close();
+
+        std::string text = Decrypt(data);
+        return std::istringstream(text);
+    }
+
     float Box_SDF(Vector3 p, Vector3 b) {
         Vector3 q = Vector3Subtract({p.x > -p.x ? p.x : -p.x,
                                         p.y > -p.y ? p.y : -p.y,
@@ -488,7 +548,7 @@ namespace Shared {
         }
 
         data.tv_Video = Shared_Data::Mpeg_Video();
-        data.tv_Video.Load(ASSETS_ROOT "vecernicek.mpg", true);
+        data.tv_Video.Load(ASSETS_ROOT "vecernicek.mpg", false);
 
         data.tv_Sound = LoadMusicStream(ASSETS_ROOT "audio/vecernicek.mp3");
     }
