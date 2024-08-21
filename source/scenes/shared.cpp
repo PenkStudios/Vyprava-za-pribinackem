@@ -76,6 +76,8 @@ namespace Shared {
         Font medium_Font;
         Font bold_Font;
 
+        Font handwriting;
+
         bool custom_Font = false;
 
         class Button {
@@ -378,6 +380,19 @@ namespace Shared {
         DrawTextEx(font, text, Vector2Subtract(position, Vector2Divide(size, {2.f, 2.f})), fontSize, spacing, tint);
     }
 
+    void DrawTextExC(Font font, std::vector<const char*> lines, Vector2 position, float font_Size, float spacing, Color tint) {
+        int line_Index = 0;
+
+        float line_Height = MeasureTextEx(font, "aA", font_Size, spacing).y; 
+        float y = position.y - (line_Height * lines.size()) / 2.f;
+        for(const char* line : lines) {
+            float line_Width = MeasureTextEx(font, line, font_Size, spacing).x;
+            DrawTextEx(font, line, {position.x - line_Width / 2.f, y}, font_Size, spacing, tint);
+            y += line_Height;
+            line_Index++;
+        }
+    }
+
     void DrawTextExOutline(Font font, const char *text, Vector2 position, float fontSize, float spacing, Color tint, unsigned char alpha = 255) {
         float outline_Size = (GetScreenWidth() + GetScreenHeight()) / 400.f;
         for(int angle = 0; angle < 360; angle += 22) {
@@ -540,6 +555,9 @@ namespace Shared {
 
         data.bold_Font = LoadFontEx(ASSETS_ROOT "fonts/bold.ttf", 64, nullptr, 0x5ff);
         SetTextureFilter(data.bold_Font.texture, TEXTURE_FILTER_BILINEAR);
+
+        data.handwriting = LoadFontEx(ASSETS_ROOT "fonts/handwriting.ttf", 64, nullptr, 0xff);
+        SetTextureFilter(data.handwriting.texture, TEXTURE_FILTER_BILINEAR);
 
         data.house = LoadModel(ASSETS_ROOT "models/house.glb");
 

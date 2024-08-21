@@ -1,4 +1,4 @@
-# Výprava za pribináčkem verze 1.1.5
+# Výprava za pribináčkem verze 1.2.0
 Velice vtipná hra o cestě pro pribináčka
 
 ## Stažení
@@ -6,10 +6,8 @@ Velice vtipná hra o cestě pro pribináčka
 - [Google Play](https://play.google.com/store/apps/details?id=com.zahon.pribinacek)
 
 ## Přídáno
-- Vylepšen systém misí (více než jedna stránka)
-- Rekord na misi
-- Večerníček se nyní stopne
-- Začátek mise s mobilem (začátek sklepu)
+- Kód k safu (náhodná generace)
+- Začátek používání safu
 
 ## Nevýhody
 - Případný copyright: pribináček, večerníček

@@ -106,19 +106,6 @@ namespace Mission {
 
     std::vector<Mission> missions = {};
 
-    void Draw_Text_Centered(Font font, std::vector<const char*> lines, Vector2 position, float font_Size, float spacing, Color tint) {
-        int line_Index = 0;
-
-        float line_Height = MeasureTextEx(font, "aA", font_Size, spacing).y; 
-        float y = position.y - (line_Height * lines.size()) / 2.f;
-        for(const char* line : lines) {
-            float line_Width = MeasureTextEx(font, line, font_Size, spacing).x;
-            DrawTextEx(font, line, {position.x - line_Width / 2.f, y}, font_Size, spacing, tint);
-            y += line_Height;
-            line_Index++;
-        }
-    }
-
     void Draw_Mission_Preview(Mission mission, Vector2 offset, unsigned char alpha = 255) {
         float margin_V = GetScreenWidth() / 5.f;
         float margin_H = GetScreenHeight() / 5.f;
@@ -137,10 +124,10 @@ namespace Mission {
             if(mission.hard_Time.set) best_Times.push_back(TextFormat("Těžká: %.2f", mission.hard_Time.time));
             if(mission.very_Hard_Time.set) best_Times.push_back(TextFormat("Velmi těžká: %.2f", mission.very_Hard_Time.time));
 
-            Draw_Text_Centered(Shared::data.medium_Font, mission.text, {rectangle.x + rectangle.width / 4.f, rectangle.y + (best_Times.size() <= 3 ? rectangle.height / 5.f * 2.f : rectangle.height / 3.f)}, font_Size, 0.f, {255, 255, 255, alpha});
-            Draw_Text_Centered(Shared::data.medium_Font, best_Times, {rectangle.x + rectangle.width / 4.f, rectangle.y + (best_Times.size() <= 3 ? rectangle.height / 5.f * 3.f : rectangle.height / 3.f * 2.f)}, font_Size / 1.2f, 0.f, {0, 255, 0, alpha});
+            Shared::DrawTextExC(Shared::data.medium_Font, mission.text, {rectangle.x + rectangle.width / 4.f, rectangle.y + (best_Times.size() <= 3 ? rectangle.height / 5.f * 2.f : rectangle.height / 3.f)}, font_Size, 0.f, {255, 255, 255, alpha});
+            Shared::DrawTextExC(Shared::data.medium_Font, best_Times, {rectangle.x + rectangle.width / 4.f, rectangle.y + (best_Times.size() <= 3 ? rectangle.height / 5.f * 3.f : rectangle.height / 3.f * 2.f)}, font_Size / 1.2f, 0.f, {0, 255, 0, alpha});
         } else {
-            Draw_Text_Centered(Shared::data.medium_Font, mission.text, {rectangle.x + rectangle.width / 4.f, rectangle.y + rectangle.height / 2.f}, font_Size, 0.f, {255, 255, 255, alpha});
+            Shared::DrawTextExC(Shared::data.medium_Font, mission.text, {rectangle.x + rectangle.width / 4.f, rectangle.y + rectangle.height / 2.f}, font_Size, 0.f, {255, 255, 255, alpha});
         }
 
         float scale = (rectangle.width / 2.1f) / mission.thumbnail.width;

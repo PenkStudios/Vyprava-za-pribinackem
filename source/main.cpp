@@ -163,6 +163,7 @@ void Update() {
         if(scene == Scene::GAME && Game::data.win.tick > Game::data.win.eat_Finish) show_Cursor = true;
         if(scene == Scene::GAME && Game::data.death_Animation_Tick - 2.f > (float)Game::data.death_Animation.size() - 1.f) show_Cursor = true;
         if(scene == Scene::INTRO) show_Cursor = false;
+        if(scene == Scene::GAME && Game::data.safe_Animation_Playing) show_Cursor = true;
 
         if(IsCursorOnScreen() && show_Cursor)
             DrawTextureEx(cursor, Vector2Add(GetMousePosition(), {-10.f, 0.f}), 0.f, 0.5f, WHITE);
