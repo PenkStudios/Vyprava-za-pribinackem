@@ -69,6 +69,7 @@ namespace Game {
 
             bool opening;
             Door_Data(Vector3 door_Position, Vector3 door_Scale, float start_Rotation_Range, float end_Rotation_Range, int type, Material* material);
+            Door_Data() {}
         };
 
         class Variable_Sound {
@@ -370,6 +371,7 @@ namespace Game {
 
         Vector3 camera_Start_Target;
         Vector3 camera_Start_Position;
+        Vector3 camera_Start_Rotation;
 
         class Fuse_Box {
         public:
@@ -441,13 +443,19 @@ namespace Game {
         Model safe_Code;
 
         Texture safe_Code_Background;
-        int safe_Code_Value;
+        std::string safe_Code_Value;
 
         RenderTexture2D safe_Code_Render_Texture;
         Image safe_Code_Image;
 
         float safe_Animation_Tick = 0.f;
         bool safe_Animation_Playing = false;
+        
+        std::string code_Input;
+        Sound click;
+
+        float safe_LED_Blink_Cooldown = 0.f;
+        Color safe_LED_Blink_Color;
     } data;
 
     // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
@@ -747,14 +755,17 @@ namespace Game {
         data.microwave_Animation_Tick = 0.f;
         data.microwave_Animation_Playing = false;
 
-        data.safe_Code_Value = rand() % 10001; // prank
+        data.safe_Code_Value = "";
+        for(int index = 0; index < 4; index++) {
+            data.safe_Code_Value += std::to_string(rand() % 8 + 1);
+        }
 
         Texture *original_Texture = &data.safe_Code.materials[1].maps[MATERIAL_MAP_DIFFUSE].texture;
 
         BeginTextureMode(data.safe_Code_Render_Texture); {
             DrawTexture(data.safe_Code_Background, 0, 0, WHITE);
 
-            const char* text = TextFormat("%d", data.safe_Code_Value);
+            const char* text = data.safe_Code_Value.c_str();
 
             Vector2 size = MeasureTextEx(Shared::data.handwriting, text, 300.f, 0.f);
             DrawTextEx(Shared::data.handwriting, text, {((float)original_Texture->width / 2.f) - size.x / 2.f,
@@ -773,6 +784,8 @@ namespace Game {
             UnloadTexture(data.safe_Code.materials[1].maps[MATERIAL_MAP_DIFFUSE].texture);
         }
         data.safe_Code.materials[1].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTextureFromImage(data.safe_Code_Image);
+
+        data.code_Input = "";
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -1397,6 +1410,8 @@ namespace Game {
         data.safe_Code_Render_Texture = LoadRenderTexture(original_Texture->width,
                                                                      original_Texture->height);
 
+        data.click = LoadSound(ASSETS_ROOT "audio/click.wav");
+
         Mod_Callback("Init_Game", (void*)&data);
     }
 
@@ -1546,6 +1561,7 @@ namespace Game {
             RayCollision collision = GetRayCollisionMesh(ray, data.door.meshes[0], matrix);
 
             if(collision.hit && collision.distance < 10.f && !door_Opened && !data.action_Used) {
+                if(!door_Data.opening && door_Data.type == 5) continue; 
                 door_Data.opening = !door_Data.opening;
                 door_Opened = true;
                 data.action_Used = true;
@@ -1674,6 +1690,8 @@ namespace Game {
 
         Shared::data.tv_Video.Pause();
         PauseMusicStream(Shared::data.tv_Sound);
+
+        PauseSound(data.click);
     }
 
     void On_Game_Resume() {
@@ -1688,6 +1706,8 @@ namespace Game {
 
         Shared::data.tv_Video.Resume();
         ResumeMusicStream(Shared::data.tv_Sound);
+
+        ResumeSound(data.click);
     }
 
     void Update() {
@@ -1700,7 +1720,7 @@ namespace Game {
         ClearBackground(BLACK);
         SetShaderValue(Shared::data.lighting, Shared::data.lighting.locs[SHADER_LOC_VECTOR_VIEW], &data.camera.position.x, SHADER_UNIFORM_VEC3);
 
-        Shared::data.flashlight.position = data.camera.position;
+        if(!data.safe_Animation_Playing) Shared::data.flashlight.position = data.camera.position;
         UpdateLightValues(Shared::data.lighting, Shared::data.flashlight);
 
         Vector3 old_Position = data.camera.position;
@@ -2015,8 +2035,14 @@ namespace Game {
 
                     Matrix matrix = Get_Door_Matrix(door_Data);
 
-                    DrawMesh(door_Data.type == 5 ? data.safe_Door.meshes[0]: data.door.meshes[0], *door_Data.material, matrix);
-                    
+                    if(door_Data.type == 5) {
+                        // DrawMesh(data.safe_Door.meshes[0], *door_Data.material, matrix);
+                        data.safe_Door.transform = matrix;
+                        DrawModel(data.safe_Door, {0.f, 0.f, 0.f}, 1.f, WHITE);
+                    } else {
+                        DrawMesh(data.door.meshes[0], *door_Data.material, matrix);
+                    }
+
                     if(door_Data.type != 4 && door_Data.type != 5) {
                         Matrix matrix_Door_Handle = MatrixIdentity();
 
@@ -2571,21 +2597,85 @@ namespace Game {
             }
         }
 
+        if(IsKeyPressed(KEY_L)) {
+            data.fuse_Box.lever_Turning = true;
+            data.safe_Animation_Playing = true;
+        }
+
         if(data.safe_Animation_Playing) {
             data.safe_Animation_Tick += GetFrameTime();
+            float tick = EaseSineInOut(Clamp(data.safe_Animation_Tick, 0.f, 1.f), 0.f, 1.f, 1.f);
 
             Vector3 target = Vector3Lerp(data.safe_Bbox.min, data.safe_Bbox.max, 0.5f);
-            Vector3 diff = Vector3Subtract(target, data.camera.position);
-            float yaw = (-atan2(diff.z, diff.x) * RAD2DEG) + 90.f;
-
-            // https://stackoverflow.com/a/4036151/18373960
-            // Velký milestone: už vím jak získat pitch rotaci
-            float pitch = (atan2(-diff.y, sqrt(diff.z*diff.z + diff.x*diff.x)) * RAD2DEG);
+            float yaw = -90.f;
         
-            data.camera_Rotation = Lerp_Rotation(data.camera_Rotation, {pitch, yaw, 0.f}, 0.05f);
+            data.camera_Rotation = Lerp_Rotation(data.camera_Start_Rotation, {0.f, yaw, 0.f}, tick);
             
-            Vector3 target_Position = Vector3Add(target, {2.5f, 0.f, 0.f});
-            data.camera.position = Vector3Lerp(data.camera.position, target_Position, 0.05f);
+            Vector3 target_Position = Vector3Add(target, {1.625f, 0.05f, -0.25f});
+            data.camera.position = Vector3Lerp(data.camera_Start_Position, target_Position, tick);
+
+            Rectangle buttons[9] { 
+                {381.f, 150.f, 95.f, 109.f},
+                {487.f, 142.f, 94.f, 119.f},
+                {595.f, 145.f, 94.f, 118.f},
+                {384.f, 275.f, 94.f, 118.f},
+                {488.f, 271.f, 94.f, 118.f},
+                {595.f, 273.f, 94.f, 118.f},
+                {381.f, 402.f, 94.f, 118.f},
+                {487.f, 404.f, 94.f, 118.f},
+                {592.f, 403.f, 94.f, 118.f}
+            };
+
+            if(data.safe_LED_Blink_Cooldown > 0.f) {
+                Color* color = &data.safe_Door.materials[2].maps[MATERIAL_MAP_DIFFUSE].color;
+                *color = Color {
+                    (unsigned char)Lerp(255.f, data.safe_LED_Blink_Color.r, data.safe_LED_Blink_Cooldown),
+                    (unsigned char)Lerp(255.f, data.safe_LED_Blink_Color.g, data.safe_LED_Blink_Cooldown),
+                    (unsigned char)Lerp(255.f, data.safe_LED_Blink_Color.b, data.safe_LED_Blink_Cooldown),
+                    255
+                };
+                data.safe_LED_Blink_Cooldown -= GetFrameTime();
+            }
+
+            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                for(int button = 0; button < 9; button++) {
+                    if(CheckCollisionPointRec(GetMousePosition(), buttons[button])) {
+                        PlaySound(data.click); 
+                        data.code_Input += std::to_string(button + 1);
+                        if(data.code_Input.size() == 4) {
+                            if(data.code_Input == data.safe_Code_Value) {
+                                data.safe_LED_Blink_Cooldown = 1.f;
+                                data.safe_LED_Blink_Color = GREEN;
+
+                                for(Game_Data::Door_Data &door : data.doors) {
+                                    if(door.type == 5)
+                                        door.opening = true;
+                                }
+                            } else {
+                                data.safe_LED_Blink_Cooldown = 1.f;
+                                data.safe_LED_Blink_Color = RED;
+                            }
+                            data.code_Input = "";
+                        }
+                    }
+                }
+            }
+
+            /*
+            static Rectangle rectangle;
+            DrawRectangleLinesEx(rectangle, 2.5f, RED);
+
+            if(IsKeyPressed(KEY_Z)) {
+                rectangle.x = GetMouseX();
+                rectangle.y = GetMouseY();
+            } else if(IsKeyPressed(KEY_X)) {
+                rectangle.width = GetMouseX() - rectangle.x;
+                rectangle.height = GetMouseY() - rectangle.y;
+            } else if(IsKeyPressed(KEY_SPACE)) {
+                TraceLog(LOG_INFO, "Rectangle {%f, %f, %f, %f}", rectangle.x, rectangle.y,
+                                                                 rectangle.width, rectangle.height);
+            }
+            */
         }
 
         Mod_Callback("Update_Game_2D", (void*)&data, false);
@@ -2740,12 +2830,21 @@ namespace Game {
                 }
             }
         } else if(data.holding_Item == Game_Data::NONE) {
-            if(IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && !data.action_Used && !data.safe_Animation_Playing && !data.doors[12].opening) {
+            Game_Data::Door_Data safe_Door {};
+            for(Game_Data::Door_Data& door : data.doors) {
+                if(door.type == 5) {
+                    safe_Door = door;
+                    break;
+                }
+            }
+            if(data.fuse_Box.lever_Turning && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && !data.action_Used && !data.safe_Animation_Playing && !safe_Door.opening) {
                 Ray ray = GetMouseRay({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, data.camera);
                 RayCollision collision = GetRayCollisionBox(ray, data.safe_Bbox);
 
                 if(collision.hit && collision.distance < 5.f) {
                     data.safe_Animation_Playing = true;
+                    data.camera_Start_Rotation = data.camera_Rotation;
+                    data.camera_Start_Position = data.camera.position;
                     EnableCursor();
                     HideCursor();
                 }
@@ -2767,38 +2866,40 @@ namespace Game {
         #endif
 
         /* COLLISIONS */ {
-            if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
-                data.camera.position.z = old_Position.z;
-
-            // (pokud data.debug) nechceme aby se koule renderovali dvakrát
-            bool is_Debug = data.debug;
-            data.debug = true;
-            if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
-                data.camera.position.x = old_Position.x;
-            data.debug = is_Debug;
-
             RayCollision collision_Legs = {0};
-            if(data.wake_Animation_Finished && !data.death_Animation_Playing) {
-                Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
-                collision_Legs = Get_Collision_Ray(bottom);
-                if(collision_Legs.hit) {
-                    Vector3 target = Vector3Add(collision_Legs.point, {0.f, data.crouching ? 5.0f : 6.5f, 0.f});
-                    if(target.y > 20.f && data.win.playing)
-                        data.crouching = true;
-                    if(data.camera.position.y < target.y) {
-                        data.camera.position = target;
-                        data.fall_Acceleration = 0.1f;
-                    } else if(data.camera.position.y < target.y + 0.1f && data.camera.position.y > target.y - 0.1f) {
-                        // Nedělat nic tady
-                        data.fall_Acceleration = 0.1f;
-                    } else {
-                        if(!data.game_Paused)
-                            data.camera.position.y -= data.fall_Acceleration * 50.f * GetFrameTime();
-                        
-                        data.fall_Acceleration += 1.f * GetFrameTime();
-                    }
-                } else
-                    data.camera.position = old_Position;
+            if(!data.safe_Animation_Playing) {
+                if(Ray_Sides_Collision({old_Position.x, data.camera.position.y, data.camera.position.z}, old_Position))
+                    data.camera.position.z = old_Position.z;
+
+                // (pokud data.debug) nechceme aby se koule renderovali dvakrát
+                bool is_Debug = data.debug;
+                data.debug = true;
+                if(Ray_Sides_Collision({data.camera.position.x, data.camera.position.y, old_Position.z}, old_Position))
+                    data.camera.position.x = old_Position.x;
+                data.debug = is_Debug;
+
+                if(data.wake_Animation_Finished && !data.death_Animation_Playing) {
+                    Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
+                    collision_Legs = Get_Collision_Ray(bottom);
+                    if(collision_Legs.hit) {
+                        Vector3 target = Vector3Add(collision_Legs.point, {0.f, data.crouching ? 5.0f : 6.5f, 0.f});
+                        if(target.y > 20.f && data.win.playing)
+                            data.crouching = true;
+                        if(data.camera.position.y < target.y) {
+                            data.camera.position = target;
+                            data.fall_Acceleration = 0.1f;
+                        } else if(data.camera.position.y < target.y + 0.1f && data.camera.position.y > target.y - 0.1f) {
+                            // Nedělat nic tady
+                            data.fall_Acceleration = 0.1f;
+                        } else {
+                            if(!data.game_Paused)
+                                data.camera.position.y -= data.fall_Acceleration * 50.f * GetFrameTime();
+                            
+                            data.fall_Acceleration += 1.f * GetFrameTime();
+                        }
+                    } else
+                        data.camera.position = old_Position;
+                }
             }
 
             if(data.debug) {
