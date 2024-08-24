@@ -450,6 +450,7 @@ namespace Game {
 
         float safe_Animation_Tick = 0.f;
         bool safe_Animation_Playing = false;
+        int safe_Animation_Direction = 0;
         
         std::string code_Input;
         Sound click;
@@ -1731,7 +1732,7 @@ namespace Game {
         t_Breakpoint("Lightning věci");
         #endif
 
-        data.action_Used = false; // If any action was used this frame (preventing click-through)
+        data.action_Used = false; // Pokud nějaká akce byla tento snímek (preventace click-through)
         if(!Shared::data.mobile_Mode.ticked)
             data.sprinting = IsKeyDown(KEY_LEFT_SHIFT);
 
@@ -2597,13 +2598,21 @@ namespace Game {
             }
         }
 
+        /*
         if(IsKeyPressed(KEY_L)) {
             data.fuse_Box.lever_Turning = true;
             data.safe_Animation_Playing = true;
+            data.safe_Animation_Direction = 1;
         }
+        */
 
         if(data.safe_Animation_Playing) {
-            data.safe_Animation_Tick += GetFrameTime();
+            data.safe_Animation_Tick += GetFrameTime() * data.safe_Animation_Direction;
+            if(data.safe_Animation_Tick <= 0.f) {
+                data.safe_Animation_Playing = false;
+            }
+            data.safe_Animation_Tick = Clamp(data.safe_Animation_Tick, -0.1f, 1.f);
+            
             float tick = EaseSineInOut(Clamp(data.safe_Animation_Tick, 0.f, 1.f), 0.f, 1.f, 1.f);
 
             Vector3 target = Vector3Lerp(data.safe_Bbox.min, data.safe_Bbox.max, 0.5f);
@@ -2640,6 +2649,7 @@ namespace Game {
             if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 for(int button = 0; button < 9; button++) {
                     if(CheckCollisionPointRec(GetMousePosition(), buttons[button])) {
+                        data.action_Used = true;
                         PlaySound(data.click); 
                         data.code_Input += std::to_string(button + 1);
                         if(data.code_Input.size() == 4) {
@@ -2647,14 +2657,19 @@ namespace Game {
                                 data.safe_LED_Blink_Cooldown = 1.f;
                                 data.safe_LED_Blink_Color = GREEN;
 
-                                for(Game_Data::Door_Data &door : data.doors) {
-                                    if(door.type == 5)
+                                for(Game_Data::Door_Data& door : data.doors) {
+                                    if(door.type == 5) {
                                         door.opening = true;
+                                        break;
+                                    }
                                 }
                             } else {
                                 data.safe_LED_Blink_Cooldown = 1.f;
                                 data.safe_LED_Blink_Color = RED;
                             }
+
+                            data.safe_Animation_Direction = -1;
+                            DisableCursor();
                             data.code_Input = "";
                         }
                     }
@@ -2843,6 +2858,7 @@ namespace Game {
 
                 if(collision.hit && collision.distance < 5.f) {
                     data.safe_Animation_Playing = true;
+                    data.safe_Animation_Direction = 1;
                     data.camera_Start_Rotation = data.camera_Rotation;
                     data.camera_Start_Position = data.camera.position;
                     EnableCursor();

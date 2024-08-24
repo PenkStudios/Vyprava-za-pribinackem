@@ -1,16 +1,27 @@
-#include <raylib.h>
-
-#include <time.h>
-#include <iterator>
-#include "scene.cpp"
-#include "mod_loader.cpp"
-
 #ifdef PLATFORM_ANDROID
 #include "android.cpp"
 #define ASSETS_ROOT ""
 #else
 #define ASSETS_ROOT "assets/"
 #endif
+
+// #define EMULATOR_STANDALONE
+#ifdef EMULATOR_STANDALONE
+
+#include "emulator.cpp"
+
+int main() {
+    return Emulator::Main();
+}
+
+#else
+
+#include <raylib.h>
+
+#include <time.h>
+#include <iterator>
+#include "scene.cpp"
+#include "mod_loader.cpp"
 
 #include "mission.cpp"
 
@@ -232,4 +243,5 @@ int main() {
     Destroy();
     return 0;
 }
+#endif
 #endif

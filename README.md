@@ -1,4 +1,4 @@
-# Výprava za pribináčkem verze 1.2.2
+# Výprava za pribináčkem verze 1.2.7
 Velice vtipná hra o cestě pro pribináčka
 
 ## Stažení
@@ -7,6 +7,8 @@ Velice vtipná hra o cestě pro pribináčka
 
 ## Přídáno
 - Vylepšen safe
+- Přidan emulátor "android" telefonu
+- Přidán model telefonu (~android 4)
 
 ## Nevýhody
 - Případný copyright: pribináček, večerníček
