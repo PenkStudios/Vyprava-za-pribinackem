@@ -1,0 +1,7 @@
+CONNECT <ROOM CODE>	    - Připojí hráče do místnosti <ROOM CODE>                            [IMPLEMENTOVÁNO]
+CREATE			        - Vytvoří místnost a vrátí kód místnosti                            [IMPLEMENTOVÁNO]
+GET-PLAYERS		        - Vrátí data všech hráčů v místnosti kde se hráč nyní nachází.      [IMPLEMENTOVÁNO]
+SET-NAME		        - Nastaví jméno tohoto hráče                                        [IMPLEMENTOVÁNO]
+SET-DATA <POZICE> <CÍL>	- Nastaví pozici a cíl tohoto hráče                                 [IMPLEMENTOVÁNO]
+PICKUP <ITEM ID>	    - Vezme předmět "do ruky"                                           [IMPLEMENTOVÁNO]
+PLACEDOWN		        - Položí předmět, který hráč drží                                   [IMPLEMENTOVÁNO]

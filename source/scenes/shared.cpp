@@ -83,30 +83,27 @@ namespace Shared {
         class Button {
         private:
             Vector2 size;
-            Rectangle rectangle;
+            float size_X;
             Font font;
 
         public:
-            Vector2 position;
-
             const char* text;
             float font_Size;
 
             Button() {}
 
-            Button(Vector2 position, const char* text, float font_Size, Font font) : position(position), text(text), font_Size(font_Size), font(font) {
+            Button(const char* text, float font_Size, Font font) : text(text), font_Size(font_Size), font(font) {
                 size = MeasureTextEx(font, text, font_Size, 0.f);
                 // float size_X = size.x * 1.5f;
                 // float size_X = EaseCubicOut(size.x, 0.f, 300.f, 200.f);
                 // float size_X = size.x * 1.2f;
-                float size_X = size.x + GetScreenWidth() / 50.f;
-                rectangle = {position.x - size_X / 2.f, position.y - size.y * 1.5f / 2.f, size_X, size.y * 1.5f};
+                size_X = size.x + GetScreenWidth() / 50.f;
             }
 
-            bool Update(unsigned char alpha = 255, bool enabled = true);
+            bool Update(Vector2 position, unsigned char alpha = 255, bool enabled = true);
         };
 
-        class TickBox {
+        class Tick_Box {
         public:
             Vector2 position;
             const char* caption;
@@ -114,10 +111,10 @@ namespace Shared {
 
             bool set = false;
 
-            TickBox() {}
+            Tick_Box() {}
 
-            TickBox(Vector2 position, const char* caption) : position(position), caption(caption) {}
-            TickBox(Vector2 position, const char* caption, bool ticked) : position(position), caption(caption), ticked(ticked) {}
+            Tick_Box(Vector2 position, const char* caption) : position(position), caption(caption) {}
+            Tick_Box(Vector2 position, const char* caption, bool ticked) : position(position), caption(caption), ticked(ticked) {}
 
             void Update(unsigned char alpha = 255);
         };
@@ -138,6 +135,29 @@ namespace Shared {
             Slider(Vector2 position, const char* caption, float default_Progress) : position(position), caption(caption), progress(default_Progress) {}
 
             bool Update(unsigned char alpha = 255, float display_Multiplier = 1.f);
+        };
+
+        class Tab_Selection {
+        public:
+            int selection;
+            std::vector<std::string> options;
+
+            RenderTexture render_Texture;
+            Image processing;
+            Texture render;
+
+            bool rendered = false;
+
+            bool set = false;
+
+            void PreRender();
+
+            Tab_Selection(std::vector<std::string> options) : options(options), selection(0), set(true) { PreRender(); }
+            Tab_Selection(std::vector<std::string> options, int selection) : options(options), selection(selection), set(true) { PreRender(); }
+        
+            Tab_Selection() {}
+
+            int Update(unsigned char alpha = 255);
         };
 
         struct Mpeg_Video {
@@ -218,15 +238,39 @@ namespace Shared {
             }
         };
 
+        class Input {
+        public:
+            bool hover = false;
+            std::string input = "";
+
+            Vector2 size;
+
+            bool set = false;
+
+            Vector2 position;
+            float font_Size;
+
+            float width;
+            int max_Characters;
+
+            float size_X;
+
+            Input() {}
+
+            Input(float font_Size, float width, int max_Characters);
+
+            void Update(Vector2 position, unsigned char alpha);
+        };
+
         Button settings_Button {};
         Button new_Game_Button {};
+        Button multiplayer_Button {};
         Button mission_Button {};
 
         // nastavení
-        Button back_Button {};
-        TickBox show_Fps {};
-        TickBox test_Mode {};
-        TickBox mobile_Mode {};
+        Tick_Box show_Fps {};
+        Tick_Box test_Mode {};
+        Tick_Box mobile_Mode {};
 
         Slider volume {};
         Slider max_Fps {};
@@ -248,7 +292,14 @@ namespace Shared {
 
         Button play_Button {};
 
-        TickBox show_Tutorial {};
+        Button start_Game_Button {};
+
+        Tick_Box show_Tutorial {};
+
+        Tab_Selection multiplayer_Tabs {};
+
+        Input game_Address_Input {};
+        Input game_Name_Input {};
 
         Model pribinacek;
         ModelAnimation *animations;
@@ -273,6 +324,214 @@ namespace Shared {
         int game_Difficulty = 2;
         bool play_Again;
     } data;
+
+    void DrawTextExC(Font font, const char *text, Vector2 position, float fontSize, float spacing, Color tint) {
+        Vector2 size = MeasureTextEx(font, text, fontSize, spacing);
+        DrawTextEx(font, text, Vector2Subtract(position, Vector2Divide(size, {2.f, 2.f})), fontSize, spacing, tint);
+    }
+
+    void DrawTextExC(Font font, std::vector<const char*> lines, Vector2 position, float font_Size, float spacing, Color tint) {
+        int line_Index = 0;
+
+        float line_Height = MeasureTextEx(font, "aA", font_Size, spacing).y; 
+        float y = position.y - (line_Height * lines.size()) / 2.f;
+        for(const char* line : lines) {
+            float line_Width = MeasureTextEx(font, line, font_Size, spacing).x;
+            DrawTextEx(font, line, {position.x - line_Width / 2.f, y}, font_Size, spacing, tint);
+            y += line_Height;
+            line_Index++;
+        }
+    }
+
+    Shared_Data::Input::Input(float font_Size, float width, int max_Characters) :
+                font_Size(font_Size), width(width), max_Characters(max_Characters) {
+
+        size = MeasureTextEx(Shared::data.medium_Font, "A", font_Size, 0.f);
+        size.x = width;
+        // float size_X = size.x * 1.5f;
+        // float size_X = EaseCubicOut(size.x, 0.f, 300.f, 200.f);
+        // float size_X = size.x * 1.2f;
+        size_X = size.x + GetScreenWidth() / 50.f;
+
+        set = true;
+    }
+
+    void Shared_Data::Input::Update(Vector2 position, unsigned char alpha) {
+        Rectangle rectangle = {position.x - size_X / 2.f, position.y - size.y * 1.5f / 2.f, size_X, size.y * 1.5f};
+
+        float spacing = GetScreenHeight() / 240.f;
+        float border_Width = GetScreenHeight() / 120.f;
+
+        Vector2 text_Size = MeasureTextEx(Shared::data.medium_Font, input.c_str(), font_Size, 0.f);
+        float text_Scale = std::min(width / text_Size.x, 1.f);
+
+        DrawRectangleRounded(rectangle, 0.3f, 10, Fade(WHITE, (float)alpha / 255.f));
+        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 3.f, rectangle.height - spacing * 3.f}, 0.3f, 10, border_Width, Fade(GRAY, (float)alpha / 255.f));
+        DrawRectangleRoundedLinesEx({rectangle.x + spacing, rectangle.y + spacing, rectangle.width - spacing * 2.f, rectangle.height - spacing * 2.f}, 0.3f, 10, border_Width, Fade(hover ? BLACK : Color {64, 64, 64, 255}, (float)alpha / 255.f));
+        DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
+    
+        Vector2 i_Size = MeasureTextEx(Shared::data.medium_Font, "I", text_Scale * font_Size, 0.f);
+        float offset = 0.f;
+        if(!data.custom_Font) offset = GetScreenHeight() / 600.f * 2.f; // Text correction (kvůli divnýmu fontu)
+
+        DrawTextExC(Shared::data.medium_Font, {input.c_str()}, {rectangle.x + rectangle.width / 2.f - i_Size.x / 2.f, rectangle.y + rectangle.height / 2.f + offset}, text_Scale * font_Size, 0.f, BLACK);
+
+        if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if(CheckCollisionPointRec(GetMousePosition(), rectangle)) {
+                hover = !hover;
+                // TODO: Popup klávesnice na androidu
+            } else {
+                hover = false;
+            }
+        }
+
+        if(hover) {
+            int key = GetCharPressed();
+
+            while (key > 0) {
+                text_Size = MeasureTextEx(Shared::data.medium_Font, input.c_str(), text_Scale * font_Size, 0.f);
+                bool can_Insert = input.size() < max_Characters;
+
+                if ((key >= 32) && (key <= 125) && can_Insert) {
+                    input += (char)key;
+                }
+
+                key = GetCharPressed();
+            }
+
+            if(IsKeyPressed(KEY_BACKSPACE)) {
+                if(!input.empty())
+                    input.pop_back();
+            }
+
+            text_Size = MeasureTextEx(Shared::data.medium_Font, input.c_str(), text_Scale * font_Size, 0.f);
+            if ((int)GetTime() % 2 == 0) DrawTextEx(Shared::data.medium_Font, "I",
+                                                    {rectangle.x + rectangle.width / 2.f - i_Size.x / 4.f + text_Size.x / 2.f,
+                                                    rectangle.y + rectangle.height / 2.f - i_Size.y / 2.f + (GetScreenHeight() / 200.f * text_Scale) + offset},
+                                                    text_Scale * font_Size, 0.f, BLACK);
+        }
+    }
+
+    void Shared_Data::Tab_Selection::PreRender() {
+        if(rendered) {
+            UnloadRenderTexture(render_Texture);
+            UnloadImage(processing);
+            // UnloadTexture(render);
+            // ^
+            // | Produkuje grafický glitch.
+            //   I bez této řádky program tak neleakuje (nebo hodně málo).
+        }
+
+        render_Texture = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
+
+        BeginTextureMode(render_Texture); {
+            ClearBackground(BLANK);
+            float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 25.f;
+            float margin = font_Size / 4.f;
+
+            float x_Offset = 0.f;
+            int index = 0;
+
+            float roundness = (GetScreenWidth() + GetScreenHeight()) / 2.f / 800.f / 4.f;
+            float line_Thick = (GetScreenWidth() + GetScreenHeight()) / 2.f / 200.f;
+
+            Rectangle screen = {
+                0.f, font_Size * 1.5f - line_Thick,
+                (float)GetScreenWidth(), GetScreenHeight() - font_Size * 1.5f + line_Thick
+            };
+
+            DrawRectangleRec(screen, WHITE);
+            DrawRectangleLinesEx(screen, line_Thick, BLACK);
+
+            for(std::string option : options) {
+                Vector2 text_Size = MeasureTextEx(Shared::data.medium_Font, option.c_str(), font_Size, 0.f);
+
+                Rectangle rectangle = {
+                    x_Offset + line_Thick, line_Thick, text_Size.x + margin * 2.f, text_Size.y + margin
+                };
+
+                DrawRectangleRounded(rectangle, roundness, 10, WHITE);
+                DrawRectangleRoundedLinesEx(rectangle, roundness, 10, line_Thick, BLACK);
+
+                // DrawTextEx(Shared::data.medium_Font, option.c_str(), {x_Offset + margin, margin}, font_Size, 0.f, selection == index ? BLACK : GRAY);
+                
+                if(selection == index) {
+                    Rectangle overlay = {
+                        line_Thick + x_Offset, text_Size.y * 1.5f - line_Thick * 3.f,
+                        text_Size.x + margin * 2.f, line_Thick * 6.f
+                    };
+
+                    DrawRectangleRec(overlay, WHITE);
+                }
+
+                x_Offset += text_Size.x + margin * 2.f + line_Thick;
+                index++;
+            }
+        } EndTextureMode();
+        
+        processing = LoadImageFromTexture(render_Texture.texture);
+        for(int x = 0; x < processing.width; x++) {
+            for(int y = 0; y < processing.height; y++) {
+                Color color = GetImageColor(processing, x, y);
+                /*inverted = {
+                    (unsigned char)(255 - inverted.r),
+                    (unsigned char)(255 - inverted.g),
+                    (unsigned char)(255 - inverted.b),
+                    (unsigned char)(255 - inverted.a)
+                };*/
+                if(color.r == 255 && color.a == 255) // WHITE
+                    color = BLANK;
+                else if(color.r == 0 && color.a == 255) // BLACK
+                    color = BLACK;
+                else if(color.r == 0 && color.a == 0) // BLANK
+                    color = WHITE;
+                ImageDrawPixelV(&processing, {(float)x, (float)y}, color);
+            }
+        }
+        
+        render = LoadTextureFromImage(processing);
+
+        rendered = true;
+    }
+
+    int Shared_Data::Tab_Selection::Update(unsigned char alpha) {
+        Color tint = Fade(WHITE, (float)(alpha) / 255.f);
+
+        DrawTexturePro(render, {0.f, 0.f, (float)render.width, -(float)render.height}, {0.f, 0.f, (float)GetScreenWidth(), (float)GetScreenHeight()}, {0.f, 0.f}, 0.f, ColorTint(WHITE, tint));
+
+        float font_Size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 25.f;
+        float margin = font_Size / 4.f;
+
+        float x_Offset = 0.f;
+        int index = 0;
+
+        float roundness = (GetScreenWidth() + GetScreenHeight()) / 2.f / 800.f / 4.f;
+        float line_Thick = (GetScreenWidth() + GetScreenHeight()) / 2.f / 200.f;
+
+        bool re_Render = false;
+
+        for(std::string option : options) {
+            Vector2 text_Size = MeasureTextEx(Shared::data.medium_Font, option.c_str(), font_Size, 0.f);
+
+            Rectangle rectangle = {
+                x_Offset + line_Thick, line_Thick, text_Size.x + margin * 2.f, text_Size.y + margin
+            };
+
+            DrawTextEx(Shared::data.medium_Font, option.c_str(), {x_Offset + margin, margin}, font_Size, 0.f, ColorTint(selection == index ? WHITE : LIGHTGRAY, tint));
+
+            if(CheckCollisionPointRec(GetMousePosition(), rectangle) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                selection = index;
+                re_Render = true;
+            }
+
+            x_Offset += text_Size.x + margin * 2.f + line_Thick;
+            index++;
+        }
+
+        if(re_Render) PreRender();
+
+        return selection;
+    }
 
     // Velice kvalitní zabezpečení
     std::vector<unsigned char> Encrypt(std::string string) {
@@ -375,24 +634,6 @@ namespace Shared {
         return culled;
     }
 
-    void DrawTextExC(Font font, const char *text, Vector2 position, float fontSize, float spacing, Color tint) {
-        Vector2 size = MeasureTextEx(font, text, fontSize, spacing);
-        DrawTextEx(font, text, Vector2Subtract(position, Vector2Divide(size, {2.f, 2.f})), fontSize, spacing, tint);
-    }
-
-    void DrawTextExC(Font font, std::vector<const char*> lines, Vector2 position, float font_Size, float spacing, Color tint) {
-        int line_Index = 0;
-
-        float line_Height = MeasureTextEx(font, "aA", font_Size, spacing).y; 
-        float y = position.y - (line_Height * lines.size()) / 2.f;
-        for(const char* line : lines) {
-            float line_Width = MeasureTextEx(font, line, font_Size, spacing).x;
-            DrawTextEx(font, line, {position.x - line_Width / 2.f, y}, font_Size, spacing, tint);
-            y += line_Height;
-            line_Index++;
-        }
-    }
-
     void DrawTextExOutline(Font font, const char *text, Vector2 position, float fontSize, float spacing, Color tint, unsigned char alpha = 255) {
         float outline_Size = (GetScreenWidth() + GetScreenHeight()) / 400.f;
         for(int angle = 0; angle < 360; angle += 22) {
@@ -418,7 +659,9 @@ namespace Shared {
         */
     }
 
-    bool Shared_Data::Button::Update(unsigned char alpha, bool enabled) {
+    bool Shared_Data::Button::Update(Vector2 position, unsigned char alpha, bool enabled) {
+        Rectangle rectangle = {position.x - size_X / 2.f, position.y - size.y * 1.5f / 2.f, size_X, size.y * 1.5f};
+        
         float spacing = GetScreenHeight() / 240.f;
         float border_Width = GetScreenHeight() / 120.f;
 
@@ -428,7 +671,7 @@ namespace Shared {
         DrawRectangleRoundedLinesEx(rectangle, 0.3f, 10, border_Width / 1.8f, Fade(WHITE, (float)alpha / 255.f));
 
         float offset = 0.f;
-        if(!data.custom_Font) offset = 4.f;
+        if(!data.custom_Font) offset = GetScreenHeight() / 600.f * 4.f;
         DrawTextEx(font, text, Vector2Add(Vector2Subtract(position, {size.x / 2.f, size.y / 2.f}), {0.f, offset}), font_Size, 0.f, enabled ? BLACK : GRAY);
 
         if(enabled)
@@ -491,7 +734,7 @@ namespace Shared {
         return to_Return;
     }
 
-    void Shared_Data::TickBox::Update(unsigned char alpha) {
+    void Shared_Data::Tick_Box::Update(unsigned char alpha) {
         float size = (GetScreenWidth() + GetScreenHeight()) / 2.f / 20.f;
         float spacing = GetScreenHeight() / 240.f;
         float font_Size = size;

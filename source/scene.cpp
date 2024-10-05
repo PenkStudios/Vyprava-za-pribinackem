@@ -4,7 +4,7 @@
 #include <map>
 #include <functional>
 
-enum Scene {INTRO, MENU, GAME};
+enum Scene {INTRO, MENU, GAME, WAITING_ROOM};
 Scene scene;
 
 class SceneInfo {

@@ -168,13 +168,13 @@ namespace Mission {
 
         bool page_Back_Enabled = mission_Transition_Tick > 0.1f;
         bool page_Forward_Enabled = mission_Transition_Tick < missions.size() - 1.1f;
-        if(Shared::data.page_1_Button.Update(alpha, page_Back_Enabled) && page_Back_Enabled) {
+        if(Shared::data.page_1_Button.Update({GetScreenWidth() / 8.f, GetScreenHeight() / 2.f}, alpha, page_Back_Enabled) && page_Back_Enabled) {
             if(mission_Transition_Direction == 0) {
                 mission_Transition_Direction = -1;
                 mission_Transition_Target_Tick = mission_Transition_Tick - 1.f;
             } else buffer = true;
         }
-        if(Shared::data.page_2_Button.Update(alpha, page_Forward_Enabled) && page_Forward_Enabled) {
+        if(Shared::data.page_2_Button.Update({GetScreenWidth() - GetScreenWidth() / 8.f, GetScreenHeight() / 2.f}, alpha, page_Forward_Enabled) && page_Forward_Enabled) {
             if(mission_Transition_Direction == 0) {
                 mission_Transition_Direction = 1;
                 mission_Transition_Target_Tick = mission_Transition_Tick + 1.f;
@@ -265,6 +265,11 @@ namespace Mission {
                 "Komedie",
                 {"Udělej si popkorn"},
                 ASSETS_ROOT "textures/missions/popcorn.png"
+            ),
+            Mission(
+                "Gamer",
+                {"Zahraj si angry", "birds na svém", "telefonu."},
+                ASSETS_ROOT "textures/missions/mad birds.png"
             )
         };
 

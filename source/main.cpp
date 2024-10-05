@@ -5,10 +5,10 @@
 #define ASSETS_ROOT "assets/"
 #endif
 
+#include "emulator.cpp"
+
 // #define EMULATOR_STANDALONE
 #ifdef EMULATOR_STANDALONE
-
-#include "emulator.cpp"
 
 int main() {
     return Emulator::Main();
@@ -29,6 +29,8 @@ int main() {
 #include "scenes/menu.cpp"
 #include "scenes/game.cpp"
 #include "scenes/shared.cpp"
+
+#include "multiplayer.cpp"
 
 #ifdef PLATFORM_IOS // IOS struktura
 extern "C" {
@@ -52,7 +54,6 @@ extern "C" android_app* GetAndroidApp();
 void Ready() {
     srand(time(NULL));
 
-    SetConfigFlags(FLAG_MSAA_4X_HINT);
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
     std::string root = std::string(GetAndroidApp()->activity->internalDataPath) + "/";
 #else
@@ -111,6 +112,9 @@ void Ready() {
         }
     }
 
+    if(Shared::data.quality != 1 /* !LOW */)
+        SetConfigFlags(FLAG_MSAA_4X_HINT);
+
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS)
     //
     /*
@@ -132,13 +136,15 @@ void Ready() {
 #endif
 
     InitAudioDevice();
-    
     ChangeDirectory(GetApplicationDirectory());
 
+    Multiplayer::Init();
+    Multiplayer::Connect();
+
     Set_Scene_Data({
-        {INTRO,   {Intro::Init,   Intro::On_Switch,   Intro::Update}},
-        {MENU,    {Menu::Init,    Menu::On_Switch,    Menu::Update}},
-        {GAME,    {Game::Init,    Game::On_Switch,    Game::Update}}
+        {INTRO,         {Intro::Init,           Intro::On_Switch,           Intro::Update}},
+        {MENU,          {Menu::Init,            Menu::On_Switch,            Menu::Update}},
+        {GAME,          {Game::Init,            Game::On_Switch,            Game::Update}}
     });
 
     Mission::Init_Missions();
@@ -159,6 +165,8 @@ void Ready() {
     Mod_Load_Directory(ASSETS_ROOT "mods/");
     Mod_Callback("Init", (void*)&Shared::data);
 
+    Emulator::Init();
+
     Init_Scenes();
     Switch_To_Scene(INTRO);
 }
@@ -175,6 +183,7 @@ void Update() {
         if(scene == Scene::GAME && Game::data.death_Animation_Tick - 2.f > (float)Game::data.death_Animation.size() - 1.f) show_Cursor = true;
         if(scene == Scene::INTRO) show_Cursor = false;
         if(scene == Scene::GAME && Game::data.safe_Animation_Playing) show_Cursor = true;
+        if(scene == Scene::GAME && Game::data.mobile_View) show_Cursor = true;
 
         if(IsCursorOnScreen() && show_Cursor)
             DrawTextureEx(cursor, Vector2Add(GetMousePosition(), {-10.f, 0.f}), 0.f, 0.5f, WHITE);
@@ -230,6 +239,10 @@ void Destroy() {
 #if defined(PLATFORM_ANDROID)
     Release_Native_Loader();
 #endif
+
+    if(Multiplayer::connected) {
+        Multiplayer::Disconnect();
+    }
 }
 
 #ifndef PLATFORM_IOS // Normální main funkce

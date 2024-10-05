@@ -33,6 +33,9 @@ float Triangular_Modulo(float x, float y) {
 }
 */
 
+#include "../emulator.cpp"
+#include "../multiplayer.cpp"
+
 // Přemění blender souřadnice na raylib souřadnice
 #define B2RL(x, y, z) {x, z, -y}
 
@@ -49,6 +52,8 @@ float Triangular_Modulo(float x, float y) {
 
 #define DEBUG_TIMER
 #define NOT_SPAWNED {0.f, 100.f, 0.f}
+
+#define PLAYER_HEIGHT 6.5f
 
 namespace Game {
     class Game_Data {
@@ -219,8 +224,8 @@ namespace Game {
 
         Joystick movement;
 
-        #define MAX_ITEMS 9 // PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, POPCORN_PACKAGE, POPCORN_DONE, SAFE_CODE, LOCK
-        enum Item {NONE, PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, POPCORN_PACKAGE, POPCORN_DONE, SAFE_CODE, LOCK, _LAST};
+        #define MAX_ITEMS 10 // PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, POPCORN_PACKAGE, POPCORN_DONE, SAFE_CODE, MOBILE, LOCK
+        enum Item {NONE, PRIBINACEK, SPOON, KEY, TV_REMOTE, CLOCK, POPCORN_PACKAGE, POPCORN_DONE, SAFE_CODE, MOBILE, LOCK, _LAST};
         class Item_Data {
         public:
             Vector3 position;
@@ -457,6 +462,17 @@ namespace Game {
 
         float safe_LED_Blink_Cooldown = 0.f;
         Color safe_LED_Blink_Color;
+
+        Model mobile;
+
+        bool mobile_View = false;
+        float mobile_View_Tick;
+        int mobile_View_Direction = 1;
+
+        Vector3 old_Mobile_Position;
+        Vector3 old_Mobile_Rotation;
+
+        RenderTexture2D mobile_Render_Texture;
     } data;
 
     // https://www.reddit.com/r/raylib/comments/1b1nw51/bounding_boxes_for_rotated_models_are_completly/
@@ -632,6 +648,7 @@ namespace Game {
         data.item_Data.push_back(Game_Data::Item_Data(6, {1.652715f, 4.066285f, 12.127025f}, true, {0.f, -135.9, 0.f})); // POPCORN_PACKAGE
         data.item_Data.push_back(Game_Data::Item_Data(7, NOT_SPAWNED, true, {0.f, 0.f, 0.f})); //                           POPCORN_DONE
         data.item_Data.push_back(Game_Data::Item_Data(8, B2RL(-26.5f, 13.f, 4.4f), true)); //                               SAFE_CODE
+        data.item_Data.push_back(Game_Data::Item_Data(9, {-35.44f, -17.53f, -26.86f}, true, {0.f, -126.08f, 0.f})); //      MOBILE
 
         int key_Position_Index = rand() % data.key_Spawns.size();
         data.item_Data[3] = Game_Data::Item_Data(3, data.key_Spawns[key_Position_Index].position, true, data.key_Spawns[key_Position_Index].rotation);
@@ -787,6 +804,9 @@ namespace Game {
         data.safe_Code.materials[1].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTextureFromImage(data.safe_Code_Image);
 
         data.code_Input = "";
+        data.mobile_View = false;
+
+        Emulator::On_Switch_Reset();
 
         Mod_Callback("Switch_Game", (void*)&data);
     }
@@ -953,8 +973,8 @@ namespace Game {
 
                 Shared::DrawTextExC(Shared::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, ColorTint(WHITE, tint_UI));
             
-                if(data.play_Again_Button.Update(tint_UI.a)) { Main_Menu(true); Shared::data.coins += coins; } // resetuje všechen progress
-                else if(data.menu_Button.Update(tint_UI.a)) {
+                if(data.play_Again_Button.Update({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + GetScreenHeight() / 8.f}, tint_UI.a)) { Main_Menu(true); Shared::data.coins += coins; } // resetuje všechen progress
+                else if(data.menu_Button.Update({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, tint_UI.a)) {
                     Shared::data.show_Tutorial.ticked = false;
                     Main_Menu(false);
                     Shared::data.coins += coins;
@@ -1101,13 +1121,12 @@ namespace Game {
 
     void Init_UI() {
         float font_Size = GetScreenHeight() / 15.f;
-        float button_Height = GetScreenHeight() / 8.f;
 
-        data.play_Again_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height}, u8"Hrát znovu", font_Size, Shared::data.medium_Font);
-        data.menu_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Zpátky do menu", font_Size, Shared::data.medium_Font);
+        data.play_Again_Button = Shared::Shared_Data::Button(u8"Hrát znovu", font_Size, Shared::data.medium_Font);
+        data.menu_Button = Shared::Shared_Data::Button(u8"Zpátky do menu", font_Size, Shared::data.medium_Font);
 
-        data.pause_Continue_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f}, u8"Pokračovat ve hře", font_Size, Shared::data.medium_Font);
-        data.pause_Menu_Button = Shared::Shared_Data::Button({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + button_Height}, u8"Zpátky do menu", font_Size, Shared::data.medium_Font);
+        data.pause_Continue_Button = Shared::Shared_Data::Button(u8"Pokračovat ve hře", font_Size, Shared::data.medium_Font);
+        data.pause_Menu_Button = Shared::Shared_Data::Button(u8"Zpátky do menu", font_Size, Shared::data.medium_Font);
     }
 
     void Init() {
@@ -1154,6 +1173,9 @@ namespace Game {
 
         int animation_Count = 0; // (1)
         data.animations = LoadModelAnimations(ASSETS_ROOT "models/human.iqm", &animation_Count);
+
+        for(int material = 0; material < Multiplayer::player_Model.materialCount; material++)
+            Multiplayer::player_Model.materials[material].shader = Shared::data.lighting;
 
         for(int material = 0; material < data.father.materialCount; material++)
             data.father.materials[material].shader = Shared::data.lighting;
@@ -1345,6 +1367,7 @@ namespace Game {
         data.item_Data.push_back(Game_Data::Item_Data(6, {1.652715f, 4.066285f, 12.127025f}, true, {0.f, -135.9, 0.f})); // POPCORN_PACKAGE
         data.item_Data.push_back(Game_Data::Item_Data(7, NOT_SPAWNED, true, {0.f, 0.f, 0.f})); //                           POPCORN_DONE
         data.item_Data.push_back(Game_Data::Item_Data(8, B2RL(-26.5f, 13.f, 4.4f), true)); //                               SAFE_CODE
+        data.item_Data.push_back(Game_Data::Item_Data(9, {-35.44f, -17.53f, -26.86f}, true, {0.f, -126.08f, 0.f})); //      MOBILE
 
         Init_UI();
 
@@ -1412,6 +1435,13 @@ namespace Game {
                                                                      original_Texture->height);
 
         data.click = LoadSound(ASSETS_ROOT "audio/click.wav");
+
+        data.mobile = LoadModel(ASSETS_ROOT "models/mobile.glb");
+        for(int material = 0; material < data.mobile.materialCount; material++)
+            data.mobile.materials[material].shader = Shared::data.lighting;
+
+        data.mobile_Render_Texture = LoadRenderTexture(390, 600);
+        SetTextureFilter(data.mobile_Render_Texture.texture, TEXTURE_FILTER_BILINEAR);
 
         Mod_Callback("Init_Game", (void*)&data);
     }
@@ -1657,7 +1687,7 @@ namespace Game {
             }
         }
 
-        if(data.holding_Item != Game_Data::NONE && !data.action_Used && !data.win.playing) {
+        if(data.holding_Item != Game_Data::NONE && !data.action_Used && !data.win.playing && !data.mobile_View) {
             data.item_Data[data.holding_Item].fall_Acceleration = 0.1f;
             data.item_Data[data.holding_Item].Calculate_Collision();
             data.item_Data[data.holding_Item].falling = true;
@@ -2233,6 +2263,15 @@ namespace Game {
                             break;
                         }
 
+                        case Game_Data::MOBILE: {
+                            data.mobile.transform = MatrixMultiply(MatrixIdentity(), MatrixRotateXYZ({data.item_Data[index].rotation.x * DEG2RAD,
+                                                                                                    data.item_Data[index].rotation.y * DEG2RAD,
+                                                                                                    data.item_Data[index].rotation.z * DEG2RAD}));
+                            
+                            DrawModel(data.mobile, data.item_Data[index].position, 1.f, WHITE);
+                            break;
+                        }
+
                         default: break;
                     }
 
@@ -2242,11 +2281,6 @@ namespace Game {
                             
                             data.item_Data[index].rotation.y = -atan2(data.camera_Target.z, data.camera_Target.x) * RAD2DEG;
                         } else {
-                            if(data.item_Data[index].collision.point.y > data.item_Data[index].position.y) {
-                                data.item_Data[index].position.y = data.item_Data[index].collision.point.y;
-                                data.item_Data[index].falling = false;
-                            }
-
                             if(data.item_Data[index].falling) {
                                 // data.item_Data[index].position.y -= 1.f * GetFrameTime();
                                 if(data.debug) DrawLine3D(data.item_Data[index].position, data.item_Data[index].collision.point, RED);
@@ -2255,6 +2289,10 @@ namespace Game {
                                     data.item_Data[index].position.y -= data.item_Data[index].fall_Acceleration * 50.f * GetFrameTime();
                                 
                                 data.item_Data[index].fall_Acceleration += 1.f * GetFrameTime();
+                            }
+                            if(data.item_Data[index].collision.point.y > data.item_Data[index].position.y) {
+                                data.item_Data[index].position.y = data.item_Data[index].collision.point.y;
+                                data.item_Data[index].falling = false;
                             }
                         }
 
@@ -2280,37 +2318,33 @@ namespace Game {
             for(Game_Data::Drawer_Data &drawer : data.drawers) {
                 DrawModel(data.drawer, drawer.position, 1.f, WHITE);
                 if(drawer.has_Lock) DrawModel(data.lock, Vector3Add(drawer.position, {1.95f, 1.f, 0.f}), 1.f, WHITE);
-                if(drawer.opening) {
-                    if(!data.game_Paused)
+                if(!data.game_Paused) {
+                    if(drawer.opening) {
                         drawer.position.x += 10.f * GetFrameTime();
-                        
-                    for(Game_Data::Item_Data* child : drawer.childs)
-                        if(child != nullptr)
-                            if(!data.game_Paused)
+                            
+                        for(Game_Data::Item_Data* child : drawer.childs)
+                            if(child != nullptr)
                                 child->position.x += 10.f * GetFrameTime();
 
-                    if(drawer.position.x > drawer.original_Position.x + 2.f) {
+                        if(drawer.position.x > drawer.original_Position.x + 2.f) {
+                            drawer.position.x -= 10.f * GetFrameTime();
+                            for(Game_Data::Item_Data* child : drawer.childs)
+                                if(child != nullptr)
+                                    child->position.x -= 10.f * GetFrameTime();
+                        }
+                    } else {
                         drawer.position.x -= 10.f * GetFrameTime();
                         for(Game_Data::Item_Data* child : drawer.childs)
                             if(child != nullptr)
-                                if(!data.game_Paused)
-                                    child->position.x -= 10.f * GetFrameTime();
-                    }
-                } else {
-                    drawer.position.x -= 10.f * GetFrameTime();
-                    for(Game_Data::Item_Data* child : drawer.childs)
-                        if(child != nullptr)
-                            if(!data.game_Paused)
                                 child->position.x -= 10.f * GetFrameTime();
-            
-                    if(drawer.position.x < drawer.original_Position.x) {
-                        if(!data.game_Paused)
+                
+                        if(drawer.position.x < drawer.original_Position.x) {
                             drawer.position.x += 10.f * GetFrameTime();
-                        for(Game_Data::Item_Data* child : drawer.childs)
-                            if(child != nullptr)
-                                if(!data.game_Paused)
+                            for(Game_Data::Item_Data* child : drawer.childs)
+                                if(child != nullptr)
                                     child->position.x += 10.f * GetFrameTime();
-                        
+                            
+                        }
                     }
                 }
 
@@ -2430,10 +2464,10 @@ namespace Game {
                             if(!data.game_Paused)
                                 data.father_Position = Vector3MoveTowards(data.father_Position, data.camera.position, GetFrameTime() * 10.f * data.father_Speed);
 
-                            bool collide_X = Get_Collision_Sphere({data.father_Position.x, data.father_Position.y + 6.5f, old_Position.z}, 1.5f);
+                            bool collide_X = Get_Collision_Sphere({data.father_Position.x, data.father_Position.y + 5.5f, old_Position.z}, 1.5f);
                             if(collide_X) data.father_Position.x = old_Position.x;
 
-                            bool collide_Z = Get_Collision_Sphere({old_Position.x, data.father_Position.y + 6.5f, data.father_Position.z}, 1.5f);
+                            bool collide_Z = Get_Collision_Sphere({old_Position.x, data.father_Position.y + 5.5f, data.father_Position.z}, 1.5f);
                             if(collide_Z) data.father_Position.z = old_Position.z;
 
                             Vector3 diff = Vector3Subtract(data.camera.position, data.father_Position);
@@ -2584,6 +2618,17 @@ namespace Game {
                                     bbox->max.x, bbox->max.y, bbox->max.z);
                 }
             }
+
+            // Multiplayer
+            if(Multiplayer::listening /* neboli, jestli je hráč klient */) {
+                /*
+                Vector3 difference = Vector3Subtract(data.camera.target, data.camera.position);
+                float player_Rotation = (-atan2(difference.z, difference.x) * RAD2DEG) + 90.f;
+                */
+
+                Multiplayer::Set_Data(Vector3Subtract(data.camera.position, {0.f, PLAYER_HEIGHT, 0.f}), data.camera.target);
+                Multiplayer::Update_3D();
+            }
         } EndMode3D();
 
         if(Shared::data.tv_Video.playing) {
@@ -2623,6 +2668,7 @@ namespace Game {
             Vector3 target_Position = Vector3Add(target, {1.625f, 0.05f, -0.25f});
             data.camera.position = Vector3Lerp(data.camera_Start_Position, target_Position, tick);
 
+            // TODO: Scaling
             Rectangle buttons[9] { 
                 {381.f, 150.f, 95.f, 109.f},
                 {487.f, 142.f, 94.f, 119.f},
@@ -2783,12 +2829,12 @@ namespace Game {
                     } else {
                         if (can_Update) {
                             rotation_Updated = true;
-                            if (data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing && !data.game_Paused && !data.safe_Animation_Playing) {
+                            if (data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing && !data.game_Paused && !data.safe_Animation_Playing && !data.mobile_View) {
                                 Update_Camera_Android(id, data.previous_Rotated);
                                 camera_Rotated = true;
                             }
                         } else {
-                            if (joystick.moving && !data.safe_Animation_Playing && data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
+                            if (joystick.moving && !data.safe_Animation_Playing && !data.mobile_View && data.wake_Animation_Finished && !data.death_Animation_Playing && !data.win.playing) {
                                 float speed = 1.f;
                                 if (data.crouching) speed /= 1.5f;
                                 if (!data.crouching && data.sprinting) speed *= 1.5f;
@@ -2830,7 +2876,7 @@ namespace Game {
                 if(!data.crouching && data.sprinting) speed *= 1.5f;
                 if(data.microwave_Animation_Playing) speed = 0.f;
 
-                if(!data.safe_Animation_Playing) Update_Camera_Desktop(speed);
+                if(!data.safe_Animation_Playing && !data.mobile_View) Update_Camera_Desktop(speed);
             }
         }
 
@@ -2865,7 +2911,70 @@ namespace Game {
                     HideCursor();
                 }
             }
+        } else if(data.holding_Item == Game_Data::MOBILE) {
+            if(IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && !data.mobile_View) {
+                data.mobile_View = true;
+                data.mobile_View_Tick = 0.f;
+                data.mobile_View_Direction = 1;
+
+                data.old_Mobile_Position = data.item_Data[Game_Data::MOBILE].position;
+                data.old_Mobile_Rotation = data.item_Data[Game_Data::MOBILE].rotation;
+
+                EnableCursor();
+                HideCursor();
+
+                data.mobile.materials[2].maps[MATERIAL_MAP_DIFFUSE].texture = data.mobile_Render_Texture.texture;
+                data.mobile.materials[2].shader = data.default_Shader;
+            }
         }
+
+        if(data.mobile_View) {
+            data.mobile_View_Tick += GetFrameTime() * data.mobile_View_Direction;
+            data.mobile_View_Tick = Clamp(data.mobile_View_Tick, -0.1f, 1.f);
+
+            Vector3 target_Position = Vector3Add(data.camera.position, Vector3Scale(Vector3Normalize(data.camera_Target), 0.6f));
+            data.item_Data[Game_Data::MOBILE].position = Vector3Lerp(data.old_Mobile_Position, target_Position, data.mobile_View_Tick);
+
+            Vector3 diff = Vector3Subtract(data.camera.position, data.item_Data[Game_Data::MOBILE].position);
+            float target_Pitch = (atan2(-diff.y, sqrt(diff.z*diff.z + diff.x*diff.x)) * RAD2DEG) + 90.f;
+
+            float addition = (float)(((((int)target_Pitch - (int)data.old_Mobile_Rotation.z) % 360) + 540) % 360) - 180; 
+            data.item_Data[Game_Data::MOBILE].rotation.z = data.old_Mobile_Rotation.z + addition * data.mobile_View_Tick;
+        
+            BeginTextureMode(data.mobile_Render_Texture); {
+                Emulator::Update({(float)data.mobile_Render_Texture.texture.width, (float)data.mobile_Render_Texture.texture.height}, data.time);
+            } EndTextureMode();
+
+            float radius = (GetScreenWidth() + GetScreenHeight()) / 2.f / 800.f / 4.f;
+
+            DrawCircleGradient(GetScreenWidth() / 2, GetScreenHeight() / 2,
+                               radius, WHITE, BLANK);
+
+            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                if(!Emulator::Mouse_On_Mobile()) {
+                    data.mobile_View_Direction = -1;
+                }
+            }
+
+            if(data.mobile_View_Tick < 0.f) {
+                data.mobile_View_Tick = 0.f;
+                data.mobile_View = false;
+                Emulator::Reset();
+                DisableCursor();
+
+                BeginTextureMode(data.mobile_Render_Texture); {
+                    ClearBackground(WHITE);
+                } EndTextureMode();
+                data.mobile.materials[2].shader = Shared::data.lighting;
+            }
+        }
+
+        /*
+        if(IsKeyPressed(KEY_L)) {
+            data.item_Data[Game_Data::MOBILE].position = data.camera.position;
+            data.item_Data[Game_Data::MOBILE].Calculate_Collision();
+        }
+        */
         
         /*
         if(IsKeyPressed(KEY_L)) {
@@ -2898,7 +3007,7 @@ namespace Game {
                     Ray bottom = {Vector3Add(data.camera.position, {0.f, -1.75f, 0.f}), {0.f, -0.1f, 0.f}};
                     collision_Legs = Get_Collision_Ray(bottom);
                     if(collision_Legs.hit) {
-                        Vector3 target = Vector3Add(collision_Legs.point, {0.f, data.crouching ? 5.0f : 6.5f, 0.f});
+                        Vector3 target = Vector3Add(collision_Legs.point, {0.f, data.crouching ? (PLAYER_HEIGHT - 1.5f) : PLAYER_HEIGHT, 0.f});
                         if(target.y > 20.f && data.win.playing)
                             data.crouching = true;
                         if(data.camera.position.y < target.y) {
@@ -3050,8 +3159,8 @@ namespace Game {
                     }
                     Shared::DrawTextExC(Shared::data.bold_Font, TextFormat(u8"+%d peněz", coins), {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
                 
-                    if(data.play_Again_Button.Update()) { Main_Menu(true); Shared::data.coins += coins; } // resetuje všechen progress
-                    else if(data.menu_Button.Update()) {
+                    if(data.play_Again_Button.Update({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + GetScreenHeight() / 8.f})) { Main_Menu(true); Shared::data.coins += coins; } // resetuje všechen progress
+                    else if(data.menu_Button.Update({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f})) {
                         Main_Menu(false);
                         Shared::data.coins += coins;
                     }
@@ -3136,10 +3245,10 @@ namespace Game {
             float font_Size = GetScreenHeight() / 15.f;
             Shared::DrawTextExOutline(Shared::data.bold_Font, u8"Hra pozastavena", {GetScreenWidth() / 2.f, GetScreenHeight() / 3.f}, font_Size, 1.f, WHITE);
 
-            if(data.pause_Menu_Button.Update()) {
+            if(data.pause_Menu_Button.Update({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + GetScreenHeight() / 8.f})) {
                 Main_Menu(false);
             }
-            if(data.pause_Continue_Button.Update()) { On_Game_Resume(); }
+            if(data.pause_Continue_Button.Update({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f})) { On_Game_Resume(); }
         }
 
         Mod_Callback("Update_Game_2D", (void*)&data, true);
@@ -3159,6 +3268,17 @@ namespace Game {
 
         if(IsKeyPressed(KEY_KP_0)) t_Summary();
         #endif
+
+        // DRAWER SUMMARY
+        if(IsKeyPressed(KEY_M)) {
+            int index = 0;
+            for(Game_Data::Drawer_Data &drawer : data.drawers) {
+                TraceLog(LOG_INFO, "Šuplík #%d, %d dětí, %d má zámek, %d otevírá se, na pozici {%f, %f, %f}", index, drawer.childs.size(),
+                                                            drawer.has_Lock, drawer.opening,
+                                                            drawer.position.x, drawer.position.y, drawer.position.z);
+                index++;
+            }
+        }
     }
 };
 

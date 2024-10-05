@@ -2,8 +2,8 @@
 #define MOD_LOADER_CXX
 
 // Ordered - pro 2d funkce, kde záleží na pořadí vykreslení (extra bool argument "in_Front")
-#define FUNCTION_LIST_ORDERED {{"Update_Intro_2D", nullptr}, {"Update_Menu_2D", nullptr}, {"Update_Game_2D", nullptr}}
-#define FUNCTION_LIST {{"Init", nullptr}, {"Init_Intro", nullptr}, {"Switch_Intro", nullptr}, {"Init_Menu", nullptr}, {"Switch_Menu", nullptr}, {"Update_Menu_3D", nullptr}, {"Init_Game", nullptr}, {"Switch_Game", nullptr}, {"Update_Game_3D", nullptr}}
+#define FUNCTION_LIST_ORDERED {{"Update_Intro_2D", nullptr}, {"Update_Waiting_Room_2D", nullptr}, {"Update_Menu_2D", nullptr}, {"Update_Game_2D", nullptr}}
+#define FUNCTION_LIST {{"Init", nullptr}, {"Init_Intro", nullptr}, {"Init_Waiting_Room", nullptr}, {"Switch_Intro", nullptr}, {"Switch_Waiting_Room", nullptr}, {"Init_Menu", nullptr}, {"Switch_Menu", nullptr}, {"Update_Menu_3D", nullptr}, {"Init_Game", nullptr}, {"Switch_Game", nullptr}, {"Update_Game_3D", nullptr}}
 
 #if defined(__WIN32__) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__) // WINDOWS
 
