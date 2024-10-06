@@ -1,4 +1,4 @@
-# Výprava za pribináčkem verze 1.4.0
+# Výprava za pribináčkem verze 1.4.5
 Velice vtipná hra o cestě pro pribináčka
 
 ## Stažení
@@ -13,7 +13,7 @@ Velice vtipná hra o cestě pro pribináčka
 - Přidana sekce: bugy
 
 ## Bugy
-<span style="color: #ff5555">1.</span> Možný buffer overflow (nejspíše) u multiplayeru
+<span style="color: #ff5555">1.</span> Možný buffer overflow (nejspíše) u multiplayeru (prvně zpozorován v 1.4.0)
 
    <img src="bugs/01-serverlog.png" width="150" height="100" />
    <img src="bugs/01-subjekt1.png" width="150" height="100" />
@@ -29,6 +29,7 @@ Velice vtipná hra o cestě pro pribináčka
 
 ## Potřeby
 - [raylib](https://github.com/raysan5/raylib)
+- [enet](http://enet.bespin.org/Downloads.html)
 - [mingw-std-thread](https://github.com/meganz/mingw-std-threads) (pouze na windows)
 
 -------------

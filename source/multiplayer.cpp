@@ -167,6 +167,9 @@ namespace Multiplayer {
         Vector3 position;
         Vector3 target;
 
+        Vector3 target_Position;
+        Vector3 target_Target;
+
         /*
         Vector3 old_Position;
         int animation_Tick;
@@ -204,24 +207,44 @@ namespace Multiplayer {
         char** lines;
         int count = String_Split(raw, '\n', &lines);
 
-        players.clear();
+        if(players.size() < count) {
+            while(players.size() < count) {
+                Player new_Player;
+                new_Player.name = "<UNKNOWN>";
+                players.push_back(new_Player);
+            }
+        } else if(players.size() > count) {
+            while(players.size() > count) {
+                players.pop_back();
+            }
+        }
 
-        for(int player = 0; player < count; player++) {
+        for(int playerIndex = 0; playerIndex < count; playerIndex++) {
             char** tokens;
-            int token_Count = String_Split(lines[player], ' ', &tokens);
+            int token_Count = String_Split(lines[playerIndex], ' ', &tokens);
 
             if(token_Count == 7) {
-                players.push_back(Player());
+                Player *player = &players[playerIndex];
 
-                players.back().name = tokens[0];
+                player->name = tokens[0];
 
-                players.back().position.x = atof(tokens[1]);
-                players.back().position.y = atof(tokens[2]);
-                players.back().position.z = atof(tokens[3]);
+                /*
+                player->target_Position.x = atof(tokens[1]);
+                player->target_Position.y = atof(tokens[2]);
+                player->target_Position.z = atof(tokens[3]);
 
-                players.back().target.x = atof(tokens[4]);
-                players.back().target.y = atof(tokens[5]);
-                players.back().target.z = atof(tokens[6]);
+                player->target_Target.x = atof(tokens[4]);
+                player->target_Target.y = atof(tokens[5]);
+                player->target_Target.z = atof(tokens[6]);
+                */
+
+                player->position.x = atof(tokens[1]);
+                player->position.y = atof(tokens[2]);
+                player->position.z = atof(tokens[3]);
+
+                player->target.x = atof(tokens[4]);
+                player->target.y = atof(tokens[5]);
+                player->target.z = atof(tokens[6]);
             }
 
             for(int token = 0; token < token_Count; token++) free(tokens[token]);
