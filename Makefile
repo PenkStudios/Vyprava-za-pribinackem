@@ -18,7 +18,7 @@ linux: source/main.cpp
 
 windows: source/main.cpp
 	$(WINDOWS-WINDRES) icon.rc -O coff -o icon.res
-	$(WINDOWS-CXX) source/main.cpp icon.res $(LINK) -L. -l:build/raylib.dll -static -mwindows -lenet -lwinmm -lws2_32  -o build/pribináček.exe
+	$(WINDOWS-CXX) source/main.cpp icon.res $(LINK) -lraylibdll -static -mwindows -lenet -lwinmm -lws2_32  -o build/pribináček.exe
 
 git:
 	./github.py

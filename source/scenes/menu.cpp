@@ -280,8 +280,8 @@ namespace Menu {
                 if(Shared::data.new_Game_Button.Update({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + GetScreenHeight() / 8.f * 1.f}, alpha))
                     Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::NEW_GAME);
 
-                if(Shared::data.multiplayer_Button.Update({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + GetScreenHeight() / 8.f * 2.f}, alpha))
-                    Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::MULTIPLAYER);
+                if(Shared::data.multiplayer_Button.Update({GetScreenWidth() / 2.f, GetScreenHeight() / 2.f + GetScreenHeight() / 8.f * 2.f}, alpha, false))
+                    {} /* Switch_To_Menu_Scene(Menu::Menu_Data::Menu_Scene::MULTIPLAYER); */
                 
                 break;
             }

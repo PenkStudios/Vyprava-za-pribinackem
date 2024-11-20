@@ -1,4 +1,4 @@
-# Výprava za pribináčkem verze 1.4.5
+# Výprava za pribináčkem verze 1.5.0
 Velice vtipná hra o cestě pro pribináčka
 
 ## Stažení
@@ -6,11 +6,7 @@ Velice vtipná hra o cestě pro pribináčka
 - [Google Play](https://play.google.com/store/apps/details?id=com.zahon.pribinacek)
 
 ## Přídáno
-- Šipka zpátky
-- Vylepšen úhel u nové hry
-- Základní server a text-klient pro pribináčka (externí) 
-- Základní multiplayer (pořád <span style="font-weight:bold">hodně</span> WIP)
-- Přidana sekce: bugy
+- Opraven bug, kdy na windowsu nefungoval zvuk 🤦
 
 ## Bugy
 <span style="color: #ff5555">1.</span> Možný buffer overflow (nejspíše) u multiplayeru (prvně zpozorován v 1.4.0)
